@@ -3,6 +3,7 @@
 Add project-specific agent instructions here.
 
 <!-- HARNESS:BEGIN -->
+
 ## Harness
 
 This repo uses Harness. Before work, read:
@@ -16,4 +17,5 @@ This repo uses Harness. Before work, read:
 
 Use the Rust Harness CLI at `scripts/bin/harness-cli` on macOS/Linux or
 `scripts/bin/harness-cli.exe` on Windows as the main operational tool.
+
 <!-- HARNESS:END -->

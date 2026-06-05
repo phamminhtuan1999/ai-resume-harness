@@ -1,14 +1,22 @@
 # Product Docs
 
-This directory is intentionally generic and mostly empty in Harness v0.
+This directory contains the living ApplyWise product contract derived from
+`SPEC.md`.
 
-When a user provides a project spec, derive smaller product contract files here
-instead of keeping one large spec as the living plan. Name files by the product
-domains that actually exist in that spec, for example `overview.md`,
-`billing.md`, `workflows.md`, `permissions.md`, or `api-conventions.md`.
+`SPEC.md` remains the original input material. Ongoing work should update these
+smaller product docs instead of extending the monolithic spec.
 
-Do not create domain files before the spec just to fill the folder. Empty
-structure is healthier than fake product truth.
+Current product docs:
+
+- `overview.md`: product positioning, target user, modules, surfaces, and
+  navigation.
+- `mvp-scope.md`: MVP inclusions, exclusions, periods, and pricing placeholder
+  rules.
+- `architecture.md`: selected stack, boundary rules, runtime responsibilities,
+  and verification ladder.
+- `data-model.md`: accepted table contract and ownership rules.
+- `ai-workflows.md`: AI parser, match, Truth Guard, roadmap, and interview prep
+  rules.
 
 ## Update Rule
 

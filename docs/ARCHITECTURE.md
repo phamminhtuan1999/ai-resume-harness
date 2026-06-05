@@ -1,10 +1,11 @@
 # Architecture
 
-No application stack is selected yet.
+ApplyWise has an accepted product spec and selected MVP stack. The product
+architecture contract now lives in `docs/product/architecture.md`, with the
+stack decision recorded in `docs/decisions/0007-applywise-mvp-monorepo.md`.
 
-No application code exists yet. This document defines generic architecture
-questions and boundary rules that future implementation should adapt after a
-user-provided spec and stack decision exist.
+No application code exists yet. The generic layering and boundary rules below
+remain the default implementation guardrails for future scaffolding.
 
 ## Discovery Before Shape
 
