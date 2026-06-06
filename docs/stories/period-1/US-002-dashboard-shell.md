@@ -2,7 +2,7 @@
 
 ## Status
 
-planned
+in_progress
 
 ## Lane
 
@@ -56,5 +56,10 @@ No harness change expected.
 
 ## Evidence
 
-No implementation proof yet.
+Scaffold evidence:
 
+- `apps/web/src/app/dashboard/page.tsx`
+- Browser DOM verification showed the dashboard heading, quick actions, resume
+  empty state, and no console errors.
+- Playwright screenshot fallback captured `/private/tmp/applywise-dashboard.png`
+  after Browser screenshot capture timed out.

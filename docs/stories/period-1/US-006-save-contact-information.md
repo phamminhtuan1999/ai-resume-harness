@@ -2,7 +2,7 @@
 
 ## Status
 
-planned
+in_progress
 
 ## Lane
 
@@ -55,5 +55,9 @@ No harness change expected.
 
 ## Evidence
 
-No implementation proof yet.
+Scaffold evidence:
 
+- `apps/web/src/app/jobs/new/page.tsx`
+
+Persistence, validation, job detail display, and authenticated ownership proof
+are not implemented yet.

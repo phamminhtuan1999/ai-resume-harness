@@ -2,7 +2,7 @@
 
 ## Status
 
-planned
+in_progress
 
 ## Lane
 
@@ -78,4 +78,18 @@ Implementation should use high-risk planning before code changes.
 
 ## Evidence
 
-No implementation proof yet.
+Scaffold evidence:
+
+- `apps/web/src/app/resumes/page.tsx`
+- `apps/web/src/app/resumes/new/page.tsx`
+- `apps/api/app/routers/resumes.py`
+- `apps/api/app/services/resume_import.py`
+- Browser DOM verification showed the resume import page, file input, text
+  area, accepted file types, Docling guidance, mobile viewport check, and no
+  console errors.
+- Playwright screenshot fallback captured
+  `/private/tmp/applywise-resume-import-mobile.png` after Browser screenshot
+  capture timed out.
+
+Persistence, authenticated ownership, Docling fixture tests, and real file
+conversion runtime proof are not implemented yet.

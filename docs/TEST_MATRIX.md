@@ -20,11 +20,11 @@ implemented until tests or validation evidence exist.
 | Story | Contract | Unit | Integration | E2E | Platform | Status | Evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | US-001 | User sign up/login and protected workspace access | no | no | no | no | planned | `docs/stories/period-1/US-001-authentication.md` |
-| US-002 | Dashboard shell with quick actions and resume empty/full states | no | no | no | no | planned | `docs/stories/period-1/US-002-dashboard-shell.md` |
-| US-003 | Career profile create/update for AI-role targeting | no | no | no | no | planned | `docs/stories/period-1/US-003-career-profile.md` |
-| US-004 | Resume text/file import, Docling normalization, list/detail/update | no | no | no | no | planned | `docs/stories/period-1/US-004-resume-text.md` |
-| US-005 | Manual job description create/list/detail/update | no | no | no | no | planned | `docs/stories/period-1/US-005-manual-job-description.md` |
-| US-006 | Optional recruiter/contact info saved with jobs | no | no | no | no | planned | `docs/stories/period-1/US-006-save-contact-information.md` |
+| US-002 | Dashboard shell with quick actions and resume empty/full states | no | no | no | no | in_progress | `apps/web/src/app/dashboard/page.tsx`; `/private/tmp/applywise-dashboard.png`; `docs/stories/period-1/US-002-dashboard-shell.md` |
+| US-003 | Career profile create/update for AI-role targeting | no | no | no | no | in_progress | `apps/web/src/app/profile/page.tsx`; `docs/stories/period-1/US-003-career-profile.md` |
+| US-004 | Resume text/file import, Docling normalization, list/detail/update | no | no | no | no | in_progress | `apps/web/src/app/resumes/new/page.tsx`; `apps/api/app/services/resume_import.py`; `/private/tmp/applywise-resume-import-mobile.png`; `docs/stories/period-1/US-004-resume-text.md` |
+| US-005 | Manual job description create/list/detail/update | no | no | no | no | in_progress | `apps/web/src/app/jobs/new/page.tsx`; `docs/stories/period-1/US-005-manual-job-description.md` |
+| US-006 | Optional recruiter/contact info saved with jobs | no | no | no | no | in_progress | `apps/web/src/app/jobs/new/page.tsx`; `docs/stories/period-1/US-006-save-contact-information.md` |
 
 ## Evidence Rules
 

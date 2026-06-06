@@ -20,8 +20,8 @@ the work is selected or when a product decision needs a durable place to land.
 | Story | Title | Lane | Status |
 | --- | --- | --- | --- |
 | US-001 | User Sign Up And Login | high-risk | planned |
-| US-002 | Dashboard Shell | normal | planned |
-| US-003 | Create User Career Profile | normal | planned |
-| US-004 | Add Or Import Resume Content | high-risk | planned |
-| US-005 | Add Job Description Manually | normal | planned |
-| US-006 | Save Contact Information | normal | planned |
+| US-002 | Dashboard Shell | normal | in_progress |
+| US-003 | Create User Career Profile | normal | in_progress |
+| US-004 | Add Or Import Resume Content | high-risk | in_progress |
+| US-005 | Add Job Description Manually | normal | in_progress |
+| US-006 | Save Contact Information | normal | in_progress |
