@@ -28,3 +28,4 @@ the work is selected or when a product decision needs a durable place to land.
 | US-007 | Generate Match Analysis | high-risk | in_progress |
 | US-008 | Generate Safe Resume Suggestions | high-risk | in_progress |
 | US-009 | Generate Markdown Tailored Resume Draft | high-risk | in_progress |
+| US-010 | Generate 4-Week Improvement Roadmap | high-risk | implemented |

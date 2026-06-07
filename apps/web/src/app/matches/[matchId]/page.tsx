@@ -152,6 +152,12 @@ export default async function MatchDetailPage({ params }: MatchDetailPageProps) 
               >
                 Resume draft
               </Link>
+              <Link
+                href={`/matches/${match.id}/roadmap`}
+                className={buttonVariants({ variant: "outline" })}
+              >
+                4-week roadmap
+              </Link>
             </CardContent>
           </Card>
         </section>

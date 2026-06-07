@@ -95,6 +95,16 @@ export type ResumeVersion = {
   updated_at: string;
 };
 
+export type Roadmap = {
+  id: string;
+  user_id: string;
+  match_id: string;
+  title: string;
+  roadmap_json: unknown;
+  created_at: string;
+  updated_at: string;
+};
+
 export type WorkspaceData = {
   appUser: AppUser | null;
   profile: WorkspaceProfile | null;
@@ -559,6 +569,56 @@ export async function getResumeDraftDetail(matchId: string) {
     match: matchRow as unknown as WorkspaceMatch,
     versions: (versionRows ?? []) as unknown as ResumeVersion[],
     suggestionCount: suggestionRows?.length ?? 0,
+  };
+}
+
+export async function getRoadmapDetail(matchId: string) {
+  const { appUser, profile } = await getWorkspaceProfile();
+
+  if (!profile) {
+    notFound();
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const [{ data: matchRow, error: matchError }, { data: roadmapRows, error: roadmapsError }] =
+    await Promise.all([
+      supabase
+        .from("matches")
+        .select(
+          [
+            "id",
+            "overall_score",
+            "missing_skills_json",
+            "created_at",
+            "updated_at",
+            "resumes(id,title)",
+            "jobs(id,company,title)",
+          ].join(",")
+        )
+        .eq("id", matchId)
+        .eq("user_id", profile.id)
+        .single(),
+      supabase
+        .from("roadmaps")
+        .select("id,user_id,match_id,title,roadmap_json,created_at,updated_at")
+        .eq("match_id", matchId)
+        .eq("user_id", profile.id)
+        .order("created_at", { ascending: false }),
+    ]);
+
+  if (matchError || !matchRow) {
+    notFound();
+  }
+
+  if (roadmapsError) {
+    console.warn("[ApplyWise data skipped] Unable to load roadmaps.");
+  }
+
+  return {
+    appUser,
+    profile,
+    match: matchRow as unknown as WorkspaceMatch,
+    roadmaps: (roadmapRows ?? []) as unknown as Roadmap[],
   };
 }
 

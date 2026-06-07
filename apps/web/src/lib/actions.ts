@@ -20,6 +20,7 @@ import {
   isUploadedResumeFile,
 } from "@/lib/resume-import-flow.mjs";
 import { analyzeResumeJobFit } from "@/lib/match-analyzer.mjs";
+import { buildFourWeekRoadmap } from "@/lib/roadmap-generator.mjs";
 import { buildTailoredResumeDraft } from "@/lib/resume-draft-generator.mjs";
 import { buildResumeSuggestions } from "@/lib/resume-suggestion-generator.mjs";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
@@ -470,4 +471,85 @@ export async function generateResumeDraftAction(
   revalidatePath(`/matches/${parsed.data.match_id}/resume-draft`);
 
   return success("Markdown resume draft generated.");
+}
+
+export async function generateRoadmapAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const parsed = validateMatchIdInput(readForm(formData));
+  if (!parsed.success) {
+    return failure("Choose a valid match before generating a roadmap.");
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data: match, error: matchError } = await supabase
+    .from("matches")
+    .select(
+      [
+        "id",
+        "missing_skills_json",
+        "resumes(id,title,raw_text)",
+        "jobs(id,company,title)",
+      ].join(",")
+    )
+    .eq("id", parsed.data.match_id)
+    .eq("user_id", context.userProfileId)
+    .single();
+
+  if (matchError || !match) {
+    return failure("Unable to load the selected match for roadmap generation.");
+  }
+
+  const sourceMatch = match as unknown as {
+    id: string;
+    missing_skills_json: unknown;
+    resumes: { id: string; title: string; raw_text: string } | null;
+    jobs: { id: string; company: string; title: string } | null;
+  };
+
+  if (!sourceMatch.jobs?.title) {
+    return failure("The selected match is missing job context.");
+  }
+
+  const { data: profileRow, error: profileError } = await supabase
+    .from("user_profiles")
+    .select("target_role")
+    .eq("id", context.userProfileId)
+    .single();
+
+  if (profileError || !profileRow) {
+    return failure("Unable to load profile context for roadmap generation.");
+  }
+
+  const roadmap = buildFourWeekRoadmap({
+    job: sourceMatch.jobs,
+    match: sourceMatch,
+    profile: profileRow,
+  });
+
+  const { data: savedRoadmap, error: roadmapError } = await supabase
+    .from("roadmaps")
+    .insert({
+      user_id: context.userProfileId,
+      match_id: parsed.data.match_id,
+      title: roadmap.title,
+      roadmap_json: roadmap.roadmap_json,
+    })
+    .select("id")
+    .single();
+
+  if (roadmapError || !savedRoadmap?.id) {
+    return failure("Roadmap save failed. Confirm the Period 3 roadmaps schema exists.");
+  }
+
+  revalidatePath(`/matches/${parsed.data.match_id}`);
+  revalidatePath(`/matches/${parsed.data.match_id}/roadmap`);
+
+  return success("4-week roadmap generated.");
 }
