@@ -6,6 +6,8 @@ import type { ActionState } from "@/lib/action-state";
 import {
   readForm,
   validateJobInput,
+  validateMatchIdInput,
+  validateMatchInput,
   validateProfileInput,
   validateResumeTextInput,
   validateResumeTitleInput,
@@ -17,6 +19,8 @@ import {
   importResumeFile,
   isUploadedResumeFile,
 } from "@/lib/resume-import-flow.mjs";
+import { analyzeResumeJobFit } from "@/lib/match-analyzer.mjs";
+import { buildResumeSuggestions } from "@/lib/resume-suggestion-generator.mjs";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 
 async function requireWritableContext(): Promise<
@@ -70,6 +74,10 @@ function logSkippedAction(message: string) {
 
 function success(message: string): ActionState {
   return { status: "success", message };
+}
+
+function successWithRedirect(message: string, redirectTo: string): ActionState {
+  return { status: "success", message, redirectTo };
 }
 
 function failure(message: string): ActionState {
@@ -213,4 +221,167 @@ export async function saveJobAction(
   revalidatePath("/tracker");
   revalidatePath("/dashboard");
   return success("Job saved.");
+}
+
+export async function generateMatchAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const parsed = validateMatchInput(readForm(formData));
+  if (!parsed.success) {
+    return failure("Choose a resume and job before generating analysis.");
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const [{ data: resume, error: resumeError }, { data: job, error: jobError }] = await Promise.all([
+    supabase
+      .from("resumes")
+      .select("id,raw_text")
+      .eq("id", parsed.data.resume_id)
+      .eq("user_id", context.userProfileId)
+      .single(),
+    supabase
+      .from("jobs")
+      .select("id,raw_description")
+      .eq("id", parsed.data.job_id)
+      .eq("user_id", context.userProfileId)
+      .single(),
+  ]);
+
+  if (resumeError || jobError || !resume?.raw_text || !job?.raw_description) {
+    return failure("Unable to load the selected resume and job for analysis.");
+  }
+
+  const analysis = analyzeResumeJobFit({
+    resumeText: resume.raw_text,
+    jobDescription: job.raw_description,
+  });
+
+  const now = new Date().toISOString();
+  const [{ error: resumeUpdateError }, { error: jobUpdateError }, { data: match, error: matchError }] =
+    await Promise.all([
+      supabase
+        .from("resumes")
+        .update({
+          structured_json: analysis.structured_resume,
+          parse_status: "parsed",
+          updated_at: now,
+        })
+        .eq("id", parsed.data.resume_id)
+        .eq("user_id", context.userProfileId),
+      supabase
+        .from("jobs")
+        .update({
+          structured_json: analysis.structured_job,
+          parse_status: "parsed",
+          updated_at: now,
+        })
+        .eq("id", parsed.data.job_id)
+        .eq("user_id", context.userProfileId),
+      supabase
+        .from("matches")
+        .insert({
+          user_id: context.userProfileId,
+          resume_id: parsed.data.resume_id,
+          job_id: parsed.data.job_id,
+          overall_score: analysis.overall_score,
+          skill_score: analysis.skill_score,
+          experience_score: analysis.experience_score,
+          ai_readiness_score: analysis.ai_readiness_score,
+          ats_keyword_score: analysis.ats_keyword_score,
+          seniority_score: analysis.seniority_score,
+          strengths_json: analysis.strengths_json,
+          weaknesses_json: analysis.weaknesses_json,
+          missing_skills_json: analysis.missing_skills_json,
+          risks_json: analysis.risks_json,
+          explanation_json: analysis.explanation_json,
+        })
+        .select("id")
+        .single(),
+    ]);
+
+  if (resumeUpdateError || jobUpdateError || matchError || !match?.id) {
+    return failure("Match analysis save failed. Confirm the Period 2 matches schema exists.");
+  }
+
+  revalidatePath("/matches");
+  revalidatePath(`/matches/${match.id}`);
+  revalidatePath("/jobs");
+  revalidatePath(`/jobs/${parsed.data.job_id}`);
+  revalidatePath("/resumes");
+  revalidatePath(`/resumes/${parsed.data.resume_id}`);
+  revalidatePath("/dashboard");
+
+  return successWithRedirect("Match analysis generated.", `/matches/${match.id}`);
+}
+
+export async function generateResumeSuggestionsAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const parsed = validateMatchIdInput(readForm(formData));
+  if (!parsed.success) {
+    return failure("Choose a valid match before generating resume suggestions.");
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data: match, error: matchError } = await supabase
+    .from("matches")
+    .select(
+      [
+        "id",
+        "strengths_json",
+        "weaknesses_json",
+        "missing_skills_json",
+      ].join(",")
+    )
+    .eq("id", parsed.data.match_id)
+    .eq("user_id", context.userProfileId)
+    .single();
+
+  if (matchError || !match) {
+    return failure("Unable to load the selected match for resume suggestions.");
+  }
+
+  const sourceMatch = match as unknown as {
+    id: string;
+    strengths_json: unknown;
+    weaknesses_json: unknown;
+    missing_skills_json: unknown;
+  };
+
+  const suggestions = buildResumeSuggestions({ match: sourceMatch }).map((suggestion) => ({
+    match_id: parsed.data.match_id,
+    ...suggestion,
+  }));
+
+  const { error: deleteError } = await supabase
+    .from("resume_suggestions")
+    .delete()
+    .eq("match_id", parsed.data.match_id);
+
+  if (deleteError) {
+    return failure("Resume suggestion save failed. Confirm the Period 3 schema exists.");
+  }
+
+  const { error: insertError } = await supabase.from("resume_suggestions").insert(suggestions);
+
+  if (insertError) {
+    return failure("Resume suggestion save failed. Confirm the Period 3 schema exists.");
+  }
+
+  revalidatePath(`/matches/${parsed.data.match_id}`);
+  revalidatePath(`/matches/${parsed.data.match_id}/resume-suggestions`);
+
+  return success("Resume suggestions generated.");
 }

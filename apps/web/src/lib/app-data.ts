@@ -4,6 +4,7 @@ import {
   ClipboardList,
   FileText,
   LayoutDashboard,
+  ListChecks,
   Settings,
   Sparkles,
   Target,
@@ -15,6 +16,7 @@ export const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Resumes", href: "/resumes", icon: FileText },
   { label: "Jobs", href: "/jobs", icon: BriefcaseBusiness },
+  { label: "Matches", href: "/matches", icon: ListChecks },
   { label: "Tracker", href: "/tracker", icon: ClipboardList },
   { label: "Pricing", href: "/pricing", icon: BadgeDollarSign },
   { label: "Settings", href: "/settings", icon: Settings },
@@ -22,7 +24,7 @@ export const navItems = [
 
 export const quickActions = [
   { label: "Add Resume", href: "/resumes/new", icon: Upload },
-  { label: "Analyze Job", href: "/jobs/new", icon: Sparkles },
+  { label: "Analyze Match", href: "/matches/new", icon: Sparkles },
   { label: "View Tracker", href: "/tracker", icon: Target },
 ] as const;
 
@@ -71,4 +73,3 @@ export const userSummary = {
   target: "AI Engineer",
   icon: UserRound,
 };
-

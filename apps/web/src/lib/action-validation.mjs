@@ -45,6 +45,15 @@ const jobSchema = z.object({
   contact_notes: z.string().trim().optional(),
 });
 
+const matchSchema = z.object({
+  resume_id: z.string().trim().uuid(),
+  job_id: z.string().trim().uuid(),
+});
+
+const matchIdSchema = z.object({
+  match_id: z.string().trim().uuid(),
+});
+
 export function readForm(formData) {
   return Object.fromEntries(formData.entries());
 }
@@ -67,4 +76,12 @@ export function validateImportedResumePayload(input) {
 
 export function validateJobInput(input) {
   return jobSchema.safeParse(input);
+}
+
+export function validateMatchInput(input) {
+  return matchSchema.safeParse(input);
+}
+
+export function validateMatchIdInput(input) {
+  return matchIdSchema.safeParse(input);
 }

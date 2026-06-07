@@ -86,10 +86,10 @@ export function AppShell({ active, children, userName, userTarget }: AppShellPro
               </span>
             </div>
             <Link
-              href="/jobs/new"
+              href="/matches/new"
               className={buttonVariants({ size: "lg", className: "shrink-0" })}
             >
-              Analyze New Job
+              Analyze Match
               <ArrowRight data-icon="inline-end" />
             </Link>
           </header>

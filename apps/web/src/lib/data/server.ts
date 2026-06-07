@@ -42,11 +42,53 @@ export type WorkspaceJob = {
   updated_at: string;
 };
 
+export type WorkspaceMatch = {
+  id: string;
+  overall_score: number;
+  skill_score: number;
+  experience_score: number;
+  ai_readiness_score: number;
+  ats_keyword_score: number;
+  seniority_score: number;
+  strengths_json: unknown;
+  weaknesses_json: unknown;
+  missing_skills_json: unknown;
+  risks_json: unknown;
+  explanation_json: unknown;
+  created_at: string;
+  updated_at: string;
+  resumes: {
+    id: string;
+    title: string;
+  } | null;
+  jobs: {
+    id: string;
+    company: string;
+    title: string;
+  } | null;
+};
+
+export type ResumeSuggestion = {
+  id: string;
+  match_id: string;
+  original_text: string | null;
+  suggested_text: string;
+  suggestion_type: string | null;
+  related_job_requirement: string | null;
+  evidence: string | null;
+  truth_guard_status: string;
+  reason: string | null;
+  user_action: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type WorkspaceData = {
   appUser: AppUser | null;
   profile: WorkspaceProfile | null;
   resumes: WorkspaceResume[];
   jobs: WorkspaceJob[];
+  matches: WorkspaceMatch[];
   isConfigured: boolean;
 };
 
@@ -59,6 +101,7 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
       profile: null,
       resumes: [],
       jobs: [],
+      matches: [],
       isConfigured: Boolean(appUser && hasSupabaseEnv()),
     };
   }
@@ -97,12 +140,16 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
       profile: null,
       resumes: [],
       jobs: [],
+      matches: [],
       isConfigured: true,
     };
   }
 
-  const [{ data: resumeRows, error: resumesError }, { data: jobRows, error: jobsError }] =
-    await Promise.all([
+  const [
+    { data: resumeRows, error: resumesError },
+    { data: jobRows, error: jobsError },
+    { data: matchRows, error: matchesError },
+  ] = await Promise.all([
       supabase
         .from("resumes")
         .select("id,title,raw_text,source_type,import_status,created_at,updated_at")
@@ -130,6 +177,31 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
         .eq("user_id", profile.id)
         .order("created_at", { ascending: false })
         .limit(10),
+      supabase
+        .from("matches")
+        .select(
+          [
+            "id",
+            "overall_score",
+            "skill_score",
+            "experience_score",
+            "ai_readiness_score",
+            "ats_keyword_score",
+            "seniority_score",
+            "strengths_json",
+            "weaknesses_json",
+            "missing_skills_json",
+            "risks_json",
+            "explanation_json",
+            "created_at",
+            "updated_at",
+            "resumes(id,title)",
+            "jobs(id,company,title)",
+          ].join(",")
+        )
+        .eq("user_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(10),
     ]);
 
   if (resumesError) {
@@ -140,11 +212,16 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
     console.warn("[ApplyWise data skipped] Unable to load jobs.");
   }
 
+  if (matchesError) {
+    console.warn("[ApplyWise data skipped] Unable to load matches.");
+  }
+
   return {
     appUser,
     profile,
     resumes: (resumeRows ?? []) as unknown as WorkspaceResume[],
     jobs: (jobRows ?? []) as unknown as WorkspaceJob[],
+    matches: (matchRows ?? []) as unknown as WorkspaceMatch[],
     isConfigured: true,
   };
 }
@@ -272,6 +349,131 @@ export async function getJobDetail(jobId: string) {
       work_type: string | null;
       raw_description: string;
     },
+  };
+}
+
+export async function getMatchWorkspaceData() {
+  const data = await getWorkspaceData();
+
+  return {
+    appUser: data.appUser,
+    profile: data.profile,
+    resumes: data.resumes,
+    jobs: data.jobs,
+    matches: data.matches,
+  };
+}
+
+export async function getMatchDetail(matchId: string) {
+  const { appUser, profile } = await getWorkspaceProfile();
+
+  if (!profile) {
+    notFound();
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data: matchRow, error } = await supabase
+    .from("matches")
+    .select(
+      [
+        "id",
+        "overall_score",
+        "skill_score",
+        "experience_score",
+        "ai_readiness_score",
+        "ats_keyword_score",
+        "seniority_score",
+        "strengths_json",
+        "weaknesses_json",
+        "missing_skills_json",
+        "risks_json",
+        "explanation_json",
+        "created_at",
+        "updated_at",
+        "resumes(id,title)",
+        "jobs(id,company,title)",
+      ].join(",")
+    )
+    .eq("id", matchId)
+    .eq("user_id", profile.id)
+    .single();
+
+  if (error || !matchRow) {
+    notFound();
+  }
+
+  return {
+    appUser,
+    profile,
+    match: matchRow as unknown as WorkspaceMatch,
+  };
+}
+
+export async function getResumeSuggestionsDetail(matchId: string) {
+  const { appUser, profile } = await getWorkspaceProfile();
+
+  if (!profile) {
+    notFound();
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const [
+    { data: matchRow, error: matchError },
+    { data: suggestionRows, error: suggestionsError },
+  ] = await Promise.all([
+    supabase
+      .from("matches")
+      .select(
+        [
+          "id",
+          "overall_score",
+          "strengths_json",
+          "weaknesses_json",
+          "missing_skills_json",
+          "created_at",
+          "updated_at",
+          "resumes(id,title)",
+          "jobs(id,company,title)",
+        ].join(",")
+      )
+      .eq("id", matchId)
+      .eq("user_id", profile.id)
+      .single(),
+    supabase
+      .from("resume_suggestions")
+      .select(
+        [
+          "id",
+          "match_id",
+          "original_text",
+          "suggested_text",
+          "suggestion_type",
+          "related_job_requirement",
+          "evidence",
+          "truth_guard_status",
+          "reason",
+          "user_action",
+          "created_at",
+          "updated_at",
+        ].join(",")
+      )
+      .eq("match_id", matchId)
+      .order("created_at", { ascending: true }),
+  ]);
+
+  if (matchError || !matchRow) {
+    notFound();
+  }
+
+  if (suggestionsError) {
+    console.warn("[ApplyWise data skipped] Unable to load resume suggestions.");
+  }
+
+  return {
+    appUser,
+    profile,
+    match: matchRow as unknown as WorkspaceMatch,
+    suggestions: (suggestionRows ?? []) as unknown as ResumeSuggestion[],
   };
 }
 

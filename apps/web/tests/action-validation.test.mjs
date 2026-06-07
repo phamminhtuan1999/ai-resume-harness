@@ -5,6 +5,8 @@ import {
   readForm,
   validateImportedResumePayload,
   validateJobInput,
+  validateMatchIdInput,
+  validateMatchInput,
   validateProfileInput,
   validateResumeTextInput,
   validateResumeTitleInput,
@@ -91,6 +93,27 @@ test("job validation rejects invalid job and contact URLs/emails", () => {
   });
 
   assert.equal(result.success, false);
+});
+
+test("match validation requires resume and job UUIDs", () => {
+  assert.equal(
+    validateMatchInput({
+      resume_id: "c7d35bfe-d78f-47da-876f-3726835f6cc0",
+      job_id: "c70ccf28-e33c-4c73-895c-7f56679454ed",
+    }).success,
+    true
+  );
+
+  assert.equal(validateMatchInput({ resume_id: "resume", job_id: "" }).success, false);
+});
+
+test("match id validation requires a UUID", () => {
+  assert.equal(
+    validateMatchIdInput({ match_id: "98ed9270-a036-4cb3-a644-613854790963" }).success,
+    true
+  );
+
+  assert.equal(validateMatchIdInput({ match_id: "match" }).success, false);
 });
 
 test("readForm converts FormData fields into an object", () => {
