@@ -19,6 +19,7 @@ import {
   importResumeFile,
   isUploadedResumeFile,
 } from "@/lib/resume-import-flow.mjs";
+import { buildInterviewPrep } from "@/lib/interview-prep-generator.mjs";
 import { analyzeResumeJobFit } from "@/lib/match-analyzer.mjs";
 import { buildFourWeekRoadmap } from "@/lib/roadmap-generator.mjs";
 import { buildTailoredResumeDraft } from "@/lib/resume-draft-generator.mjs";
@@ -552,4 +553,83 @@ export async function generateRoadmapAction(
   revalidatePath(`/matches/${parsed.data.match_id}/roadmap`);
 
   return success("4-week roadmap generated.");
+}
+
+export async function generateInterviewPrepAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const parsed = validateMatchIdInput(readForm(formData));
+  if (!parsed.success) {
+    return failure("Choose a valid match before generating interview prep.");
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data: match, error: matchError } = await supabase
+    .from("matches")
+    .select(
+      [
+        "id",
+        "strengths_json",
+        "weaknesses_json",
+        "missing_skills_json",
+        "risks_json",
+        "resumes(id,title,raw_text)",
+        "jobs(id,company,title,raw_description)",
+      ].join(",")
+    )
+    .eq("id", parsed.data.match_id)
+    .eq("user_id", context.userProfileId)
+    .single();
+
+  if (matchError || !match) {
+    return failure("Unable to load the selected match for interview prep generation.");
+  }
+
+  const sourceMatch = match as unknown as {
+    id: string;
+    strengths_json: unknown;
+    weaknesses_json: unknown;
+    missing_skills_json: unknown;
+    risks_json: unknown;
+    resumes: { id: string; title: string; raw_text: string } | null;
+    jobs: { id: string; company: string; title: string; raw_description: string } | null;
+  };
+
+  if (!sourceMatch.resumes?.raw_text || !sourceMatch.jobs?.title) {
+    return failure("The selected match is missing resume or job context.");
+  }
+
+  const prep = buildInterviewPrep({
+    job: sourceMatch.jobs,
+    match: sourceMatch,
+    resume: sourceMatch.resumes,
+  });
+
+  const { data: savedPrep, error: prepError } = await supabase
+    .from("interview_preps")
+    .insert({
+      user_id: context.userProfileId,
+      match_id: parsed.data.match_id,
+      questions_json: prep.questions_json,
+      weak_topics_json: prep.weak_topics_json,
+      study_plan_json: prep.study_plan_json,
+      answer_guidance_json: prep.answer_guidance_json,
+    })
+    .select("id")
+    .single();
+
+  if (prepError || !savedPrep?.id) {
+    return failure("Interview prep save failed. Confirm the Period 3 interview_preps schema exists.");
+  }
+
+  revalidatePath(`/matches/${parsed.data.match_id}`);
+  revalidatePath(`/matches/${parsed.data.match_id}/interview-prep`);
+
+  return success("Interview prep generated.");
 }

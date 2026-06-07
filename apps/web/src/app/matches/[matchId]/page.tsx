@@ -158,6 +158,12 @@ export default async function MatchDetailPage({ params }: MatchDetailPageProps) 
               >
                 4-week roadmap
               </Link>
+              <Link
+                href={`/matches/${match.id}/interview-prep`}
+                className={buttonVariants({ variant: "outline" })}
+              >
+                Interview prep
+              </Link>
             </CardContent>
           </Card>
         </section>

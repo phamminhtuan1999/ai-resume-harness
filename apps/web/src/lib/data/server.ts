@@ -105,6 +105,18 @@ export type Roadmap = {
   updated_at: string;
 };
 
+export type InterviewPrep = {
+  id: string;
+  user_id: string;
+  match_id: string;
+  questions_json: unknown;
+  weak_topics_json: unknown;
+  study_plan_json: unknown;
+  answer_guidance_json: unknown;
+  created_at: string;
+  updated_at: string;
+};
+
 export type WorkspaceData = {
   appUser: AppUser | null;
   profile: WorkspaceProfile | null;
@@ -619,6 +631,71 @@ export async function getRoadmapDetail(matchId: string) {
     profile,
     match: matchRow as unknown as WorkspaceMatch,
     roadmaps: (roadmapRows ?? []) as unknown as Roadmap[],
+  };
+}
+
+export async function getInterviewPrepDetail(matchId: string) {
+  const { appUser, profile } = await getWorkspaceProfile();
+
+  if (!profile) {
+    notFound();
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const [{ data: matchRow, error: matchError }, { data: prepRows, error: prepsError }] =
+    await Promise.all([
+      supabase
+        .from("matches")
+        .select(
+          [
+            "id",
+            "overall_score",
+            "strengths_json",
+            "weaknesses_json",
+            "missing_skills_json",
+            "risks_json",
+            "created_at",
+            "updated_at",
+            "resumes(id,title)",
+            "jobs(id,company,title)",
+          ].join(",")
+        )
+        .eq("id", matchId)
+        .eq("user_id", profile.id)
+        .single(),
+      supabase
+        .from("interview_preps")
+        .select(
+          [
+            "id",
+            "user_id",
+            "match_id",
+            "questions_json",
+            "weak_topics_json",
+            "study_plan_json",
+            "answer_guidance_json",
+            "created_at",
+            "updated_at",
+          ].join(",")
+        )
+        .eq("match_id", matchId)
+        .eq("user_id", profile.id)
+        .order("created_at", { ascending: false }),
+    ]);
+
+  if (matchError || !matchRow) {
+    notFound();
+  }
+
+  if (prepsError) {
+    console.warn("[ApplyWise data skipped] Unable to load interview prep.");
+  }
+
+  return {
+    appUser,
+    profile,
+    match: matchRow as unknown as WorkspaceMatch,
+    interviewPreps: (prepRows ?? []) as unknown as InterviewPrep[],
   };
 }
 
