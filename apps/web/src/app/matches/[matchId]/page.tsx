@@ -146,6 +146,12 @@ export default async function MatchDetailPage({ params }: MatchDetailPageProps) 
               >
                 Resume suggestions
               </Link>
+              <Link
+                href={`/matches/${match.id}/resume-draft`}
+                className={buttonVariants({ variant: "outline" })}
+              >
+                Resume draft
+              </Link>
             </CardContent>
           </Card>
         </section>

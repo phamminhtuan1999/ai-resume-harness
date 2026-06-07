@@ -83,6 +83,18 @@ export type ResumeSuggestion = {
   updated_at: string;
 };
 
+export type ResumeVersion = {
+  id: string;
+  user_id: string;
+  resume_id: string;
+  job_id: string;
+  match_id: string;
+  title: string;
+  content_markdown: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type WorkspaceData = {
   appUser: AppUser | null;
   profile: WorkspaceProfile | null;
@@ -474,6 +486,79 @@ export async function getResumeSuggestionsDetail(matchId: string) {
     profile,
     match: matchRow as unknown as WorkspaceMatch,
     suggestions: (suggestionRows ?? []) as unknown as ResumeSuggestion[],
+  };
+}
+
+export async function getResumeDraftDetail(matchId: string) {
+  const { appUser, profile } = await getWorkspaceProfile();
+
+  if (!profile) {
+    notFound();
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const [
+    { data: matchRow, error: matchError },
+    { data: versionRows, error: versionsError },
+    { data: suggestionRows, error: suggestionsError },
+  ] = await Promise.all([
+    supabase
+      .from("matches")
+      .select(
+        [
+          "id",
+          "overall_score",
+          "created_at",
+          "updated_at",
+          "resumes(id,title)",
+          "jobs(id,company,title)",
+        ].join(",")
+      )
+      .eq("id", matchId)
+      .eq("user_id", profile.id)
+      .single(),
+    supabase
+      .from("resume_versions")
+      .select(
+        [
+          "id",
+          "user_id",
+          "resume_id",
+          "job_id",
+          "match_id",
+          "title",
+          "content_markdown",
+          "created_at",
+          "updated_at",
+        ].join(",")
+      )
+      .eq("match_id", matchId)
+      .eq("user_id", profile.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("resume_suggestions")
+      .select("id,truth_guard_status")
+      .eq("match_id", matchId),
+  ]);
+
+  if (matchError || !matchRow) {
+    notFound();
+  }
+
+  if (versionsError) {
+    console.warn("[ApplyWise data skipped] Unable to load resume versions.");
+  }
+
+  if (suggestionsError) {
+    console.warn("[ApplyWise data skipped] Unable to load resume suggestions.");
+  }
+
+  return {
+    appUser,
+    profile,
+    match: matchRow as unknown as WorkspaceMatch,
+    versions: (versionRows ?? []) as unknown as ResumeVersion[],
+    suggestionCount: suggestionRows?.length ?? 0,
   };
 }
 

@@ -20,6 +20,7 @@ import {
   isUploadedResumeFile,
 } from "@/lib/resume-import-flow.mjs";
 import { analyzeResumeJobFit } from "@/lib/match-analyzer.mjs";
+import { buildTailoredResumeDraft } from "@/lib/resume-draft-generator.mjs";
 import { buildResumeSuggestions } from "@/lib/resume-suggestion-generator.mjs";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 
@@ -384,4 +385,89 @@ export async function generateResumeSuggestionsAction(
   revalidatePath(`/matches/${parsed.data.match_id}/resume-suggestions`);
 
   return success("Resume suggestions generated.");
+}
+
+export async function generateResumeDraftAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const parsed = validateMatchIdInput(readForm(formData));
+  if (!parsed.success) {
+    return failure("Choose a valid match before generating a resume draft.");
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data: match, error: matchError } = await supabase
+    .from("matches")
+    .select(
+      [
+        "id",
+        "resume_id",
+        "job_id",
+        "resumes(id,title,raw_text)",
+        "jobs(id,company,title)",
+      ].join(",")
+    )
+    .eq("id", parsed.data.match_id)
+    .eq("user_id", context.userProfileId)
+    .single();
+
+  if (matchError || !match) {
+    return failure("Unable to load the selected match for resume draft generation.");
+  }
+
+  const sourceMatch = match as unknown as {
+    id: string;
+    resume_id: string;
+    job_id: string;
+    resumes: { id: string; title: string; raw_text: string } | null;
+    jobs: { id: string; company: string; title: string } | null;
+  };
+
+  if (!sourceMatch.resumes?.raw_text || !sourceMatch.jobs?.title) {
+    return failure("The selected match is missing resume or job context.");
+  }
+
+  const { data: suggestions, error: suggestionsError } = await supabase
+    .from("resume_suggestions")
+    .select("suggested_text,truth_guard_status")
+    .eq("match_id", parsed.data.match_id)
+    .order("created_at", { ascending: true });
+
+  if (suggestionsError) {
+    return failure("Unable to load resume suggestions for this match.");
+  }
+
+  const draft = buildTailoredResumeDraft({
+    resume: sourceMatch.resumes,
+    job: sourceMatch.jobs,
+    suggestions: suggestions ?? [],
+  });
+
+  const { data: version, error: versionError } = await supabase
+    .from("resume_versions")
+    .insert({
+      user_id: context.userProfileId,
+      resume_id: sourceMatch.resume_id,
+      job_id: sourceMatch.job_id,
+      match_id: parsed.data.match_id,
+      title: draft.title,
+      content_markdown: draft.content_markdown,
+    })
+    .select("id")
+    .single();
+
+  if (versionError || !version?.id) {
+    return failure("Resume draft save failed. Confirm the Period 3 resume_versions schema exists.");
+  }
+
+  revalidatePath(`/matches/${parsed.data.match_id}`);
+  revalidatePath(`/matches/${parsed.data.match_id}/resume-draft`);
+
+  return success("Markdown resume draft generated.");
 }

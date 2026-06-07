@@ -79,7 +79,15 @@ export default async function ResumeSuggestionsPage({ params }: ResumeSuggestion
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ResumeSuggestionsForm matchId={match.id} />
+              <div className="flex flex-col gap-3">
+                <ResumeSuggestionsForm matchId={match.id} />
+                <Link
+                  href={`/matches/${match.id}/resume-draft`}
+                  className={buttonVariants({ variant: "outline" })}
+                >
+                  Open resume draft
+                </Link>
+              </div>
             </CardContent>
           </Card>
         </section>
