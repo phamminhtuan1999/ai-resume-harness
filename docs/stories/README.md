@@ -5,6 +5,17 @@ and validation work.
 
 No story packets are active yet.
 
+## Format Rule
+
+Use one story packet shape per selected story:
+
+- Tiny or normal work uses one flat markdown file from `docs/templates/story.md`.
+- High-risk work uses a folder copied from `docs/templates/high-risk-story/`.
+
+Do not mix both shapes for the same story. If older stories in the same period
+use a different shape, follow the current lane rule for new work and mention
+the mismatch in the trace if it affects implementation.
+
 ## Normal Story
 
 Use `docs/templates/story.md` for normal feature work.

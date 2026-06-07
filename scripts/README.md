@@ -33,6 +33,11 @@ no. `story verify <id>` runs the configured `verify_command`; it does not accept
 proof flags. Configure the command with `story add/update --verify`, run
 `story verify <id>`, then update proof flags with `story update`.
 
+`story update` does not currently expose first-class flags for title or lane
+metadata. When those durable fields must change, use the documented maintenance
+procedure in `docs/VALIDATION_PLAYBOOK.md#story-metadata-updates`, keep markdown
+story files synchronized, and record the reason in the task trace.
+
 Backlog `--risk` uses Harness lanes, not severity words: use `tiny`, `normal`,
 or `high-risk`. Use `tiny` instead of `low`. `query matrix` defaults to
 human-readable `yes`/`no`; use `query matrix --numeric` when copying values into

@@ -237,6 +237,9 @@ For every task:
 9. If harness friction was found, either fix it directly or record it with
    `scripts/bin/harness-cli backlog add`.
 
+Use `docs/VALIDATION_PLAYBOOK.md` when browser E2E, file inputs, local dev
+servers, or story metadata updates create validation friction.
+
 ## Story Verification
 
 Stories may carry a mechanical proof command:
@@ -251,6 +254,11 @@ scripts/bin/harness-cli story verify US-012
 `last_verified_at` and `last_verified_result`, and exits 0 on pass or 1 on fail.
 When `trace --story <id>` links to a story whose verification command has never
 passed, the trace still records but prints an advisory warning before close.
+
+For normal and high-risk work, always pass the matching intake id to
+`scripts/bin/harness-cli trace --intake <id>` when an intake record exists. A
+detailed trace without intake linkage loses lane and input-type attribution in
+`query friction` and `score-trace`.
 
 `story verify` accepts only the story id. Configure the command with
 `story add --verify` or `story update --verify`. Record proof booleans with

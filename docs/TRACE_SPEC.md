@@ -14,7 +14,7 @@ table. The schema is not changed by Phase 2.
 | `id` | INTEGER | Automatic | SQLite autoincrement primary key. Do not set manually. | `42` |
 | `created_at` | TEXT | Automatic | SQLite `datetime('now')`. Do not set manually. | `2026-05-27 09:24:37` |
 | `task_summary` | TEXT | Yes | One sentence, at least 10 characters, naming the outcome or attempted outcome. | `Completed Phase 2 docs-only observability and taxonomy specification` |
-| `intake_id` | INTEGER | Standard+ when an intake was recorded | Integer id from the related `intake` row. | `36` |
+| `intake_id` | INTEGER | Standard+ when an intake was recorded; required for normal/high-risk work after intake | Integer id from the related `intake` row. | `36` |
 | `story_id` | TEXT | Standard+ when work maps to one story | Story id from the `story` table. Use the main story when one trace covers several; list the rest in `notes`. | `US-004` |
 | `agent` | TEXT | Optional for minimal; Standard+ expected | Short agent/tool name. | `codex` |
 | `actions_taken` | TEXT | Standard+ | JSON array text. With the current CLI, pass a comma-separated list and the CLI stores JSON text. | `["read PHASE2.md","drafted TRACE_SPEC.md","updated HARNESS.md"]` |
@@ -194,6 +194,8 @@ Why this is insufficient for normal-lane Phase 2 work:
 Before the final response, check:
 
 - The trace tier matches the lane.
+- Normal and high-risk traces include `--intake <id>` when an intake was
+  recorded for the task.
 - Review the score printed automatically by `scripts/bin/harness-cli trace`.
   Use `scripts/bin/harness-cli score-trace --id N` when re-checking a specific
   historical trace.

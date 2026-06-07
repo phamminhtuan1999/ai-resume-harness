@@ -36,3 +36,5 @@ implemented until tests or validation evidence exist.
   behavior that cannot be proven in lower layers.
 - A story can be implemented without every proof column if the story packet
   explains why.
+- When browser tooling cannot perform the exact E2E action, follow
+  `docs/VALIDATION_PLAYBOOK.md` and state the fallback proof in story evidence.
