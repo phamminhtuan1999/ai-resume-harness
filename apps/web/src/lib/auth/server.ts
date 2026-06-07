@@ -34,3 +34,11 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
   };
 }
 
+export async function getCurrentSessionToken(): Promise<string | null> {
+  if (!hasClerkEnv()) {
+    return null;
+  }
+
+  const { getToken } = await auth();
+  return getToken();
+}

@@ -11,9 +11,17 @@ class Settings(BaseSettings):
     allowed_origins: str = Field(default="http://localhost:3000", alias="APPLYWISE_ALLOWED_ORIGINS")
     resume_import_max_bytes: int = Field(default=10_485_760, alias="RESUME_IMPORT_MAX_BYTES")
     resume_import_timeout_seconds: int = Field(default=45, alias="RESUME_IMPORT_TIMEOUT_SECONDS")
+    clerk_secret_key: str = Field(default="", alias="CLERK_SECRET_KEY")
+    clerk_jwks_url: str = Field(default="", alias="CLERK_JWKS_URL")
+    supabase_url: str = Field(default="", alias="SUPABASE_URL")
+    supabase_service_role_key: str = Field(default="", alias="SUPABASE_SERVICE_ROLE_KEY")
+
+    @property
+    def allowed_origins_list(self) -> list[str]:
+        """Comma-separated APPLYWISE_ALLOWED_ORIGINS parsed into a list."""
+        return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
 
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

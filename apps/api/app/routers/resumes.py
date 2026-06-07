@@ -1,5 +1,6 @@
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
+from app.auth import AuthenticatedUser, require_authenticated_user
 from app.schemas.resume import ResumeImportPreview
 from app.services.resume_import import SUPPORTED_MIME_TYPES, import_resume_file
 from app.settings import get_settings
@@ -8,7 +9,10 @@ router = APIRouter()
 
 
 @router.post("/import/preview", response_model=ResumeImportPreview)
-async def import_preview(file: UploadFile = File(...)) -> ResumeImportPreview:
+async def import_preview(
+    file: UploadFile = File(...),
+    _user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> ResumeImportPreview:
     settings = get_settings()
     content = await file.read()
 
@@ -23,4 +27,3 @@ async def import_preview(file: UploadFile = File(...)) -> ResumeImportPreview:
         mime_type=file.content_type or "application/octet-stream",
         content=content,
     )
-

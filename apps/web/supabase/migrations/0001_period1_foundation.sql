@@ -5,7 +5,7 @@ create table if not exists public.user_profiles (
   clerk_user_id text not null unique,
   email text not null,
   full_name text,
-  current_role text,
+  "current_role" text,
   years_of_experience numeric,
   target_role text,
   location_preference text,
@@ -70,4 +70,3 @@ alter table public.jobs enable row level security;
 
 -- The FastAPI service will use the Supabase service role after verifying Clerk
 -- identity. Browser clients must not write these tables directly in Period 1.
-

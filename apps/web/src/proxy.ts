@@ -1,19 +1,13 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
+import { protectedRoutePatterns } from "@/lib/route-policy.mjs";
+
 const hasClerkEnv = Boolean(
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY
 );
 
-const isProtectedRoute = createRouteMatcher([
-  "/dashboard(.*)",
-  "/profile(.*)",
-  "/resumes(.*)",
-  "/jobs(.*)",
-  "/matches(.*)",
-  "/tracker(.*)",
-  "/settings(.*)",
-]);
+const isProtectedRoute = createRouteMatcher(protectedRoutePatterns);
 
 const clerkProxy = clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {
@@ -31,4 +25,3 @@ export const config = {
     "/(api|trpc)(.*)",
   ],
 };
-

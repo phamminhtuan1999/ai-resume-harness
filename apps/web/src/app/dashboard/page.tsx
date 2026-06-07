@@ -2,7 +2,9 @@ import Link from "next/link";
 import { ArrowUpRight, FileText, Upload } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
-import { quickActions, recentJobs, resumeSources } from "@/lib/app-data";
+import { quickActions, resumeSources } from "@/lib/app-data";
+import { getWorkspaceCounts, getWorkspaceRecommendation } from "@/lib/dashboard-summary.mjs";
+import { formatShortDate, getContactLabel, getWorkspaceData } from "@/lib/data/server";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -22,20 +24,32 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const { appUser, profile, resumes, jobs } = await getWorkspaceData();
+  const primaryResume = resumes[0];
+  const profileTarget = profile?.target_role || "AI Engineer";
+  const profileRole = profile?.current_role || "Software Engineer";
+  const counts = getWorkspaceCounts({ profile, resumes, jobs });
+  const recommendation = getWorkspaceRecommendation({ profile, resumes, jobs });
+
   return (
-    <AppShell active="Dashboard">
+    <AppShell
+      active="Dashboard"
+      userName={profile?.full_name || appUser?.fullName}
+      userTarget={profile?.target_role}
+    >
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
         <section className="grid gap-5 xl:grid-cols-[1fr_360px]">
           <div className="flex flex-col gap-5">
             <div className="flex flex-col gap-4 rounded-lg border bg-card p-5 shadow-sm md:flex-row md:items-center md:justify-between">
               <div className="flex max-w-2xl flex-col gap-2">
                 <h1 className="text-2xl font-semibold tracking-normal">
-                  Build a stronger AI Engineer application.
+                  Build a stronger {profileTarget} application.
                 </h1>
                 <p className="text-sm leading-6 text-muted-foreground">
-                  Import a resume, paste a job description, then compare the evidence before
-                  deciding whether to apply now or improve first.
+                  {profile?.target_role
+                    ? `Profile ready for ${profileRole} to ${profileTarget} positioning.`
+                    : "Set up your career profile, import a resume, and save target jobs."}
                 </p>
               </div>
               <Link href="/resumes/new" className={buttonVariants({ size: "lg" })}>
@@ -69,15 +83,15 @@ export default function DashboardPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Apply Now or Improve First?</CardTitle>
-              <CardDescription>Preview state before the first generated match.</CardDescription>
+              <CardTitle>Workspace status</CardTitle>
+              <CardDescription>Live counts for your saved application materials.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  ["Match", 74],
-                  ["AI ready", 58],
-                  ["ATS", 82],
+                  ["Profiles", counts.profiles],
+                  ["Resumes", counts.resumes],
+                  ["Jobs", counts.jobs],
                 ].map(([label, value]) => (
                   <div key={label} className="rounded-lg border p-3">
                     <div className="text-xl font-semibold">{value}</div>
@@ -88,13 +102,10 @@ export default function DashboardPage() {
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">Recommendation</span>
-                  <Badge variant="secondary">Improve first</Badge>
+                  <Badge variant="secondary">{recommendation.label}</Badge>
                 </div>
-                <Progress value={58} />
-                <p className="text-sm leading-6 text-muted-foreground">
-                  Backend experience is visible, but RAG, vector databases, and AI evaluation
-                  still need stronger proof.
-                </p>
+                <Progress value={recommendation.score} />
+                <p className="text-sm leading-6 text-muted-foreground">{recommendation.message}</p>
               </div>
             </CardContent>
           </Card>
@@ -104,7 +115,11 @@ export default function DashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle>Primary resume</CardTitle>
-              <CardDescription>Supported sources for the first import flow.</CardDescription>
+              <CardDescription>
+                {primaryResume
+                  ? `Last updated ${formatShortDate(primaryResume.updated_at)}`
+                  : "Supported sources for the first import flow."}
+              </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="flex items-start gap-3 rounded-lg border border-dashed p-4">
@@ -113,17 +128,28 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex flex-1 flex-col gap-3">
                   <div>
-                    <p className="text-sm font-medium">No resume imported yet</p>
+                    <p className="text-sm font-medium">
+                      {primaryResume?.title || "No resume imported yet"}
+                    </p>
                     <p className="text-sm text-muted-foreground">
-                      Paste text or upload a PDF, DOCX, image, Markdown, or plain text resume.
+                      {primaryResume
+                        ? primaryResume.raw_text.slice(0, 180)
+                        : "Paste text or upload a PDF, DOCX, image, Markdown, or plain text resume."}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {resumeSources.map((source) => (
-                      <Badge key={source} variant="outline">
-                        {source}
-                      </Badge>
-                    ))}
+                    {primaryResume ? (
+                      <>
+                        <Badge variant="secondary">{primaryResume.source_type}</Badge>
+                        <Badge variant="outline">{primaryResume.import_status}</Badge>
+                      </>
+                    ) : (
+                      resumeSources.map((source) => (
+                        <Badge key={source} variant="outline">
+                          {source}
+                        </Badge>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
@@ -156,33 +182,43 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Recent jobs</CardTitle>
-            <CardDescription>Sample tracker data for the Period 1 shell.</CardDescription>
+            <CardDescription>
+              {jobs.length > 0
+                ? "Latest jobs saved under your account."
+                : "Saved jobs appear here after manual intake."}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead className="text-right">Match</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentJobs.map((job) => (
-                  <TableRow key={`${job.company}-${job.role}`}>
-                    <TableCell className="font-medium">{job.company}</TableCell>
-                    <TableCell>{job.role}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{job.status}</Badge>
-                    </TableCell>
-                    <TableCell>{job.contact}</TableCell>
-                    <TableCell className="text-right">{job.match}%</TableCell>
+            {jobs.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Company</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Contact</TableHead>
+                    <TableHead className="text-right">Saved</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {jobs.slice(0, 5).map((job) => (
+                    <TableRow key={job.id}>
+                      <TableCell className="font-medium">{job.company}</TableCell>
+                      <TableCell>{job.title}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{job.parse_status}</Badge>
+                      </TableCell>
+                      <TableCell>{getContactLabel(job)}</TableCell>
+                      <TableCell className="text-right">{formatShortDate(job.created_at)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                Add a job description to populate the tracker and dashboard.
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

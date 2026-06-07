@@ -1,43 +1,23 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
-import { getCurrentAppUser } from "@/lib/auth/server";
-import { hasSupabaseEnv } from "@/lib/env";
+import type { ActionState } from "@/lib/action-state";
+import {
+  readForm,
+  validateJobInput,
+  validateProfileInput,
+  validateResumeTextInput,
+  validateResumeTitleInput,
+} from "@/lib/action-validation.mjs";
+import { getCurrentAppUser, getCurrentSessionToken } from "@/lib/auth/server";
+import { hasSupabaseEnv, serverEnv } from "@/lib/env";
+import {
+  buildImportedResumeInsert,
+  importResumeFile,
+  isUploadedResumeFile,
+} from "@/lib/resume-import-flow.mjs";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
-
-const profileSchema = z.object({
-  current_role: z.string().trim().min(1),
-  years_of_experience: z.coerce.number().min(0).max(60),
-  target_role: z.enum([
-    "AI Engineer",
-    "Applied AI Engineer",
-    "LLM Engineer",
-    "GenAI Engineer",
-    "ML Engineer",
-  ]),
-  location_preference: z.string().trim().optional(),
-  technical_background: z.string().trim().optional(),
-});
-
-const resumeSchema = z.object({
-  title: z.string().trim().min(1),
-  raw_text: z.string().trim().min(1),
-  source_type: z.enum(["text", "markdown"]).default("text"),
-});
-
-const jobSchema = z.object({
-  company: z.string().trim().min(1),
-  title: z.string().trim().min(1),
-  job_url: z.string().trim().url().or(z.literal("")).optional(),
-  location: z.string().trim().optional(),
-  raw_description: z.string().trim().min(1),
-  contact_name: z.string().trim().optional(),
-  contact_email: z.string().trim().email().or(z.literal("")).optional(),
-  contact_linkedin_url: z.string().trim().url().or(z.literal("")).optional(),
-  contact_notes: z.string().trim().optional(),
-});
 
 async function requireWritableContext(): Promise<
   | { ok: true; userProfileId: string }
@@ -84,25 +64,31 @@ async function requireWritableContext(): Promise<
   return { ok: true, userProfileId: data.id };
 }
 
-function readForm(formData: FormData) {
-  return Object.fromEntries(formData.entries());
-}
-
 function logSkippedAction(message: string) {
   console.warn(`[ApplyWise action skipped] ${message}`);
 }
 
-export async function saveProfileAction(formData: FormData): Promise<void> {
+function success(message: string): ActionState {
+  return { status: "success", message };
+}
+
+function failure(message: string): ActionState {
+  logSkippedAction(message);
+  return { status: "error", message };
+}
+
+export async function saveProfileAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
   const context = await requireWritableContext();
   if (!context.ok) {
-    logSkippedAction(context.message);
-    return;
+    return failure(context.message);
   }
 
-  const parsed = profileSchema.safeParse(readForm(formData));
+  const parsed = validateProfileInput(readForm(formData));
   if (!parsed.success) {
-    logSkippedAction("Profile fields are incomplete or invalid.");
-    return;
+    return failure("Profile fields are incomplete or invalid.");
   }
 
   const supabase = getSupabaseServiceClient();
@@ -112,25 +98,64 @@ export async function saveProfileAction(formData: FormData): Promise<void> {
     .eq("id", context.userProfileId);
 
   if (error) {
-    logSkippedAction("Profile save failed.");
-    return;
+    return failure("Profile save failed.");
   }
 
   revalidatePath("/profile");
   revalidatePath("/dashboard");
+  return success("Profile saved.");
 }
 
-export async function saveResumeAction(formData: FormData): Promise<void> {
+export async function saveResumeAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
   const context = await requireWritableContext();
   if (!context.ok) {
-    logSkippedAction(context.message);
-    return;
+    return failure(context.message);
   }
 
-  const parsed = resumeSchema.safeParse(readForm(formData));
+  const titleParsed = validateResumeTitleInput(readForm(formData));
+  if (!titleParsed.success) {
+    return failure("Resume title is required.");
+  }
+
+  const resumeFile = formData.get("resume_file");
+  const hasUploadedFile = isUploadedResumeFile(resumeFile);
+
+  if (hasUploadedFile) {
+    const sessionToken = await getCurrentSessionToken();
+    const importResult = await importResumeFile({
+      apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
+      resumeFile,
+      sessionToken,
+    });
+
+    if (!importResult.ok) {
+      return failure(importResult.message);
+    }
+
+    const supabase = getSupabaseServiceClient();
+    const { error } = await supabase.from("resumes").insert(
+      buildImportedResumeInsert({
+        imported: importResult.imported,
+        title: titleParsed.data.title,
+        userProfileId: context.userProfileId,
+      })
+    );
+
+    if (error) {
+      return failure("Resume save failed after import.");
+    }
+
+    revalidatePath("/resumes");
+    revalidatePath("/dashboard");
+    return success("Resume imported and saved.");
+  }
+
+  const parsed = validateResumeTextInput(readForm(formData));
   if (!parsed.success) {
-    logSkippedAction("Resume title and text are required.");
-    return;
+    return failure("Resume title and either pasted text or an uploaded file are required.");
   }
 
   const supabase = getSupabaseServiceClient();
@@ -143,25 +168,26 @@ export async function saveResumeAction(formData: FormData): Promise<void> {
   });
 
   if (error) {
-    logSkippedAction("Resume save failed.");
-    return;
+    return failure("Resume save failed.");
   }
 
   revalidatePath("/resumes");
   revalidatePath("/dashboard");
+  return success("Resume saved.");
 }
 
-export async function saveJobAction(formData: FormData): Promise<void> {
+export async function saveJobAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
   const context = await requireWritableContext();
   if (!context.ok) {
-    logSkippedAction(context.message);
-    return;
+    return failure(context.message);
   }
 
-  const parsed = jobSchema.safeParse(readForm(formData));
+  const parsed = validateJobInput(readForm(formData));
   if (!parsed.success) {
-    logSkippedAction("Job fields are incomplete or invalid.");
-    return;
+    return failure("Job fields are incomplete or invalid.");
   }
 
   const clean = parsed.data;
@@ -180,10 +206,11 @@ export async function saveJobAction(formData: FormData): Promise<void> {
   });
 
   if (error) {
-    logSkippedAction("Job save failed.");
-    return;
+    return failure("Job save failed.");
   }
 
   revalidatePath("/jobs");
   revalidatePath("/tracker");
+  revalidatePath("/dashboard");
+  return success("Job saved.");
 }

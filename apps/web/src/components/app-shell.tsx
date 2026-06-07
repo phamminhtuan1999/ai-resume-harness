@@ -11,10 +11,14 @@ import { Separator } from "@/components/ui/separator";
 type AppShellProps = {
   active: string;
   children: React.ReactNode;
+  userName?: string | null;
+  userTarget?: string | null;
 };
 
-export function AppShell({ active, children }: AppShellProps) {
+export function AppShell({ active, children, userName, userTarget }: AppShellProps) {
   const UserIcon = userSummary.icon;
+  const displayName = userName || userSummary.name;
+  const displayTarget = userTarget || userSummary.target;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -56,8 +60,8 @@ export function AppShell({ active, children }: AppShellProps) {
                 <UserIcon className="size-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{userSummary.name}</p>
-                <p className="truncate text-xs text-muted-foreground">{userSummary.target}</p>
+                <p className="truncate text-sm font-medium">{displayName}</p>
+                <p className="truncate text-xs text-muted-foreground">{displayTarget}</p>
               </div>
               {hasClerkEnv() ? (
                 <SignOutButton>

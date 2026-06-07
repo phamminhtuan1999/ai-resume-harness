@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { AppShell } from "@/components/app-shell";
-import { recentJobs } from "@/lib/app-data";
+import { formatShortDate, getContactLabel, getWorkspaceData } from "@/lib/data/server";
 import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -20,9 +20,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-export default function JobsPage() {
+export default async function JobsPage() {
+  const { appUser, profile, jobs } = await getWorkspaceData();
+
   return (
-    <AppShell active="Jobs">
+    <AppShell
+      active="Jobs"
+      userName={profile?.full_name || appUser?.fullName}
+      userTarget={profile?.target_role}
+    >
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
@@ -38,37 +44,50 @@ export default function JobsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Saved jobs</CardTitle>
-            <CardDescription>Sample rows until persistence is wired.</CardDescription>
+            <CardDescription>
+              {jobs.length > 0
+                ? "Jobs saved under your account."
+                : "Saved jobs will appear after manual intake."}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead className="text-right">Match</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentJobs.map((job) => (
-                  <TableRow key={`${job.company}-${job.role}`}>
-                    <TableCell className="font-medium">{job.company}</TableCell>
-                    <TableCell>{job.role}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{job.status}</Badge>
-                    </TableCell>
-                    <TableCell>{job.contact}</TableCell>
-                    <TableCell className="text-right">{job.match}%</TableCell>
+            {jobs.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Company</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Contact</TableHead>
+                    <TableHead className="text-right">Saved</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {jobs.map((job) => (
+                    <TableRow key={job.id}>
+                      <TableCell className="font-medium">{job.company}</TableCell>
+                      <TableCell>
+                        <Link href={`/jobs/${job.id}`} className="hover:underline">
+                          {job.title}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{job.parse_status}</Badge>
+                      </TableCell>
+                      <TableCell>{getContactLabel(job)}</TableCell>
+                      <TableCell className="text-right">{formatShortDate(job.created_at)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                Add a job description to start tracking company, role, and contact details.
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
     </AppShell>
   );
 }
-

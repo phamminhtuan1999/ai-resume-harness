@@ -33,3 +33,8 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+*.egg-info/
+
+# Local agent skills (not pushed).
+.agents/
+skills-lock.json
