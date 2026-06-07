@@ -6,10 +6,11 @@ import type { ActionState } from "@/lib/action-state";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 type FormStatusMessageProps = {
+  successTitle?: string;
   state: ActionState;
 };
 
-export function FormStatusMessage({ state }: FormStatusMessageProps) {
+export function FormStatusMessage({ state, successTitle = "Saved" }: FormStatusMessageProps) {
   if (state.status === "idle") {
     return null;
   }
@@ -20,7 +21,7 @@ export function FormStatusMessage({ state }: FormStatusMessageProps) {
   return (
     <Alert>
       <Icon />
-      <AlertTitle>{isSuccess ? "Saved" : "Needs attention"}</AlertTitle>
+      <AlertTitle>{isSuccess ? successTitle : "Needs attention"}</AlertTitle>
       <AlertDescription>{state.message}</AlertDescription>
     </Alert>
   );

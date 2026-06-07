@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { APPLICATION_STATUSES } from "./application-tracker.mjs";
+
 const profileSchema = z.object({
   current_role: z.string().trim().min(1),
   years_of_experience: z.coerce.number().min(0).max(60),
@@ -54,6 +56,24 @@ const matchIdSchema = z.object({
   match_id: z.string().trim().uuid(),
 });
 
+const optionalUuidSchema = z
+  .string()
+  .trim()
+  .uuid()
+  .or(z.literal(""))
+  .optional()
+  .transform((value) => value || null);
+
+const saveApplicationSchema = z.object({
+  job_id: z.string().trim().uuid(),
+  match_id: optionalUuidSchema,
+});
+
+const updateApplicationStatusSchema = z.object({
+  application_id: z.string().trim().uuid(),
+  status: z.enum(APPLICATION_STATUSES),
+});
+
 export function readForm(formData) {
   return Object.fromEntries(formData.entries());
 }
@@ -84,4 +104,12 @@ export function validateMatchInput(input) {
 
 export function validateMatchIdInput(input) {
   return matchIdSchema.safeParse(input);
+}
+
+export function validateSaveApplicationInput(input) {
+  return saveApplicationSchema.safeParse(input);
+}
+
+export function validateUpdateApplicationStatusInput(input) {
+  return updateApplicationStatusSchema.safeParse(input);
 }

@@ -13,7 +13,7 @@ the work is selected or when a product decision needs a durable place to land.
 | Period 1 Foundation | Auth, dashboard, profile, resume text/file import, manual job description, and contact capture. | sliced |
 | Period 2 AI Analysis | Resume parsing, JD parsing, match scoring, strengths, missing skills, and AI readiness. | sliced |
 | Period 3 Improvement Outputs | Resume suggestions, Truth Guard, Markdown draft, 4-week roadmap, and interview prep. | sliced |
-| Period 4 SaaS Polish | Tracker, contact surfacing, pricing placeholder, settings, landing page, empty/error/loading states, and demo flow. | unsliced |
+| Period 4 SaaS Polish | Tracker, contact surfacing, pricing placeholder, settings, landing page, empty/error/loading states, and demo flow. | sliced |
 
 ## Sliced Stories
 
@@ -30,3 +30,5 @@ the work is selected or when a product decision needs a durable place to land.
 | US-009 | Generate Markdown Tailored Resume Draft | high-risk | in_progress |
 | US-010 | Generate 4-Week Improvement Roadmap | high-risk | implemented |
 | US-011 | Generate Interview Prep Suggestions | high-risk | implemented |
+| US-012 | Application Tracker Status Workflow | high-risk | implemented |
+| US-013 | Period 4 SaaS Polish And Demo Flow | high-risk | implemented |

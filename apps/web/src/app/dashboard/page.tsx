@@ -162,19 +162,20 @@ export default async function DashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle>AI workflow status</CardTitle>
-              <CardDescription>Backend services planned for the next slice.</CardDescription>
+              <CardDescription>Demo-ready MVP workflow modules.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              {["Docling import", "Resume parser", "JD parser", "Match analyzer"].map(
-                (item, index) => (
+              {[
+                "Docling import",
+                "Match analyzer",
+                "Resume suggestions",
+                "Roadmap and interview prep",
+              ].map((item) => (
                   <div key={item} className="flex items-center justify-between rounded-lg border p-3">
                     <span className="text-sm font-medium">{item}</span>
-                    <Badge variant={index === 0 ? "secondary" : "outline"}>
-                      {index === 0 ? "scaffolded" : "planned"}
-                    </Badge>
+                    <Badge variant="secondary">implemented</Badge>
                   </div>
-                )
-              )}
+                ))}
             </CardContent>
           </Card>
         </section>

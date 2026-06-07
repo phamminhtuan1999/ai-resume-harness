@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { SaveApplicationForm } from "@/components/forms/save-application-form";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -140,6 +141,7 @@ export default async function MatchDetailPage({ params }: MatchDetailPageProps) 
                 This report uses saved canonical resume text and raw job description text. It does
                 not invent missing resume evidence.
               </p>
+              {match.job_id ? <SaveApplicationForm jobId={match.job_id} matchId={match.id} /> : null}
               <Link
                 href={`/matches/${match.id}/resume-suggestions`}
                 className={buttonVariants({ variant: "outline" })}

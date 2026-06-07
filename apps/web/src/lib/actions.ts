@@ -11,6 +11,8 @@ import {
   validateProfileInput,
   validateResumeTextInput,
   validateResumeTitleInput,
+  validateSaveApplicationInput,
+  validateUpdateApplicationStatusInput,
 } from "@/lib/action-validation.mjs";
 import { getCurrentAppUser, getCurrentSessionToken } from "@/lib/auth/server";
 import { hasSupabaseEnv, serverEnv } from "@/lib/env";
@@ -224,6 +226,151 @@ export async function saveJobAction(
   revalidatePath("/tracker");
   revalidatePath("/dashboard");
   return success("Job saved.");
+}
+
+export async function saveApplicationAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const parsed = validateSaveApplicationInput(readForm(formData));
+  if (!parsed.success) {
+    return failure("Choose a valid job before saving it to the tracker.");
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data: job, error: jobError } = await supabase
+    .from("jobs")
+    .select("id")
+    .eq("id", parsed.data.job_id)
+    .eq("user_id", context.userProfileId)
+    .single();
+
+  if (jobError || !job?.id) {
+    return failure("Unable to load the selected job for this account.");
+  }
+
+  if (parsed.data.match_id) {
+    const { data: match, error: matchError } = await supabase
+      .from("matches")
+      .select("id,job_id")
+      .eq("id", parsed.data.match_id)
+      .eq("user_id", context.userProfileId)
+      .single();
+
+    if (matchError || !match?.id || match.job_id !== parsed.data.job_id) {
+      return failure("Unable to link that match to the selected job.");
+    }
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from("applications")
+    .select("id,match_id")
+    .eq("user_id", context.userProfileId)
+    .eq("job_id", parsed.data.job_id)
+    .maybeSingle();
+
+  if (existingError) {
+    return failure("Tracker save failed. Confirm the Period 4 applications schema exists.");
+  }
+
+  if (existing?.id) {
+    if (parsed.data.match_id && !existing.match_id) {
+      const { error: updateError } = await supabase
+        .from("applications")
+        .update({
+          match_id: parsed.data.match_id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id)
+        .eq("user_id", context.userProfileId);
+
+      if (updateError) {
+        return failure("Tracker save failed.");
+      }
+    }
+
+    revalidatePath("/tracker");
+    revalidatePath(`/jobs/${parsed.data.job_id}`);
+    if (parsed.data.match_id) {
+      revalidatePath(`/matches/${parsed.data.match_id}`);
+    }
+
+    return successWithRedirect("This job is already in your tracker.", "/tracker");
+  }
+
+  const { error: insertError } = await supabase.from("applications").insert({
+    user_id: context.userProfileId,
+    job_id: parsed.data.job_id,
+    match_id: parsed.data.match_id,
+    status: "saved",
+  });
+
+  if (insertError) {
+    return failure("Tracker save failed. Confirm the Period 4 applications schema exists.");
+  }
+
+  revalidatePath("/tracker");
+  revalidatePath(`/jobs/${parsed.data.job_id}`);
+  if (parsed.data.match_id) {
+    revalidatePath(`/matches/${parsed.data.match_id}`);
+  }
+  revalidatePath("/dashboard");
+
+  return successWithRedirect("Job saved to tracker.", "/tracker");
+}
+
+export async function updateApplicationStatusAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const parsed = validateUpdateApplicationStatusInput(readForm(formData));
+  if (!parsed.success) {
+    return failure("Choose a valid tracker status.");
+  }
+
+  const updatePayload: {
+    status: string;
+    updated_at: string;
+    applied_date?: string;
+  } = {
+    status: parsed.data.status,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (parsed.data.status === "applied") {
+    updatePayload.applied_date = new Date().toISOString().slice(0, 10);
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data: application, error } = await supabase
+    .from("applications")
+    .update(updatePayload)
+    .eq("id", parsed.data.application_id)
+    .eq("user_id", context.userProfileId)
+    .select("id,job_id,match_id")
+    .single();
+
+  if (error || !application?.id) {
+    return failure("Tracker status update failed.");
+  }
+
+  revalidatePath("/tracker");
+  revalidatePath(`/jobs/${application.job_id}`);
+  if (application.match_id) {
+    revalidatePath(`/matches/${application.match_id}`);
+  }
+
+  return success("Tracker status updated.");
 }
 
 export async function generateMatchAction(

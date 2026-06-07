@@ -10,6 +10,8 @@ import {
   validateProfileInput,
   validateResumeTextInput,
   validateResumeTitleInput,
+  validateSaveApplicationInput,
+  validateUpdateApplicationStatusInput,
 } from "../src/lib/action-validation.mjs";
 
 test("profile validation accepts supported AI target roles and coerces experience", () => {
@@ -114,6 +116,41 @@ test("match id validation requires a UUID", () => {
   );
 
   assert.equal(validateMatchIdInput({ match_id: "match" }).success, false);
+});
+
+test("application save validation accepts job UUID and optional match UUID", () => {
+  assert.equal(
+    validateSaveApplicationInput({
+      job_id: "ffb2c3c7-9914-497a-935a-26707e5b10bf",
+      match_id: "98ed9270-a036-4cb3-a644-613854790963",
+    }).success,
+    true
+  );
+
+  const withoutMatch = validateSaveApplicationInput({
+    job_id: "ffb2c3c7-9914-497a-935a-26707e5b10bf",
+    match_id: "",
+  });
+  assert.equal(withoutMatch.success, true);
+  assert.equal(withoutMatch.data.match_id, null);
+});
+
+test("application status validation accepts only the tracker workflow statuses", () => {
+  assert.equal(
+    validateUpdateApplicationStatusInput({
+      application_id: "43c75e3c-c5da-4a3c-b33f-16c1b2ee9f6c",
+      status: "interviewing",
+    }).success,
+    true
+  );
+
+  assert.equal(
+    validateUpdateApplicationStatusInput({
+      application_id: "43c75e3c-c5da-4a3c-b33f-16c1b2ee9f6c",
+      status: "screen",
+    }).success,
+    false
+  );
 });
 
 test("readForm converts FormData fields into an object", () => {

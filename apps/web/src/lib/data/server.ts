@@ -2,6 +2,7 @@ import "server-only";
 
 import { notFound } from "next/navigation";
 
+import { summarizeApplicationStatuses } from "@/lib/application-tracker.mjs";
 import { getCurrentAppUser, type AppUser } from "@/lib/auth/server";
 import { hasSupabaseEnv } from "@/lib/env";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
@@ -44,6 +45,8 @@ export type WorkspaceJob = {
 
 export type WorkspaceMatch = {
   id: string;
+  resume_id: string;
+  job_id: string;
   overall_score: number;
   skill_score: number;
   experience_score: number;
@@ -66,6 +69,41 @@ export type WorkspaceMatch = {
     company: string;
     title: string;
   } | null;
+};
+
+export type ApplicationTrackerItem = {
+  id: string;
+  user_id: string;
+  job_id: string;
+  match_id: string | null;
+  status: string;
+  applied_date: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  jobs: {
+    id: string;
+    company: string;
+    title: string;
+    job_url: string | null;
+    location: string | null;
+    contact_name: string | null;
+    contact_email: string | null;
+    contact_linkedin_url: string | null;
+    contact_notes: string | null;
+  } | null;
+  matches: {
+    id: string;
+    overall_score: number;
+  } | null;
+};
+
+export type TrackerData = {
+  appUser: AppUser | null;
+  profile: WorkspaceProfile | null;
+  applications: ApplicationTrackerItem[];
+  statusSummary: Record<string, number>;
+  isConfigured: boolean;
 };
 
 export type ResumeSuggestion = {
@@ -216,6 +254,8 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
         .select(
           [
             "id",
+            "resume_id",
+            "job_id",
             "overall_score",
             "skill_score",
             "experience_score",
@@ -398,6 +438,65 @@ export async function getMatchWorkspaceData() {
   };
 }
 
+export async function getTrackerData(): Promise<TrackerData> {
+  const { appUser, profile } = await getWorkspaceProfile();
+
+  if (!appUser || !hasSupabaseEnv()) {
+    return {
+      appUser,
+      profile,
+      applications: [],
+      statusSummary: summarizeApplicationStatuses([]),
+      isConfigured: false,
+    };
+  }
+
+  if (!profile) {
+    return {
+      appUser,
+      profile,
+      applications: [],
+      statusSummary: summarizeApplicationStatuses([]),
+      isConfigured: true,
+    };
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data: applicationRows, error } = await supabase
+    .from("applications")
+    .select(
+      [
+        "id",
+        "user_id",
+        "job_id",
+        "match_id",
+        "status",
+        "applied_date",
+        "notes",
+        "created_at",
+        "updated_at",
+        "jobs(id,company,title,job_url,location,contact_name,contact_email,contact_linkedin_url,contact_notes)",
+        "matches(id,overall_score)",
+      ].join(",")
+    )
+    .eq("user_id", profile.id)
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    console.warn("[ApplyWise data skipped] Unable to load application tracker.");
+  }
+
+  const applications = (applicationRows ?? []) as unknown as ApplicationTrackerItem[];
+
+  return {
+    appUser,
+    profile,
+    applications,
+    statusSummary: summarizeApplicationStatuses(applications),
+    isConfigured: true,
+  };
+}
+
 export async function getMatchDetail(matchId: string) {
   const { appUser, profile } = await getWorkspaceProfile();
 
@@ -411,6 +510,8 @@ export async function getMatchDetail(matchId: string) {
     .select(
       [
         "id",
+        "resume_id",
+        "job_id",
         "overall_score",
         "skill_score",
         "experience_score",
@@ -460,6 +561,8 @@ export async function getResumeSuggestionsDetail(matchId: string) {
       .select(
         [
           "id",
+          "resume_id",
+          "job_id",
           "overall_score",
           "strengths_json",
           "weaknesses_json",
@@ -529,6 +632,8 @@ export async function getResumeDraftDetail(matchId: string) {
       .select(
         [
           "id",
+          "resume_id",
+          "job_id",
           "overall_score",
           "created_at",
           "updated_at",
@@ -599,6 +704,8 @@ export async function getRoadmapDetail(matchId: string) {
         .select(
           [
             "id",
+            "resume_id",
+            "job_id",
             "overall_score",
             "missing_skills_json",
             "created_at",
@@ -649,6 +756,8 @@ export async function getInterviewPrepDetail(matchId: string) {
         .select(
           [
             "id",
+            "resume_id",
+            "job_id",
             "overall_score",
             "strengths_json",
             "weaknesses_json",

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { SaveApplicationForm } from "@/components/forms/save-application-form";
 import { formatShortDate, getContactLabel, getJobDetail } from "@/lib/data/server";
 import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -58,6 +59,16 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
           </Card>
 
           <div className="flex flex-col gap-5">
+            <Card>
+              <CardHeader>
+                <CardTitle>Application tracker</CardTitle>
+                <CardDescription>Save this job to track application progress.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <SaveApplicationForm jobId={job.id} />
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle>Job metadata</CardTitle>

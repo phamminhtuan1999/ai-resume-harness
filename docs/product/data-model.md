@@ -200,11 +200,14 @@ Required fields:
 - `notes text`
 - timestamps
 
-Valid `status` values:
+Valid `status` storage values:
 
-- `Saved`
-- `Applied`
-- `Interviewing`
-- `Offer`
-- `Rejected`
-- `Archived`
+- `saved`
+- `applied`
+- `interviewing`
+- `offer`
+- `rejected`
+- `archived`
+
+The browser UI displays these values as `Saved`, `Applied`, `Interviewing`,
+`Offer`, `Rejected`, and `Archived`.
