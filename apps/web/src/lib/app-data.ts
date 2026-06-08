@@ -22,6 +22,21 @@ export const navItems = [
   { label: "Settings", href: "/settings", icon: Settings },
 ] as const;
 
+// Derives the active sidebar item from the current pathname. /profile and its
+// subroutes are grouped under Settings in the nav.
+export function isNavItemActive(
+  pathname: string,
+  item: { href: string; label: string }
+) {
+  if (item.label === "Settings" && pathname.startsWith("/profile")) {
+    return true;
+  }
+  if (item.href === "/dashboard") {
+    return pathname === "/dashboard";
+  }
+  return pathname === item.href || pathname.startsWith(`${item.href}/`);
+}
+
 export const quickActions = [
   { label: "Add resume", href: "/resumes/new", icon: Upload },
   { label: "Analyze match", href: "/matches/new", icon: Sparkles },

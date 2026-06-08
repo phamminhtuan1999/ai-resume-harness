@@ -16,9 +16,14 @@ test("shared UI system components exist for page headers and empty states", () =
   const pageHeader = readSource("components/page-header.tsx");
   const emptyState = readSource("components/empty-state.tsx");
 
-  assert.match(pageHeader, /text-2xl font-semibold tracking-normal/);
+  // Period 7: page titles use the Sora display face with tight tracking.
+  assert.match(pageHeader, /font-display text-2xl font-semibold tracking-tight/);
   assert.match(pageHeader, /max-w-2xl text-sm leading-6 text-muted-foreground/);
-  assert.match(emptyState, /rounded-lg border border-dashed bg-muted\/20/);
+  // Period 7: empty states keep the shared rounded-lg shape and a dashed default,
+  // and now support intent variants (default / create / error).
+  assert.match(emptyState, /rounded-lg border/);
+  assert.match(emptyState, /border-dashed/);
+  assert.match(emptyState, /variant/);
 });
 
 test("shared shape language uses rounded-lg across core primitives", () => {
@@ -34,7 +39,11 @@ test("shared shape language uses rounded-lg across core primitives", () => {
 });
 
 test("primary workspace list pages use shared page headers and empty states", () => {
-  for (const path of ["resumes/page.tsx", "jobs/page.tsx", "matches/page.tsx"]) {
+  for (const path of [
+    "(app)/resumes/page.tsx",
+    "(app)/jobs/page.tsx",
+    "(app)/matches/page.tsx",
+  ]) {
     const source = readSource(`app/${path}`);
 
     assert.match(source, /PageHeader/);

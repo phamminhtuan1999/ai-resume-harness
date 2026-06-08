@@ -29,7 +29,7 @@ test("pricing page is a placeholder and does not start checkout", () => {
 });
 
 test("settings page uses live account data and avoids fake destructive controls", () => {
-  const source = readAppFile("settings/page.tsx");
+  const source = readAppFile("(app)/settings/page.tsx");
 
   assert.match(source, /getWorkspaceData/);
   assert.match(source, /getTrackerData/);

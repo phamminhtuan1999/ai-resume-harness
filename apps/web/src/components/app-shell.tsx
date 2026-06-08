@@ -1,69 +1,45 @@
 import Link from "next/link";
 import { SignOutButton } from "@clerk/nextjs";
-import { ArrowRight, LogOut, Sparkles } from "lucide-react";
+import { ArrowRight, LogOut } from "lucide-react";
 
 import { hasClerkEnv } from "@/lib/env";
-import { navItems, userSummary } from "@/lib/app-data";
-import { cn } from "@/lib/utils";
+import { userSummary } from "@/lib/app-data";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+import { Logo } from "@/components/brand/logo";
+import { MobileNav } from "@/components/mobile-nav";
+import { SidebarNav } from "@/components/sidebar-nav";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type AppShellProps = {
-  active: string;
   children: React.ReactNode;
   userName?: string | null;
   userTarget?: string | null;
 };
 
-export function AppShell({ active, children, userName, userTarget }: AppShellProps) {
+export function AppShell({ children, userName, userTarget }: AppShellProps) {
   const UserIcon = userSummary.icon;
   const displayName = userName || userSummary.name;
   const displayTarget = userTarget || userSummary.target;
+  const clerkEnabled = hasClerkEnv();
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[248px_1fr]">
-        <aside className="hidden border-r bg-sidebar/80 lg:flex lg:flex-col">
-          <div className="flex h-16 items-center gap-3 px-5">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Sparkles className="size-4" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold">ApplyWise</span>
-              <span className="text-xs text-muted-foreground">AI role copilot</span>
-            </div>
+    <div className="min-h-[100dvh] bg-background text-foreground">
+      <div className="grid min-h-[100dvh] grid-cols-1 lg:grid-cols-[264px_1fr]">
+        <aside className="hidden border-r bg-sidebar lg:flex lg:flex-col">
+          <div className="flex h-16 items-center px-5">
+            <Logo subtitle="AI role copilot" />
           </div>
-          <Separator />
-          <nav className="flex flex-1 flex-col gap-1 p-3">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = active === item.label;
-
-              return (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className={cn(
-                    "flex h-9 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-                    isActive && "bg-accent text-accent-foreground"
-                  )}
-                >
-                  <Icon className="size-4" />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
+          <SidebarNav />
           <div className="p-3">
-            <div className="flex items-center gap-3 rounded-lg border bg-card p-3">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-secondary">
+            <div className="flex items-center gap-3 rounded-lg border bg-card p-3 shadow-sm shadow-black/[0.02]">
+              <div className="flex size-9 items-center justify-center rounded-lg bg-brand-muted text-[oklch(0.43_0.10_164)] dark:text-brand">
                 <UserIcon className="size-4" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{displayName}</p>
                 <p className="truncate text-xs text-muted-foreground">{displayTarget}</p>
               </div>
-              {hasClerkEnv() ? (
+              {clerkEnabled ? (
                 <SignOutButton>
                   <Button variant="ghost" size="icon-sm" aria-label="Sign out">
                     <LogOut />
@@ -77,21 +53,30 @@ export function AppShell({ active, children, userName, userTarget }: AppShellPro
             </div>
           </div>
         </aside>
+
         <main className="flex min-w-0 flex-col">
-          <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-background/95 px-4 backdrop-blur lg:px-6">
-            <div className="flex min-w-0 flex-col">
-              <span className="text-sm font-semibold lg:hidden">ApplyWise</span>
-              <span className="truncate text-xs text-muted-foreground">
+          <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b bg-background/85 px-4 backdrop-blur lg:px-6">
+            <div className="flex min-w-0 items-center gap-2">
+              <MobileNav
+                hasClerk={clerkEnabled}
+                displayName={displayName}
+                displayTarget={displayTarget}
+              />
+              <Logo className="lg:hidden" wordmark={false} />
+              <span className="hidden truncate text-sm text-muted-foreground lg:block">
                 Resume strategy for AI engineering roles
               </span>
             </div>
-            <Link
-              href="/matches/new"
-              className={buttonVariants({ size: "lg", className: "shrink-0" })}
-            >
-              Analyze match
-              <ArrowRight data-icon="inline-end" />
-            </Link>
+            <div className="flex shrink-0 items-center gap-2">
+              <ThemeToggle />
+              <Link
+                href="/matches/new"
+                className={buttonVariants({ size: "lg", className: "shrink-0" })}
+              >
+                Analyze match
+                <ArrowRight data-icon="inline-end" />
+              </Link>
+            </div>
           </header>
           <div className="flex-1 p-4 lg:p-6">{children}</div>
         </main>

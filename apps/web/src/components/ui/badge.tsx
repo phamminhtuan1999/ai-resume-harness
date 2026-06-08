@@ -18,6 +18,11 @@ const badgeVariants = cva(
           "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
+        success:
+          "bg-success/12 text-[oklch(0.43_0.10_164)] dark:bg-success/18 dark:text-[oklch(0.84_0.13_166)]",
+        warning:
+          "bg-warning/16 text-[oklch(0.45_0.09_70)] dark:bg-warning/18 dark:text-[oklch(0.85_0.13_82)]",
+        info: "bg-info/12 text-[oklch(0.45_0.13_245)] dark:bg-info/18 dark:text-[oklch(0.80_0.12_240)]",
         link: "text-primary underline-offset-4 hover:underline",
       },
     },

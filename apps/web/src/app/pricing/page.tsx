@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, LockKeyhole } from "lucide-react";
+import { CheckCircle2, LockKeyhole } from "lucide-react";
 
+import { Logo } from "@/components/brand/logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -33,24 +35,33 @@ const plans = [
 
 export default function PricingPage() {
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 lg:px-6">
-        <header className="flex items-center justify-between">
-          <Link href="/" className={buttonVariants({ variant: "ghost" })}>
-            <ArrowLeft data-icon="inline-start" />
-            ApplyWise
+    <main className="min-h-[100dvh] bg-background text-foreground">
+      <header className="border-b">
+        <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-4 lg:px-6">
+          <Link href="/" aria-label="ApplyWise home">
+            <Logo />
           </Link>
-          <Link href="/sign-up" className={buttonVariants({ variant: "outline" })}>
-            Start workspace
-          </Link>
-        </header>
-
-        <section className="flex flex-col gap-3 py-8">
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Link href="/sign-in" className={buttonVariants({ variant: "outline" })}>
+              Sign in
+            </Link>
+            <Link
+              href="/sign-up"
+              className={buttonVariants({ className: "hidden sm:inline-flex" })}
+            >
+              Start workspace
+            </Link>
+          </div>
+        </div>
+      </header>
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-10 lg:px-6">
+        <section className="flex flex-col gap-3">
           <Badge className="w-fit" variant="secondary">
             Payment disabled in MVP
           </Badge>
-          <h1 className="max-w-2xl text-4xl font-semibold tracking-normal md:text-5xl">
-            Pricing placeholder for a serious SaaS path.
+          <h1 className="max-w-2xl font-display text-4xl font-semibold tracking-tight md:text-5xl">
+            Plans that grow with your search.
           </h1>
           <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
             ApplyWise shows Free and Pro positioning now, but the MVP does not collect payment

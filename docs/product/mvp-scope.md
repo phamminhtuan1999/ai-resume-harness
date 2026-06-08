@@ -53,6 +53,7 @@ The MVP is complete when a user can:
 | Period 4 | Tracker, pricing placeholder, landing page, settings, polish, demo flow. | Future story packets |
 | Period 5 | UI/UX rework, validation consistency, responsive workflow polish, copy cleanup, and visual QA. | Future story packets |
 | Period 6 | Job URL intake and resume-based profile autofill. | Future story packets |
+| Period 7 | Commercial-grade design-system overhaul: brand, tokens, typography, primitives, app shell, landing, light/dark parity. | US-021 through US-026 |
 
 ## Period 1 Exit Criteria
 

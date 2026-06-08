@@ -7,6 +7,7 @@ import { FormFieldError, FormFieldHint } from "@/components/forms/form-field";
 import { FormStatusMessage } from "@/components/forms/form-status-message";
 import { FormSuccessPopup } from "@/components/forms/form-success-popup";
 import { SubmitButton } from "@/components/forms/submit-button";
+import { Select } from "@/components/ui/select";
 import {
   APPLICATION_STATUSES,
   getApplicationStatusLabel,
@@ -44,21 +45,22 @@ export function ApplicationStatusForm({ applicationId, status }: ApplicationStat
         Application status
       </label>
       <div className="flex gap-2">
-        <select
-          aria-invalid={Boolean(state.fieldErrors?.status)}
-          className="h-8 flex-1 rounded-lg border bg-background px-2 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
-          value={selected}
-          onChange={(event) => setSelected(event.target.value)}
-          id={`application-status-${applicationId}`}
-          name="status"
-          required
-        >
-          {APPLICATION_STATUSES.map((option) => (
-            <option key={option} value={option}>
-              {getApplicationStatusLabel(option)}
-            </option>
-          ))}
-        </select>
+        <div className="flex-1">
+          <Select
+            aria-invalid={Boolean(state.fieldErrors?.status)}
+            value={selected}
+            onChange={(event) => setSelected(event.target.value)}
+            id={`application-status-${applicationId}`}
+            name="status"
+            required
+          >
+            {APPLICATION_STATUSES.map((option) => (
+              <option key={option} value={option}>
+                {getApplicationStatusLabel(option)}
+              </option>
+            ))}
+          </Select>
+        </div>
         <SubmitButton className="w-fit" variant="outline" disabled={!isDirty}>
           <Save data-icon="inline-start" />
           Update

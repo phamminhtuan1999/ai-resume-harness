@@ -300,7 +300,7 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
   };
 }
 
-async function getWorkspaceProfile() {
+export async function getWorkspaceProfile() {
   const appUser = await getCurrentAppUser();
 
   if (!appUser || !hasSupabaseEnv()) {

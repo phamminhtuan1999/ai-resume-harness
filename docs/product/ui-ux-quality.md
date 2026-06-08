@@ -2,25 +2,48 @@
 
 ## Design Read
 
-ApplyWise is a B2B SaaS-style product workspace for job seekers making repeated,
-high-stakes decisions. The UI should feel quiet, trustworthy, and task-focused:
-dense enough for comparison and review, but not decorative or marketing-heavy.
+ApplyWise is a B2B SaaS product workspace for job seekers making repeated,
+high-stakes decisions. Protected workspace pages must stay quiet, trustworthy,
+and task-focused: dense enough for comparison and review. Public pages
+(landing, pricing, auth) are brand-led and may be more expressive to earn trust
+before sign-up. Decision `docs/decisions/0011-design-system-overhaul.md` sets the
+current visual direction and supersedes the conservative direction in US-014.
 
-Design dials for the next UI rework:
+Design dials (Period 7 overhaul, see decision 0011):
 
-- Design variance: 4. Preserve the existing product structure and improve
-  consistency before introducing new visual language.
-- Motion intensity: 2. Use motion only for feedback, loading, and state changes.
-- Visual density: 6. Protected workspace pages should support scanning,
-  comparison, and repeated use.
+- Design variance: 7. A distinct, ownable brand. Public pages use varied,
+  asymmetric, brand-led composition; protected pages stay calmer (effective
+  variance ~5) to protect scanning.
+- Motion intensity: 4. CSS-driven motion for feedback, loading, state changes,
+  and tasteful entrance/scroll reveals on public pages. Every animation must be
+  motivated and must honor `prefers-reduced-motion`. No animation-runtime
+  dependency is added at this level.
+- Visual density: 5. Workspace pages remain scannable for repeated use; public
+  pages breathe more.
+
+## Design System
+
+- Brand accent: emerald / teal (≈ `oklch(0.60 0.13 165)`), locked as the single
+  accent across all light and dark surfaces. No second accent color.
+- Neutrals: one cool-gray family; no warm/cool drift within a page.
+- Typography: a real self-hosted system via `next/font` — Geist for UI and body,
+  Geist Mono for numerals and metadata, and a display family for headlines, on a
+  distinct display / heading / body / caption scale.
+- Theme parity: light and dark are first-class. Every token has a tested dark
+  value, and a page picks one theme without inverting mid-scroll.
+- Shape: one corner-radius scale for cards, buttons, inputs, alerts, and popups.
+- Brand mark: a simple geometric logo, not a generic stock glyph.
+- Public landing and pricing avoid div-based fake product screenshots,
+  decorative grid lines, equal-card feature rows, and fabricated testimonials or
+  metrics. Use real component previews and honest copy.
 
 ## Quality Contract
 
 All product surfaces must follow these rules:
 
 - Use one theme and one accent language across public and protected pages.
-- Keep the current restrained SaaS palette unless a later brand decision changes
-  it.
+- Use the emerald / teal brand accent as the single locked accent; do not
+  introduce a second accent in any section (decision 0011).
 - Keep one corner-radius system for cards, buttons, inputs, alerts, and popups.
 - Keep page headings, section headings, and compact panel headings on distinct
   type scales.

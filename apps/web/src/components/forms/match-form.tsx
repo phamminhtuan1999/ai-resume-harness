@@ -9,6 +9,7 @@ import { FormField } from "@/components/forms/form-field";
 import { FormStatusMessage } from "@/components/forms/form-status-message";
 import { FormSuccessPopup } from "@/components/forms/form-success-popup";
 import { SubmitButton } from "@/components/forms/submit-button";
+import { Select } from "@/components/ui/select";
 
 type MatchFormProps = {
   jobs: WorkspaceJob[];
@@ -30,9 +31,8 @@ export function MatchForm({ jobs, resumes }: MatchFormProps) {
         label="Resume"
         required
       >
-        <select
+        <Select
           aria-invalid={Boolean(state.fieldErrors?.resume_id)}
-          className="h-10 rounded-lg border bg-background px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
           disabled={resumes.length === 0}
           name="resume_id"
           required
@@ -43,7 +43,7 @@ export function MatchForm({ jobs, resumes }: MatchFormProps) {
               {resume.title}
             </option>
           ))}
-        </select>
+        </Select>
       </FormField>
 
       <FormField
@@ -52,9 +52,8 @@ export function MatchForm({ jobs, resumes }: MatchFormProps) {
         label="Job"
         required
       >
-        <select
+        <Select
           aria-invalid={Boolean(state.fieldErrors?.job_id)}
-          className="h-10 rounded-lg border bg-background px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
           disabled={jobs.length === 0}
           name="job_id"
           required
@@ -65,7 +64,7 @@ export function MatchForm({ jobs, resumes }: MatchFormProps) {
               {job.company} - {job.title}
             </option>
           ))}
-        </select>
+        </Select>
       </FormField>
 
       {!canGenerate ? (

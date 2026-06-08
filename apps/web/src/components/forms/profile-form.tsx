@@ -12,6 +12,7 @@ import { FormSuccessPopup } from "@/components/forms/form-success-popup";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 
 type ProfileFormProfile = {
   current_role: string | null;
@@ -160,9 +161,8 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         label="Target role"
         required
       >
-        <select
+        <Select
           aria-invalid={Boolean(state.fieldErrors?.target_role)}
-          className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
           value={values.target_role}
           onChange={(event) => updateField("target_role", event.target.value)}
           name="target_role"
@@ -173,7 +173,7 @@ export function ProfileForm({ profile }: ProfileFormProps) {
               {option}
             </option>
           ))}
-        </select>
+        </Select>
       </FormField>
       <FormField
         error={state.fieldErrors?.location_preference}
