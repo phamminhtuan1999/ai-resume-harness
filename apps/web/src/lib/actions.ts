@@ -24,6 +24,7 @@ import {
 } from "@/lib/resume-import-flow.mjs";
 import { buildInterviewPrep } from "@/lib/interview-prep-generator.mjs";
 import { analyzeResumeJobFit } from "@/lib/match-analyzer.mjs";
+import { saveImportedCandidateProfile } from "@/lib/profile-import-flow.mjs";
 import { buildFourWeekRoadmap } from "@/lib/roadmap-generator.mjs";
 import { buildTailoredResumeDraft } from "@/lib/resume-draft-generator.mjs";
 import { buildResumeSuggestions } from "@/lib/resume-suggestion-generator.mjs";
@@ -121,6 +122,56 @@ export async function saveProfileAction(
   revalidatePath("/profile");
   revalidatePath("/dashboard");
   return success("Profile saved.");
+}
+
+export async function saveImportedProfileAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const resumeId = String(formData.get("resume_id") || "");
+  const candidateProfileJson = String(formData.get("candidate_profile_json") || "");
+  const confidenceJson = String(formData.get("confidence_json") || "");
+
+  let candidateProfile: unknown;
+  let confidence: unknown;
+  try {
+    candidateProfile = JSON.parse(candidateProfileJson);
+    confidence = confidenceJson
+      ? JSON.parse(confidenceJson)
+      : { overall: 1, low_confidence_fields: [] };
+  } catch {
+    return failure("Review JSON must be valid before importing.", {
+      candidate_profile_json: "Enter valid candidate profile JSON.",
+    });
+  }
+
+  if (!resumeId) {
+    return failure("Resume is required before profile import.", {
+      resume_id: "Resume is required.",
+    });
+  }
+
+  const sessionToken = await getCurrentSessionToken();
+  const result = await saveImportedCandidateProfile({
+    apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
+    candidateProfile,
+    confidence,
+    resumeId,
+    sessionToken,
+  });
+
+  if (!result.ok) {
+    return failure(result.message);
+  }
+
+  revalidatePath("/profile");
+  revalidatePath("/dashboard");
+  return successWithRedirect("Profile imported from resume.", "/profile");
 }
 
 export async function saveResumeAction(

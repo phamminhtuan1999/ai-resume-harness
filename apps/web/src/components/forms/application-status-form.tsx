@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Save } from "lucide-react";
 
 import { FormFieldError, FormFieldHint } from "@/components/forms/form-field";
@@ -11,6 +11,7 @@ import {
   APPLICATION_STATUSES,
   getApplicationStatusLabel,
 } from "@/lib/application-tracker.mjs";
+import { valuesDiffer } from "@/lib/form-dirty.mjs";
 import { idleActionState } from "@/lib/action-state";
 import { updateApplicationStatusAction } from "@/lib/actions";
 
@@ -21,6 +22,19 @@ type ApplicationStatusFormProps = {
 
 export function ApplicationStatusForm({ applicationId, status }: ApplicationStatusFormProps) {
   const [state, formAction] = useActionState(updateApplicationStatusAction, idleActionState);
+  const [selected, setSelected] = useState(status);
+  const [savedStatus, setSavedStatus] = useState(status);
+
+  // When the saved status changes (e.g. after a successful update revalidates the
+  // tracker), re-sync the selection so the control returns to a clean state. A
+  // failed update leaves the saved status unchanged, keeping the edit and Update
+  // enabled for retry. This render-time adjustment is preferred over an effect.
+  if (savedStatus !== status) {
+    setSavedStatus(status);
+    setSelected(status);
+  }
+
+  const isDirty = valuesDiffer({ status }, { status: selected });
 
   return (
     <form action={formAction} className="grid min-w-[220px] gap-2">
@@ -33,7 +47,8 @@ export function ApplicationStatusForm({ applicationId, status }: ApplicationStat
         <select
           aria-invalid={Boolean(state.fieldErrors?.status)}
           className="h-8 flex-1 rounded-lg border bg-background px-2 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
-          defaultValue={status}
+          value={selected}
+          onChange={(event) => setSelected(event.target.value)}
           id={`application-status-${applicationId}`}
           name="status"
           required
@@ -44,7 +59,7 @@ export function ApplicationStatusForm({ applicationId, status }: ApplicationStat
             </option>
           ))}
         </select>
-        <SubmitButton className="w-fit" variant="outline">
+        <SubmitButton className="w-fit" variant="outline" disabled={!isDirty}>
           <Save data-icon="inline-start" />
           Update
         </SubmitButton>

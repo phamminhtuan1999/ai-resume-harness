@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, FileText } from "lucide-react";
+import { ArrowLeft, FileText, UserRoundSearch } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { formatShortDate, getResumeDetail } from "@/lib/data/server";
@@ -42,6 +42,13 @@ export default async function ResumeDetailPage({ params }: ResumeDetailPageProps
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <Link
+                href={`/profile/import-from-resume/${resume.id}`}
+                className={buttonVariants({ variant: "outline" })}
+              >
+                <UserRoundSearch data-icon="inline-start" />
+                Import profile
+              </Link>
               <Badge variant="secondary">{resume.source_type}</Badge>
               <Badge variant="outline">{resume.import_status}</Badge>
             </div>

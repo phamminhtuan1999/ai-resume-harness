@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     clerk_jwks_url: str = Field(default="", alias="CLERK_JWKS_URL")
     supabase_url: str = Field(default="", alias="SUPABASE_URL")
     supabase_service_role_key: str = Field(default="", alias="SUPABASE_SERVICE_ROLE_KEY")
+    gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
+    gemini_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_MODEL")
+    gemini_max_attempts: int = Field(default=3, ge=1, alias="GEMINI_MAX_ATTEMPTS")
+    gemini_retry_base_delay_seconds: float = Field(
+        default=0.5, ge=0, alias="GEMINI_RETRY_BASE_DELAY_SECONDS"
+    )
 
     @property
     def allowed_origins_list(self) -> list[str]:

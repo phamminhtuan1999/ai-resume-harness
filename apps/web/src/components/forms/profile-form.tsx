@@ -1,14 +1,16 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 
-import { idleActionState } from "@/lib/action-state";
+import { idleActionState, type ActionState } from "@/lib/action-state";
 import { saveProfileAction } from "@/lib/actions";
 import { profileFields } from "@/lib/app-data";
+import { valuesDiffer } from "@/lib/form-dirty.mjs";
 import { FormField } from "@/components/forms/form-field";
 import { FormStatusMessage } from "@/components/forms/form-status-message";
 import { FormSuccessPopup } from "@/components/forms/form-success-popup";
 import { SubmitButton } from "@/components/forms/submit-button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 type ProfileFormProfile = {
@@ -23,6 +25,14 @@ type ProfileFormProps = {
   profile?: ProfileFormProfile | null;
 };
 
+type ProfileValues = {
+  current_role: string;
+  years_of_experience: string;
+  target_role: string;
+  location_preference: string;
+  technical_background: string;
+};
+
 const targetRoleOptions = [
   "AI Engineer",
   "Applied AI Engineer",
@@ -31,14 +41,80 @@ const targetRoleOptions = [
   "ML Engineer",
 ];
 
+const DEFAULT_TECHNICAL_BACKGROUND = "Backend, APIs, SQL, cloud deployment";
+
+function toFormValues(profile?: ProfileFormProfile | null): ProfileValues {
+  return {
+    current_role: profile?.current_role || profileFields[0].value,
+    years_of_experience: String(profile?.years_of_experience ?? 4),
+    target_role: profile?.target_role || profileFields[2].value,
+    location_preference: profile?.location_preference || profileFields[3].value,
+    technical_background: profile?.technical_background || DEFAULT_TECHNICAL_BACKGROUND,
+  };
+}
+
 export function ProfileForm({ profile }: ProfileFormProps) {
   const [state, formAction] = useActionState(saveProfileAction, idleActionState);
-  const currentRole = profile?.current_role || profileFields[0].value;
-  const yearsOfExperience = profile?.years_of_experience ?? 4;
-  const targetRole = profile?.target_role || profileFields[2].value;
-  const locationPreference = profile?.location_preference || profileFields[3].value;
-  const technicalBackground =
-    profile?.technical_background || "Backend, APIs, SQL, cloud deployment";
+
+  const initialValues = toFormValues(profile);
+  // A row may exist with empty fields; treat the required fields as the signal
+  // that a real profile was saved and can be shown read-only first.
+  const hasSavedProfile = Boolean(profile && (profile.current_role || profile.target_role));
+
+  const [mode, setMode] = useState<"view" | "edit">(hasSavedProfile ? "view" : "edit");
+  const [baseline, setBaseline] = useState<ProfileValues>(initialValues);
+  const [values, setValues] = useState<ProfileValues>(initialValues);
+  const handledStateRef = useRef<ActionState | null>(null);
+
+  const isDirty = valuesDiffer(baseline, values);
+
+  // After a successful save, the submitted values are now the saved values:
+  // adopt them as the new baseline and drop back to the read-only detail view.
+  useEffect(() => {
+    if (state.status === "success" && handledStateRef.current !== state) {
+      handledStateRef.current = state;
+      setBaseline(values);
+      setMode("view");
+    }
+  }, [state, values]);
+
+  function updateField(field: keyof ProfileValues, value: string) {
+    setValues((current) => ({ ...current, [field]: value }));
+  }
+
+  function startEditing() {
+    setBaseline(values);
+    setMode("edit");
+  }
+
+  function cancelEditing() {
+    setValues(baseline);
+    setMode("view");
+  }
+
+  if (mode === "view") {
+    return (
+      <div className="grid gap-5">
+        <FormSuccessPopup state={state} title="Profile saved" />
+        <dl className="grid gap-4 text-sm md:grid-cols-2">
+          <DetailItem label="Current role" value={values.current_role} />
+          <DetailItem label="Years of experience" value={`${values.years_of_experience} years`} />
+          <DetailItem label="Target role" value={values.target_role} />
+          <DetailItem label="Location preference" value={values.location_preference} />
+          <DetailItem
+            className="md:col-span-2"
+            label="Technical background"
+            value={values.technical_background}
+          />
+        </dl>
+        <div>
+          <Button type="button" onClick={startEditing}>
+            Edit profile
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form action={formAction} className="grid gap-4 md:grid-cols-2">
@@ -55,7 +131,8 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         <Input
           aria-invalid={Boolean(state.fieldErrors?.current_role)}
           name="current_role"
-          defaultValue={currentRole}
+          value={values.current_role}
+          onChange={(event) => updateField("current_role", event.target.value)}
           required
         />
       </FormField>
@@ -72,7 +149,8 @@ export function ProfileForm({ profile }: ProfileFormProps) {
           min="0"
           max="60"
           step="0.5"
-          defaultValue={yearsOfExperience}
+          value={values.years_of_experience}
+          onChange={(event) => updateField("years_of_experience", event.target.value)}
           required
         />
       </FormField>
@@ -85,7 +163,8 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         <select
           aria-invalid={Boolean(state.fieldErrors?.target_role)}
           className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
-          defaultValue={targetRole}
+          value={values.target_role}
+          onChange={(event) => updateField("target_role", event.target.value)}
           name="target_role"
           required
         >
@@ -104,7 +183,8 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         <Input
           aria-invalid={Boolean(state.fieldErrors?.location_preference)}
           name="location_preference"
-          defaultValue={locationPreference}
+          value={values.location_preference}
+          onChange={(event) => updateField("location_preference", event.target.value)}
         />
       </FormField>
       <FormField
@@ -116,12 +196,35 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         <Input
           aria-invalid={Boolean(state.fieldErrors?.technical_background)}
           name="technical_background"
-          defaultValue={technicalBackground}
+          value={values.technical_background}
+          onChange={(event) => updateField("technical_background", event.target.value)}
         />
       </FormField>
-      <div className="md:col-span-2">
-        <SubmitButton>Save profile</SubmitButton>
+      <div className="flex gap-2 md:col-span-2">
+        <SubmitButton disabled={!isDirty}>Save profile</SubmitButton>
+        {hasSavedProfile ? (
+          <Button type="button" variant="outline" onClick={cancelEditing}>
+            Cancel
+          </Button>
+        ) : null}
       </div>
     </form>
+  );
+}
+
+function DetailItem({
+  className,
+  label,
+  value,
+}: {
+  className?: string;
+  label: string;
+  value?: string | null;
+}) {
+  return (
+    <div className={className}>
+      <dt className="font-medium">{label}</dt>
+      <dd className="mt-1 text-muted-foreground">{value || "Not set"}</dd>
+    </div>
   );
 }
