@@ -11,6 +11,7 @@
     "lint:web": "npm --workspace apps/web run lint",
     "test:web": "npm --workspace apps/web run test",
     "setup:api": "cd apps/api && python3 -m venv .venv && .venv/bin/python -m pip install --upgrade pip && .venv/bin/python -m pip install -e \".[dev]\"",
-    "dev:api": "cd apps/api && .venv/bin/python -m uvicorn app.main:app --reload --port 8000"
+    "dev:api": "cd apps/api && .venv/bin/python -m uvicorn app.main:app --reload --port 8000",
+    "kill:ports": "node scripts/kill-ports.mjs"
   }
 }

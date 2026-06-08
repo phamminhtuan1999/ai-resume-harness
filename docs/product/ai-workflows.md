@@ -90,6 +90,81 @@ Output:
 - `domain`
 - `work_type`
 
+## Job URL Fetcher And Extractor
+
+Input:
+
+- user-submitted job URL
+
+Provider order:
+
+1. Firecrawl scrape URL.
+2. Manual paste fallback when fetch fails.
+3. Browserbase only for future agentic browsing workflows.
+4. Apify actors, job APIs, and approved feeds only for future discovery.
+
+Output:
+
+- source URL
+- company
+- title
+- location
+- work type
+- employment type
+- salary range when present
+- responsibilities
+- required skills
+- preferred skills
+- required experience years
+- AI-related requirements
+- cloud requirements
+- raw job description
+- confidence score
+
+Rules:
+
+- Validate the submitted URL before fetching.
+- Normalize URLs before duplicate checks.
+- Do not create a duplicate job when the normalized URL already exists for the
+  same user.
+- Validate every provider and AI extraction response with a strict schema.
+- Save fetched jobs with source `manual_url`.
+- If fetch fails, show a fallback path for manual job description paste.
+- Do not rely on unauthorized LinkedIn scraping as the primary product path.
+  LinkedIn URLs are supported only when user-submitted pages are accessible to
+  the approved fetch provider.
+
+## Candidate Profile Extractor
+
+Input:
+
+- canonical resume text already extracted by resume import normalization
+
+Output:
+
+- basic info
+- professional summary
+- categorized skills
+- work experience
+- projects
+- education
+- certifications
+- AI-derived metadata
+- confidence details and low-confidence fields
+
+Rules:
+
+- Use canonical resume text as the source of truth.
+- Return structured JSON only.
+- Do not invent companies, dates, skills, projects, metrics, education, or
+  certifications.
+- Missing values must be `null` or empty arrays.
+- Preserve original resume bullet meaning.
+- Separate work experience from projects when possible.
+- Mark uncertain fields with low confidence instead of guessing.
+- The user must review and edit the profile draft before it becomes the active
+  candidate profile.
+
 ## Match Analyzer
 
 Input:

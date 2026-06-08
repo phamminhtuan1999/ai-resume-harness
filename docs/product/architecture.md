@@ -29,6 +29,10 @@ delete support.
 AI model target: Gemini or another free-tier-friendly model first, with future
 fallback options for OpenAI, Claude, or local models.
 
+Job URL fetch target: Firecrawl first for MVP job URL intake. Browserbase is a
+post-MVP option for agentic browsing workflows. Apify actors, job APIs, and
+approved feeds are future discovery options.
+
 ## Boundary Rules
 
 - Protected browser routes require Clerk authentication.
@@ -45,13 +49,19 @@ fallback options for OpenAI, Claude, or local models.
   resume import normalization, and persistence of generated analysis results.
 - The backend owns Docling execution for PDF, DOCX, image, Markdown, and plain
   text resume imports.
+- The backend owns job URL fetch orchestration, provider response validation,
+  extraction prompts, duplicate URL checks, and provider failure fallback
+  states.
+- ApplyWise must not rely on unauthorized LinkedIn scraping as its primary job
+  intake dependency. LinkedIn URLs may be supported when user-submitted pages
+  are publicly accessible to the approved fetch provider.
 
 ## Runtime Responsibilities
 
 | Surface | Owns | Does Not Own |
 | --- | --- | --- |
 | `apps/web` | App shell, routes, forms, client state, Clerk UI, rendered results, browser validation. | AI prompt execution, provider SDK details, direct database policy bypass. |
-| `apps/api` | Auth verification, validation, persistence, resume import normalization, AI workflows, scoring, structured outputs. | Browser rendering or shadcn component state. |
+| `apps/api` | Auth verification, validation, persistence, resume import normalization, job URL fetching, AI workflows, scoring, structured outputs. | Browser rendering or shadcn component state. |
 | Supabase Postgres | User profile, resumes, jobs, matches, suggestions, versions, roadmaps, interview prep, tracker records. | Application authorization decisions without matching server checks. |
 
 ## Verification Ladder

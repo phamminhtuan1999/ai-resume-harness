@@ -15,6 +15,7 @@ the work is selected or when a product decision needs a durable place to land.
 | Period 3 Improvement Outputs | Resume suggestions, Truth Guard, Markdown draft, 4-week roadmap, and interview prep. | sliced |
 | Period 4 SaaS Polish | Tracker, contact surfacing, pricing placeholder, settings, landing page, empty/error/loading states, and demo flow. | sliced |
 | Period 5 UI/UX And Validation Rework | Design-system consistency, required validation, field feedback, responsive navigation, copy cleanup, and visual QA. | sliced |
+| Period 6 Job URL And Profile Automation | Firecrawl-backed job URL intake, manual fetch fallback, resume-based candidate profile autofill, and provider safety boundaries. | sliced |
 
 ## Sliced Stories
 
@@ -37,3 +38,5 @@ the work is selected or when a product decision needs a durable place to land.
 | US-015 | Form Validation And Feedback Rework | high-risk | planned |
 | US-016 | Core Workflow Responsive UX Rework | high-risk | planned |
 | US-017 | Accessibility Copy And Visual QA Pass | normal | planned |
+| US-018 | Add Job By URL With Fetcher | high-risk | planned |
+| US-019 | Resume PDF Text To Candidate Profile Autofill | high-risk | planned |

@@ -5,7 +5,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="APPLYWISE_", env_file=".env.local")
+    model_config = SettingsConfigDict(
+        env_prefix="APPLYWISE_",
+        env_file=".env.local",
+        extra="ignore",
+    )
 
     api_env: str = Field(default="development", alias="APPLYWISE_API_ENV")
     allowed_origins: str = Field(default="http://localhost:3000", alias="APPLYWISE_ALLOWED_ORIGINS")

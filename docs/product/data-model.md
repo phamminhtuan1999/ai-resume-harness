@@ -23,7 +23,22 @@ Required fields:
 - `target_role text`
 - `location_preference text`
 - `technical_background text`
+- `candidate_profile_json jsonb`
+- `candidate_profile_confidence_json jsonb`
+- `profile_source text default 'manual'`
+- `profile_source_resume_id uuid references resumes(id) on delete set null`
 - timestamps
+
+`candidate_profile_json` stores the reviewed structured candidate profile after
+resume-based profile import. Summary columns such as `current_role`,
+`years_of_experience`, `target_role`, `location_preference`, and
+`technical_background` remain the lightweight fields used by existing MVP
+screens.
+
+Valid `profile_source` values:
+
+- `manual`
+- `resume_import`
 
 ### `resumes`
 
@@ -74,8 +89,8 @@ content.
 
 ### `jobs`
 
-Stores manually entered job metadata, raw job description text, parser output,
-and optional contact details.
+Stores manually entered job metadata, URL-imported job metadata, raw job
+description text, parser output, and optional contact details.
 
 Required fields:
 
@@ -83,17 +98,40 @@ Required fields:
 - `user_id uuid references user_profiles(id) on delete cascade`
 - `company text not null`
 - `title text not null`
+- `source text default 'manual'`
 - `job_url text`
+- `normalized_url text`
 - `location text`
 - `work_type text`
+- `employment_type text`
+- `salary_range text`
 - `raw_description text not null`
 - `structured_json jsonb`
 - `parse_status text default 'not_parsed'`
+- `extraction_status text default 'not_required'`
+- `extraction_confidence numeric`
+- `extraction_json jsonb`
 - `contact_name text`
 - `contact_email text`
 - `contact_linkedin_url text`
 - `contact_notes text`
 - timestamps
+
+Valid `source` values:
+
+- `manual`
+- `manual_url`
+
+Valid `extraction_status` values:
+
+- `not_required`
+- `pending`
+- `processing`
+- `succeeded`
+- `failed`
+
+For URL-imported jobs, `normalized_url` should be unique per user when present.
+The app should not create a duplicate job for the same user and normalized URL.
 
 ### `matches`
 

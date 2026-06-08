@@ -19,21 +19,26 @@ The MVP is complete when a user can:
 13. Generate interview prep suggestions.
 14. Save a job to the application tracker.
 15. View a pricing screen.
+16. Add a job by URL using an approved fetch provider with manual paste
+    fallback.
+17. Generate a reviewed candidate profile draft from extracted resume text.
 
 ## Out Of Scope For MVP
 
 - PDF or DOCX resume export.
 - Section-by-section resume editor.
 - Resume version comparison.
-- Job URL parser.
 - Real Stripe or payment processing.
 - Chrome extension.
+- Browserbase-powered agentic job board navigation.
 - GitHub project analyzer.
 - AI mock interview chat.
 - Advanced model selector.
 - Application analytics.
 - Voice interview.
 - Auto job recommendations.
+- Unauthorized LinkedIn scraping as a primary product dependency.
+- Apify or job feed based automatic discovery.
 - Public portfolio generator.
 - Recruiter outreach generator.
 - Team or career-coach dashboard.
@@ -47,6 +52,7 @@ The MVP is complete when a user can:
 | Period 3 | Resume suggestions, Truth Guard, Markdown draft, roadmap, interview prep. | Future story packets |
 | Period 4 | Tracker, pricing placeholder, landing page, settings, polish, demo flow. | Future story packets |
 | Period 5 | UI/UX rework, validation consistency, responsive workflow polish, copy cleanup, and visual QA. | Future story packets |
+| Period 6 | Job URL intake and resume-based profile autofill. | Future story packets |
 
 ## Period 1 Exit Criteria
 

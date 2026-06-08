@@ -12,6 +12,8 @@ The MVP helps a user:
 - Create a career profile.
 - Add resume content as Markdown or plain text.
 - Paste a job description manually.
+- Add a job by URL when the page is fetchable by an approved provider.
+- Generate a candidate profile draft from extracted resume text.
 - Analyze resume-to-job fit.
 - See missing skills, weak positioning, strengths, and risks.
 - Generate evidence-based resume suggestions with Truth Guard.
@@ -32,7 +34,7 @@ The MVP is not targeted at:
 - General resume use cases.
 - Immigrant-specific career guidance.
 - Auto-application automation.
-- LinkedIn scraping.
+- Unauthorized LinkedIn scraping or login-gated job board automation.
 - Recruiter-side hiring tools.
 
 ## Positioning
@@ -51,7 +53,7 @@ The product should repeatedly answer this user question:
 | --- | --- |
 | Auth & Account | Clerk authentication, protected workspace access, account shell. |
 | Resume Workspace | Resume text storage, primary resume summary, parse status. |
-| Job Workspace | Manual job description storage, metadata, contact info, parse status. |
+| Job Workspace | Manual job description storage, job URL intake, metadata, contact info, parse status. |
 | AI Analysis Engine | Resume parsing, JD parsing, scoring, gaps, suggestions, roadmap, interview prep. |
 | Application Tracker | Application status, job link, match link, notes, contacts. |
 | Billing Placeholder | Pricing and plan positioning only; no payment processing in MVP. |
@@ -96,4 +98,3 @@ The authenticated app shell uses a sidebar with:
 The primary workflow CTA is:
 
 - Analyze New Job
-
