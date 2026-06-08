@@ -89,7 +89,7 @@ export function AppShell({ active, children, userName, userTarget }: AppShellPro
               href="/matches/new"
               className={buttonVariants({ size: "lg", className: "shrink-0" })}
             >
-              Analyze Match
+              Analyze match
               <ArrowRight data-icon="inline-end" />
             </Link>
           </header>

@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { idleActionState } from "@/lib/action-state";
 import { saveProfileAction } from "@/lib/actions";
 import { profileFields } from "@/lib/app-data";
+import { FormField } from "@/components/forms/form-field";
 import { FormStatusMessage } from "@/components/forms/form-status-message";
 import { FormSuccessPopup } from "@/components/forms/form-success-popup";
 import { SubmitButton } from "@/components/forms/submit-button";
@@ -22,6 +23,14 @@ type ProfileFormProps = {
   profile?: ProfileFormProfile | null;
 };
 
+const targetRoleOptions = [
+  "AI Engineer",
+  "Applied AI Engineer",
+  "LLM Engineer",
+  "GenAI Engineer",
+  "ML Engineer",
+];
+
 export function ProfileForm({ profile }: ProfileFormProps) {
   const [state, formAction] = useActionState(saveProfileAction, idleActionState);
   const currentRole = profile?.current_role || profileFields[0].value;
@@ -37,13 +46,27 @@ export function ProfileForm({ profile }: ProfileFormProps) {
       <div className="md:col-span-2">
         <FormStatusMessage state={state} />
       </div>
-      <label className="flex flex-col gap-2 text-sm font-medium">
-        Current role
-        <Input name="current_role" defaultValue={currentRole} required />
-      </label>
-      <label className="flex flex-col gap-2 text-sm font-medium">
-        Years of experience
+      <FormField
+        error={state.fieldErrors?.current_role}
+        helpText="Use the role that best describes your current experience."
+        label="Current role"
+        required
+      >
         <Input
+          aria-invalid={Boolean(state.fieldErrors?.current_role)}
+          name="current_role"
+          defaultValue={currentRole}
+          required
+        />
+      </FormField>
+      <FormField
+        error={state.fieldErrors?.years_of_experience}
+        helpText="Enter total relevant years, from 0 to 60."
+        label="Years of experience"
+        required
+      >
+        <Input
+          aria-invalid={Boolean(state.fieldErrors?.years_of_experience)}
           name="years_of_experience"
           type="number"
           min="0"
@@ -52,19 +75,50 @@ export function ProfileForm({ profile }: ProfileFormProps) {
           defaultValue={yearsOfExperience}
           required
         />
-      </label>
-      <label className="flex flex-col gap-2 text-sm font-medium">
-        Target role
-        <Input name="target_role" defaultValue={targetRole} required />
-      </label>
-      <label className="flex flex-col gap-2 text-sm font-medium">
-        Location preference
-        <Input name="location_preference" defaultValue={locationPreference} />
-      </label>
-      <label className="flex flex-col gap-2 text-sm font-medium md:col-span-2">
-        Technical background
-        <Input name="technical_background" defaultValue={technicalBackground} />
-      </label>
+      </FormField>
+      <FormField
+        error={state.fieldErrors?.target_role}
+        helpText="Choose the target role used for roadmap and match context."
+        label="Target role"
+        required
+      >
+        <select
+          aria-invalid={Boolean(state.fieldErrors?.target_role)}
+          className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
+          defaultValue={targetRole}
+          name="target_role"
+          required
+        >
+          {targetRoleOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </FormField>
+      <FormField
+        error={state.fieldErrors?.location_preference}
+        helpText="Optional location or remote preference."
+        label="Location preference"
+      >
+        <Input
+          aria-invalid={Boolean(state.fieldErrors?.location_preference)}
+          name="location_preference"
+          defaultValue={locationPreference}
+        />
+      </FormField>
+      <FormField
+        className="md:col-span-2"
+        error={state.fieldErrors?.technical_background}
+        helpText="Optional summary of languages, platforms, and domains."
+        label="Technical background"
+      >
+        <Input
+          aria-invalid={Boolean(state.fieldErrors?.technical_background)}
+          name="technical_background"
+          defaultValue={technicalBackground}
+        />
+      </FormField>
       <div className="md:col-span-2">
         <SubmitButton>Save profile</SubmitButton>
       </div>

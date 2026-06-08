@@ -23,9 +23,9 @@ export const navItems = [
 ] as const;
 
 export const quickActions = [
-  { label: "Add Resume", href: "/resumes/new", icon: Upload },
-  { label: "Analyze Match", href: "/matches/new", icon: Sparkles },
-  { label: "View Tracker", href: "/tracker", icon: Target },
+  { label: "Add resume", href: "/resumes/new", icon: Upload },
+  { label: "Analyze match", href: "/matches/new", icon: Sparkles },
+  { label: "View tracker", href: "/tracker", icon: Target },
 ] as const;
 
 export const recentJobs = [

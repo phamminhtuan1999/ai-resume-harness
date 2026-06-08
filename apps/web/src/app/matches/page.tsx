@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { ListChecks } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -30,17 +33,15 @@ export default async function MatchesPage() {
       userTarget={profile?.target_role}
     >
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">Matches</h1>
-            <p className="text-sm text-muted-foreground">
-              Resume-to-job analysis reports saved under your account.
-            </p>
-          </div>
+        <PageHeader
+          actions={
           <Link href="/matches/new" className={buttonVariants({ size: "lg" })}>
-            Generate Match
+            Generate match
           </Link>
-        </div>
+          }
+          description="Review resume-to-job analysis reports saved under your account."
+          title="Matches"
+        />
 
         <Card>
           <CardHeader>
@@ -81,9 +82,16 @@ export default async function MatchesPage() {
                 </TableBody>
               </Table>
             ) : (
-              <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                Generate a match after saving a resume and job description.
-              </div>
+              <EmptyState
+                action={
+                  <Link href="/matches/new" className={buttonVariants({ variant: "outline" })}>
+                    Generate match
+                  </Link>
+                }
+                description="Generate a match after saving a resume and job description."
+                icon={ListChecks}
+                title="No saved matches"
+              />
             )}
           </CardContent>
         </Card>

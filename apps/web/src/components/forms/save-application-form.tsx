@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { Bookmark } from "lucide-react";
 
+import { FormFieldError, FormFieldHint } from "@/components/forms/form-field";
 import { FormStatusMessage } from "@/components/forms/form-status-message";
 import { FormSuccessPopup } from "@/components/forms/form-success-popup";
 import { SubmitButton } from "@/components/forms/submit-button";
@@ -23,6 +24,8 @@ export function SaveApplicationForm({ jobId, matchId }: SaveApplicationFormProps
       <FormStatusMessage state={state} />
       <input name="job_id" type="hidden" value={jobId} />
       {matchId ? <input name="match_id" type="hidden" value={matchId} /> : null}
+      <FormFieldHint text="Required job context is attached from this page." />
+      <FormFieldError error={state.fieldErrors?.job_id || state.fieldErrors?.match_id} />
       <SubmitButton>
         <Bookmark data-icon="inline-start" />
         Save to tracker

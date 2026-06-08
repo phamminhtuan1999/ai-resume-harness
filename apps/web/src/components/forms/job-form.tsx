@@ -4,6 +4,7 @@ import { useActionState } from "react";
 
 import { idleActionState } from "@/lib/action-state";
 import { saveJobAction } from "@/lib/actions";
+import { FormField } from "@/components/forms/form-field";
 import { FormStatusMessage } from "@/components/forms/form-status-message";
 import { FormSuccessPopup } from "@/components/forms/form-success-popup";
 import { SubmitButton } from "@/components/forms/submit-button";
@@ -19,48 +20,121 @@ export function JobForm() {
       <div className="md:col-span-2">
         <FormStatusMessage state={state} />
       </div>
-      <label className="flex flex-col gap-2 text-sm font-medium">
-        Company
-        <Input name="company" minLength={2} placeholder="Northstar AI" required />
-      </label>
-      <label className="flex flex-col gap-2 text-sm font-medium">
-        Job title
-        <Input name="title" minLength={2} placeholder="Applied AI Engineer" required />
-      </label>
-      <label className="flex flex-col gap-2 text-sm font-medium">
-        Job URL
-        <Input name="job_url" placeholder="https://example.com/jobs/123" type="url" />
-      </label>
-      <label className="flex flex-col gap-2 text-sm font-medium">
-        Location
-        <Input name="location" placeholder="Remote, US" />
-      </label>
-      <label className="flex flex-col gap-2 text-sm font-medium md:col-span-2">
-        Job description
+      <FormField
+        error={state.fieldErrors?.company}
+        helpText="The employer or team name."
+        label="Company"
+        required
+      >
+        <Input
+          aria-invalid={Boolean(state.fieldErrors?.company)}
+          name="company"
+          minLength={2}
+          placeholder="Northstar AI"
+          required
+        />
+      </FormField>
+      <FormField
+        error={state.fieldErrors?.title}
+        helpText="Use the title from the posting."
+        label="Job title"
+        required
+      >
+        <Input
+          aria-invalid={Boolean(state.fieldErrors?.title)}
+          name="title"
+          minLength={2}
+          placeholder="Applied AI Engineer"
+          required
+        />
+      </FormField>
+      <FormField
+        error={state.fieldErrors?.job_url}
+        helpText="Optional full URL, including https://."
+        label="Job URL"
+      >
+        <Input
+          aria-invalid={Boolean(state.fieldErrors?.job_url)}
+          name="job_url"
+          placeholder="https://example.com/jobs/123"
+          type="url"
+        />
+      </FormField>
+      <FormField
+        error={state.fieldErrors?.location}
+        helpText="Optional office, hybrid, or remote location."
+        label="Location"
+      >
+        <Input
+          aria-invalid={Boolean(state.fieldErrors?.location)}
+          name="location"
+          placeholder="Remote, US"
+        />
+      </FormField>
+      <FormField
+        className="md:col-span-2"
+        error={state.fieldErrors?.raw_description}
+        helpText="Paste the full posting so the match analysis has enough context."
+        label="Job description"
+        required
+      >
         <Textarea
+          aria-invalid={Boolean(state.fieldErrors?.raw_description)}
           name="raw_description"
           className="min-h-52"
           minLength={10}
           placeholder="Paste the full job description."
           required
         />
-      </label>
-      <label className="flex flex-col gap-2 text-sm font-medium">
-        Contact name
-        <Input name="contact_name" placeholder="Maya Chen" />
-      </label>
-      <label className="flex flex-col gap-2 text-sm font-medium">
-        Contact email
-        <Input name="contact_email" placeholder="maya@example.com" type="email" />
-      </label>
-      <label className="flex flex-col gap-2 text-sm font-medium md:col-span-2">
-        Contact LinkedIn URL
-        <Input name="contact_linkedin_url" placeholder="https://linkedin.com/in/maya" type="url" />
-      </label>
-      <label className="flex flex-col gap-2 text-sm font-medium md:col-span-2">
-        Contact notes
-        <Textarea name="contact_notes" placeholder="Recruiter notes or LinkedIn context." />
-      </label>
+      </FormField>
+      <FormField
+        error={state.fieldErrors?.contact_name}
+        helpText="Optional recruiter, hiring manager, or referrer."
+        label="Contact name"
+      >
+        <Input
+          aria-invalid={Boolean(state.fieldErrors?.contact_name)}
+          name="contact_name"
+          placeholder="Maya Chen"
+        />
+      </FormField>
+      <FormField
+        error={state.fieldErrors?.contact_email}
+        helpText="Optional valid email address."
+        label="Contact email"
+      >
+        <Input
+          aria-invalid={Boolean(state.fieldErrors?.contact_email)}
+          name="contact_email"
+          placeholder="maya@example.com"
+          type="email"
+        />
+      </FormField>
+      <FormField
+        className="md:col-span-2"
+        error={state.fieldErrors?.contact_linkedin_url}
+        helpText="Optional full LinkedIn URL, including https://."
+        label="Contact LinkedIn URL"
+      >
+        <Input
+          aria-invalid={Boolean(state.fieldErrors?.contact_linkedin_url)}
+          name="contact_linkedin_url"
+          placeholder="https://linkedin.com/in/maya"
+          type="url"
+        />
+      </FormField>
+      <FormField
+        className="md:col-span-2"
+        error={state.fieldErrors?.contact_notes}
+        helpText="Optional context from outreach or referrals."
+        label="Contact notes"
+      >
+        <Textarea
+          aria-invalid={Boolean(state.fieldErrors?.contact_notes)}
+          name="contact_notes"
+          placeholder="Recruiter notes or LinkedIn context."
+        />
+      </FormField>
       <div className="md:col-span-2">
         <SubmitButton>Save job</SubmitButton>
       </div>

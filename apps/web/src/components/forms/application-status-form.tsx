@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { Save } from "lucide-react";
 
+import { FormFieldError, FormFieldHint } from "@/components/forms/form-field";
 import { FormStatusMessage } from "@/components/forms/form-status-message";
 import { FormSuccessPopup } from "@/components/forms/form-success-popup";
 import { SubmitButton } from "@/components/forms/submit-button";
@@ -30,7 +31,8 @@ export function ApplicationStatusForm({ applicationId, status }: ApplicationStat
       </label>
       <div className="flex gap-2">
         <select
-          className="h-8 flex-1 rounded-lg border bg-background px-2 text-sm"
+          aria-invalid={Boolean(state.fieldErrors?.status)}
+          className="h-8 flex-1 rounded-lg border bg-background px-2 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
           defaultValue={status}
           id={`application-status-${applicationId}`}
           name="status"
@@ -47,6 +49,8 @@ export function ApplicationStatusForm({ applicationId, status }: ApplicationStat
           Update
         </SubmitButton>
       </div>
+      <FormFieldHint text="Required. Pick the current tracker stage." />
+      <FormFieldError error={state.fieldErrors?.application_id || state.fieldErrors?.status} />
       <FormStatusMessage state={state} successTitle="Updated" />
     </form>
   );

@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  getResumeFileValidationError,
+  getValidationFieldErrors,
   readForm,
+  RESUME_IMPORT_MAX_BYTES,
   validateImportedResumePayload,
   validateJobInput,
   validateMatchIdInput,
@@ -35,6 +38,10 @@ test("profile validation rejects missing current role and unsupported target rol
   });
 
   assert.equal(result.success, false);
+  assert.deepEqual(getValidationFieldErrors(result.error), {
+    current_role: "Current role is required.",
+    target_role: "Choose a supported target role.",
+  });
 });
 
 test("resume text validation requires title and canonical text", () => {
@@ -47,7 +54,11 @@ test("resume text validation requires title and canonical text", () => {
     true
   );
 
-  assert.equal(validateResumeTextInput({ title: "Primary resume", raw_text: "" }).success, false);
+  const invalid = validateResumeTextInput({ title: "Primary resume", raw_text: "" });
+  assert.equal(invalid.success, false);
+  assert.deepEqual(getValidationFieldErrors(invalid.error), {
+    raw_text: "Paste resume text or choose a resume file.",
+  });
 });
 
 test("resume title validation supports file imports without pasted text", () => {
@@ -95,6 +106,11 @@ test("job validation rejects invalid job and contact URLs/emails", () => {
   });
 
   assert.equal(result.success, false);
+  assert.deepEqual(getValidationFieldErrors(result.error), {
+    job_url: "Enter a valid job URL.",
+    contact_email: "Enter a valid contact email.",
+    contact_linkedin_url: "Enter a valid LinkedIn URL.",
+  });
 });
 
 test("match validation requires resume and job UUIDs", () => {
@@ -106,7 +122,45 @@ test("match validation requires resume and job UUIDs", () => {
     true
   );
 
-  assert.equal(validateMatchInput({ resume_id: "resume", job_id: "" }).success, false);
+  const invalid = validateMatchInput({ resume_id: "resume", job_id: "" });
+  assert.equal(invalid.success, false);
+  assert.deepEqual(getValidationFieldErrors(invalid.error), {
+    resume_id: "Choose a resume.",
+    job_id: "Choose a job.",
+  });
+});
+
+test("resume file validation accepts supported imports and rejects unsafe files", () => {
+  assert.equal(
+    getResumeFileValidationError(
+      new File(["resume"], "resume.pdf", { type: "application/pdf" })
+    ),
+    ""
+  );
+  assert.equal(
+    getResumeFileValidationError(
+      new File(["resume"], "resume.docx", {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      })
+    ),
+    ""
+  );
+  assert.equal(
+    getResumeFileValidationError(new File(["resume"], "resume.png", { type: "image/png" })),
+    ""
+  );
+  assert.equal(
+    getResumeFileValidationError(new File(["resume"], "resume.exe", { type: "application/x-msdownload" })),
+    "Choose a PDF, DOCX, image, Markdown, or plain text resume."
+  );
+  assert.equal(
+    getResumeFileValidationError(
+      new File([new Uint8Array(RESUME_IMPORT_MAX_BYTES + 1)], "resume.pdf", {
+        type: "application/pdf",
+      })
+    ),
+    "Resume file must be 10 MB or smaller."
+  );
 });
 
 test("match id validation requires a UUID", () => {

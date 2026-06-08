@@ -17,6 +17,8 @@ Current product docs:
 - `data-model.md`: accepted table contract and ownership rules.
 - `ai-workflows.md`: AI parser, match, Truth Guard, roadmap, and interview prep
   rules.
+- `ui-ux-quality.md`: design read, UI consistency, validation, state, copy, and
+  visual QA rules.
 
 ## Update Rule
 

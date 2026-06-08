@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { ClipboardList } from "lucide-react";
 
 import { ApplicationStatusForm } from "@/components/forms/application-status-form";
 import { AppShell } from "@/components/app-shell";
+import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -51,17 +53,15 @@ export default async function TrackerPage() {
       userTarget={profile?.target_role}
     >
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">Application tracker</h1>
-            <p className="text-sm text-muted-foreground">
-              Track saved, applied, interviewing, offer, rejected, and archived jobs.
-            </p>
-          </div>
+        <PageHeader
+          actions={
           <Link href="/matches" className={buttonVariants({ variant: "outline" })}>
             Find matches
           </Link>
-        </div>
+          }
+          description="Track saved, applied, interviewing, offer, rejected, and archived jobs."
+          title="Application tracker"
+        />
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
           {APPLICATION_STATUSES.map((status) => (
@@ -162,13 +162,28 @@ export default async function TrackerPage() {
                 Save a matched job or job description to start tracking application progress.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col gap-3 sm:flex-row">
-              <Link href="/matches" className={buttonVariants({ variant: "default" })}>
-                Review matches
-              </Link>
-              <Link href="/jobs" className={buttonVariants({ variant: "outline" })}>
-                View jobs
-              </Link>
+            <CardContent>
+              <div className="flex flex-col gap-4 rounded-lg border border-dashed bg-muted/20 p-5 text-sm sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary">
+                    <ClipboardList className="size-4" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Start from a match or saved job</p>
+                    <p className="mt-1 text-muted-foreground">
+                      Tracker rows appear after you save a job from a match or job detail page.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Link href="/matches" className={buttonVariants({ variant: "default" })}>
+                    Review matches
+                  </Link>
+                  <Link href="/jobs" className={buttonVariants({ variant: "outline" })}>
+                    View jobs
+                  </Link>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}

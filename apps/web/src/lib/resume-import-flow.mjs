@@ -1,4 +1,7 @@
-import { validateImportedResumePayload } from "./action-validation.mjs";
+import {
+  getResumeFileValidationError,
+  validateImportedResumePayload,
+} from "./action-validation.mjs";
 
 export function isUploadedResumeFile(value) {
   return value instanceof File && value.size > 0;
@@ -10,6 +13,15 @@ export async function importResumeFile({
   resumeFile,
   sessionToken,
 }) {
+  const fileError = getResumeFileValidationError(resumeFile);
+  if (fileError) {
+    return {
+      ok: false,
+      message: fileError,
+      fieldErrors: { resume_file: fileError },
+    };
+  }
+
   if (!apiBaseUrl) {
     return { ok: false, message: "Resume import API is not configured." };
   }

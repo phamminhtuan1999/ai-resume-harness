@@ -46,6 +46,7 @@ The MVP is complete when a user can:
 | Period 2 | AI parsing, match scoring, missing skills, AI readiness. | Future story packets |
 | Period 3 | Resume suggestions, Truth Guard, Markdown draft, roadmap, interview prep. | Future story packets |
 | Period 4 | Tracker, pricing placeholder, landing page, settings, polish, demo flow. | Future story packets |
+| Period 5 | UI/UX rework, validation consistency, responsive workflow polish, copy cleanup, and visual QA. | Future story packets |
 
 ## Period 1 Exit Criteria
 
@@ -64,3 +65,8 @@ Period 1 is complete when:
 The MVP includes `/pricing` with Free and Pro plan positioning. Upgrade buttons
 must communicate `Coming soon` and must not initiate checkout or collect
 payment details.
+
+## UI Quality Exit Criteria
+
+Before MVP release, Period 5 must complete the UI, UX, and validation quality
+contract in `docs/product/ui-ux-quality.md`.

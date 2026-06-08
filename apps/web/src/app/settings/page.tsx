@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CheckCircle2, Database, ShieldCheck, UserRound } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -35,12 +36,10 @@ export default async function SettingsPage() {
       userTarget={profile?.target_role}
     >
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
-        <div>
-          <h1 className="text-2xl font-semibold">Settings</h1>
-          <p className="text-sm text-muted-foreground">
-            Review account identity and MVP data controls for the protected workspace.
-          </p>
-        </div>
+        <PageHeader
+          description="Review account identity and data controls for the protected workspace."
+          title="Settings"
+        />
 
         <section className="grid gap-5 lg:grid-cols-[1fr_360px]">
           <Card>

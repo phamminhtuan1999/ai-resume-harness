@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { BriefcaseBusiness } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
 import { formatShortDate, getContactLabel, getWorkspaceData } from "@/lib/data/server";
 import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,17 +33,15 @@ export default async function JobsPage() {
       userTarget={profile?.target_role}
     >
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">Jobs</h1>
-            <p className="text-sm text-muted-foreground">
-              Manual job description intake for the MVP.
-            </p>
-          </div>
+        <PageHeader
+          actions={
           <Link href="/jobs/new" className={buttonVariants({ size: "lg" })}>
-            Analyze New Job
+            Analyze new job
           </Link>
-        </div>
+          }
+          description="Save job descriptions, company details, and contact context before analysis."
+          title="Jobs"
+        />
         <Card>
           <CardHeader>
             <CardTitle>Saved jobs</CardTitle>
@@ -81,9 +82,16 @@ export default async function JobsPage() {
                 </TableBody>
               </Table>
             ) : (
-              <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                Add a job description to start tracking company, role, and contact details.
-              </div>
+              <EmptyState
+                action={
+                  <Link href="/jobs/new" className={buttonVariants({ variant: "outline" })}>
+                    Add job
+                  </Link>
+                }
+                description="Add a job description to start tracking company, role, and contact details."
+                icon={BriefcaseBusiness}
+                title="No saved jobs"
+              />
             )}
           </CardContent>
         </Card>

@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/app-shell";
 import { ProfileForm } from "@/components/forms/profile-form";
+import { PageHeader } from "@/components/page-header";
 import { SetupNotice } from "@/components/setup-notice";
 import { getWorkspaceData } from "@/lib/data/server";
 import {
@@ -20,12 +21,10 @@ export default async function ProfilePage() {
       userTarget={profile?.target_role}
     >
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
-        <div>
-          <h1 className="text-2xl font-semibold">Career profile</h1>
-          <p className="text-sm text-muted-foreground">
-            This profile will tune analysis toward AI-focused engineering roles.
-          </p>
-        </div>
+        <PageHeader
+          description="Tune analysis toward AI-focused engineering roles with your current background and target role."
+          title="Career profile"
+        />
         <SetupNotice />
         <Card>
           <CardHeader>

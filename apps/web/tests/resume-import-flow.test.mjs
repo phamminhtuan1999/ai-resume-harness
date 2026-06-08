@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { RESUME_IMPORT_MAX_BYTES } from "../src/lib/action-validation.mjs";
 import {
   buildImportedResumeInsert,
   importResumeFile,
@@ -61,7 +62,7 @@ test("importResumeFile returns API detail for rejected uploads", async () => {
     apiBaseUrl: "http://localhost:8000",
     fetchImpl: async () =>
       Response.json({ detail: "Unsupported resume file type." }, { status: 415 }),
-    resumeFile: new File(["bad"], "resume.exe", { type: "application/octet-stream" }),
+    resumeFile: new File(["bad"], "resume.pdf", { type: "application/pdf" }),
     sessionToken: "session_test",
   });
 
@@ -69,6 +70,50 @@ test("importResumeFile returns API detail for rejected uploads", async () => {
     ok: false,
     message: "Unsupported resume file type.",
   });
+});
+
+test("importResumeFile rejects unsupported and oversized files before calling the API", async () => {
+  let fetchCalls = 0;
+  const fetchImpl = async () => {
+    fetchCalls += 1;
+    return Response.json({});
+  };
+
+  assert.deepEqual(
+    await importResumeFile({
+      apiBaseUrl: "http://localhost:8000",
+      fetchImpl,
+      resumeFile: new File(["bad"], "resume.exe", { type: "application/x-msdownload" }),
+      sessionToken: "session_test",
+    }),
+    {
+      ok: false,
+      message: "Choose a PDF, DOCX, image, Markdown, or plain text resume.",
+      fieldErrors: {
+        resume_file: "Choose a PDF, DOCX, image, Markdown, or plain text resume.",
+      },
+    }
+  );
+  assert.equal(fetchCalls, 0);
+
+  assert.deepEqual(
+    await importResumeFile({
+      apiBaseUrl: "http://localhost:8000",
+      fetchImpl,
+      resumeFile: new File([new Uint8Array(RESUME_IMPORT_MAX_BYTES + 1)], "resume.pdf", {
+        type: "application/pdf",
+      }),
+      sessionToken: "session_test",
+    }),
+    {
+      ok: false,
+      message: "Resume file must be 10 MB or smaller.",
+      fieldErrors: {
+        resume_file: "Resume file must be 10 MB or smaller.",
+      },
+    }
+  );
+  assert.equal(fetchCalls, 0);
 });
 
 test("importResumeFile rejects missing API configuration and auth token", async () => {

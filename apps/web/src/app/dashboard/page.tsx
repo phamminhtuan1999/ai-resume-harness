@@ -2,6 +2,8 @@ import Link from "next/link";
 import { ArrowUpRight, FileText, Upload } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
 import { quickActions, resumeSources } from "@/lib/app-data";
 import { getWorkspaceCounts, getWorkspaceRecommendation } from "@/lib/dashboard-summary.mjs";
 import { formatShortDate, getContactLabel, getWorkspaceData } from "@/lib/data/server";
@@ -42,19 +44,18 @@ export default async function DashboardPage() {
         <section className="grid gap-5 xl:grid-cols-[1fr_360px]">
           <div className="flex flex-col gap-5">
             <div className="flex flex-col gap-4 rounded-lg border bg-card p-5 shadow-sm md:flex-row md:items-center md:justify-between">
-              <div className="flex max-w-2xl flex-col gap-2">
-                <h1 className="text-2xl font-semibold tracking-normal">
-                  Build a stronger {profileTarget} application.
-                </h1>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  {profile?.target_role
+              <PageHeader
+                className="flex-1"
+                description={
+                  profile?.target_role
                     ? `Profile ready for ${profileRole} to ${profileTarget} positioning.`
-                    : "Set up your career profile, import a resume, and save target jobs."}
-                </p>
-              </div>
+                    : "Set up your career profile, import a resume, and save target jobs."
+                }
+                title={`Build a stronger ${profileTarget} application.`}
+              />
               <Link href="/resumes/new" className={buttonVariants({ size: "lg" })}>
                 <Upload data-icon="inline-start" />
-                Add Resume
+                Add resume
               </Link>
             </div>
 
@@ -216,9 +217,10 @@ export default async function DashboardPage() {
                 </TableBody>
               </Table>
             ) : (
-              <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                Add a job description to populate the tracker and dashboard.
-              </div>
+              <EmptyState
+                description="Add a job description to populate the tracker and dashboard."
+                title="No recent jobs"
+              />
             )}
           </CardContent>
         </Card>

@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { idleActionState } from "@/lib/action-state";
 import { generateMatchAction } from "@/lib/actions";
 import type { WorkspaceJob, WorkspaceResume } from "@/lib/data/server";
+import { FormField } from "@/components/forms/form-field";
 import { FormStatusMessage } from "@/components/forms/form-status-message";
 import { FormSuccessPopup } from "@/components/forms/form-success-popup";
 import { SubmitButton } from "@/components/forms/submit-button";
@@ -23,10 +24,16 @@ export function MatchForm({ jobs, resumes }: MatchFormProps) {
       <FormSuccessPopup redirectTo={state.redirectTo} state={state} title="Match generated" />
       <FormStatusMessage state={state} />
 
-      <label className="flex flex-col gap-2 text-sm font-medium">
-        Resume
+      <FormField
+        error={state.fieldErrors?.resume_id}
+        helpText="Required. Choose the resume to compare against the job."
+        label="Resume"
+        required
+      >
         <select
-          className="h-10 rounded-lg border bg-background px-3 text-sm"
+          aria-invalid={Boolean(state.fieldErrors?.resume_id)}
+          className="h-10 rounded-lg border bg-background px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
+          disabled={resumes.length === 0}
           name="resume_id"
           required
         >
@@ -37,11 +44,21 @@ export function MatchForm({ jobs, resumes }: MatchFormProps) {
             </option>
           ))}
         </select>
-      </label>
+      </FormField>
 
-      <label className="flex flex-col gap-2 text-sm font-medium">
-        Job
-        <select className="h-10 rounded-lg border bg-background px-3 text-sm" name="job_id" required>
+      <FormField
+        error={state.fieldErrors?.job_id}
+        helpText="Required. Choose the job description to analyze."
+        label="Job"
+        required
+      >
+        <select
+          aria-invalid={Boolean(state.fieldErrors?.job_id)}
+          className="h-10 rounded-lg border bg-background px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
+          disabled={jobs.length === 0}
+          name="job_id"
+          required
+        >
           <option value="">Choose a job</option>
           {jobs.map((job) => (
             <option key={job.id} value={job.id}>
@@ -49,7 +66,7 @@ export function MatchForm({ jobs, resumes }: MatchFormProps) {
             </option>
           ))}
         </select>
-      </label>
+      </FormField>
 
       {!canGenerate ? (
         <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">

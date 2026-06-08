@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { MatchForm } from "@/components/forms/match-form";
 import { AppShell } from "@/components/app-shell";
+import { PageHeader } from "@/components/page-header";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -23,17 +24,21 @@ export default async function NewMatchPage() {
       userTarget={profile?.target_role}
     >
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
-        <Link href="/matches" className={buttonVariants({ variant: "ghost", className: "w-fit" })}>
-          <ArrowLeft data-icon="inline-start" />
-          Matches
-        </Link>
+        <PageHeader
+          actions={
+            <Link href="/matches" className={buttonVariants({ variant: "ghost" })}>
+              <ArrowLeft data-icon="inline-start" />
+              Matches
+            </Link>
+          }
+          description="Compare canonical resume content against a saved job description."
+          title="Generate match analysis"
+        />
 
         <Card>
           <CardHeader>
-            <CardTitle>Generate match analysis</CardTitle>
-            <CardDescription>
-              Compare canonical resume content against a saved job description.
-            </CardDescription>
+            <CardTitle>Inputs</CardTitle>
+            <CardDescription>Select the resume and job to compare.</CardDescription>
           </CardHeader>
           <CardContent>
             <MatchForm resumes={resumes} jobs={jobs} />

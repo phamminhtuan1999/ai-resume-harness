@@ -2,6 +2,8 @@ import Link from "next/link";
 import { FileText, Upload } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
 import { resumeSources } from "@/lib/app-data";
 import { formatShortDate, getWorkspaceData } from "@/lib/data/server";
 import { buttonVariants } from "@/components/ui/button";
@@ -24,18 +26,16 @@ export default async function ResumesPage() {
       userTarget={profile?.target_role}
     >
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">Resumes</h1>
-            <p className="text-sm text-muted-foreground">
-              Import a source resume and keep canonical Markdown ready for analysis.
-            </p>
-          </div>
+        <PageHeader
+          actions={
           <Link href="/resumes/new" className={buttonVariants({ size: "lg" })}>
             <Upload data-icon="inline-start" />
-            Add Resume
+            Add resume
           </Link>
-        </div>
+          }
+          description="Import a source resume and keep canonical Markdown ready for analysis."
+          title="Resumes"
+        />
         {resumes.length > 0 ? (
           <div className="grid gap-4">
             {resumes.map((resume) => (
@@ -79,24 +79,19 @@ export default async function ResumesPage() {
               <CardDescription>Start with a text paste or file import.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              <div className="flex items-start gap-3 rounded-lg border border-dashed p-4">
-                <div className="flex size-10 items-center justify-center rounded-lg bg-secondary">
-                  <FileText className="size-4" />
+              <EmptyState
+                description="Saved resumes will appear here after you paste text or import a supported file."
+                icon={FileText}
+                title="Add your first resume"
+              >
+                <div className="flex flex-wrap gap-2">
+                  {resumeSources.map((source) => (
+                    <Badge key={source} variant="outline">
+                      {source}
+                    </Badge>
+                  ))}
                 </div>
-                <div className="flex flex-col gap-3">
-                  <p className="text-sm text-muted-foreground">
-                    Saved resumes will appear here after you paste Markdown/plain text or import a
-                    supported file.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {resumeSources.map((source) => (
-                      <Badge key={source} variant="outline">
-                        {source}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              </EmptyState>
             </CardContent>
           </Card>
         )}

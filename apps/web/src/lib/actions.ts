@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import type { ActionState } from "@/lib/action-state";
 import {
+  getValidationFieldErrors,
   readForm,
   validateJobInput,
   validateMatchIdInput,
@@ -85,9 +86,9 @@ function successWithRedirect(message: string, redirectTo: string): ActionState {
   return { status: "success", message, redirectTo };
 }
 
-function failure(message: string): ActionState {
+function failure(message: string, fieldErrors?: Record<string, string>): ActionState {
   logSkippedAction(message);
-  return { status: "error", message };
+  return { status: "error", message, fieldErrors };
 }
 
 export async function saveProfileAction(
@@ -101,7 +102,10 @@ export async function saveProfileAction(
 
   const parsed = validateProfileInput(readForm(formData));
   if (!parsed.success) {
-    return failure("Profile fields are incomplete or invalid.");
+    return failure(
+      "Profile fields are incomplete or invalid.",
+      getValidationFieldErrors(parsed.error)
+    );
   }
 
   const supabase = getSupabaseServiceClient();
@@ -130,7 +134,7 @@ export async function saveResumeAction(
 
   const titleParsed = validateResumeTitleInput(readForm(formData));
   if (!titleParsed.success) {
-    return failure("Resume title is required.");
+    return failure("Resume title is required.", getValidationFieldErrors(titleParsed.error));
   }
 
   const resumeFile = formData.get("resume_file");
@@ -145,7 +149,7 @@ export async function saveResumeAction(
     });
 
     if (!importResult.ok) {
-      return failure(importResult.message);
+      return failure(importResult.message, importResult.fieldErrors);
     }
 
     const supabase = getSupabaseServiceClient();
@@ -168,7 +172,10 @@ export async function saveResumeAction(
 
   const parsed = validateResumeTextInput(readForm(formData));
   if (!parsed.success) {
-    return failure("Resume title and either pasted text or an uploaded file are required.");
+    return failure(
+      "Resume title and either pasted text or an uploaded file are required.",
+      getValidationFieldErrors(parsed.error)
+    );
   }
 
   const supabase = getSupabaseServiceClient();
@@ -200,7 +207,7 @@ export async function saveJobAction(
 
   const parsed = validateJobInput(readForm(formData));
   if (!parsed.success) {
-    return failure("Job fields are incomplete or invalid.");
+    return failure("Job fields are incomplete or invalid.", getValidationFieldErrors(parsed.error));
   }
 
   const clean = parsed.data;
@@ -239,7 +246,10 @@ export async function saveApplicationAction(
 
   const parsed = validateSaveApplicationInput(readForm(formData));
   if (!parsed.success) {
-    return failure("Choose a valid job before saving it to the tracker.");
+    return failure(
+      "Choose a valid job before saving it to the tracker.",
+      getValidationFieldErrors(parsed.error)
+    );
   }
 
   const supabase = getSupabaseServiceClient();
@@ -335,7 +345,7 @@ export async function updateApplicationStatusAction(
 
   const parsed = validateUpdateApplicationStatusInput(readForm(formData));
   if (!parsed.success) {
-    return failure("Choose a valid tracker status.");
+    return failure("Choose a valid tracker status.", getValidationFieldErrors(parsed.error));
   }
 
   const updatePayload: {
@@ -384,7 +394,10 @@ export async function generateMatchAction(
 
   const parsed = validateMatchInput(readForm(formData));
   if (!parsed.success) {
-    return failure("Choose a resume and job before generating analysis.");
+    return failure(
+      "Choose a resume and job before generating analysis.",
+      getValidationFieldErrors(parsed.error)
+    );
   }
 
   const supabase = getSupabaseServiceClient();
@@ -481,7 +494,10 @@ export async function generateResumeSuggestionsAction(
 
   const parsed = validateMatchIdInput(readForm(formData));
   if (!parsed.success) {
-    return failure("Choose a valid match before generating resume suggestions.");
+    return failure(
+      "Choose a valid match before generating resume suggestions.",
+      getValidationFieldErrors(parsed.error)
+    );
   }
 
   const supabase = getSupabaseServiceClient();
@@ -547,7 +563,10 @@ export async function generateResumeDraftAction(
 
   const parsed = validateMatchIdInput(readForm(formData));
   if (!parsed.success) {
-    return failure("Choose a valid match before generating a resume draft.");
+    return failure(
+      "Choose a valid match before generating a resume draft.",
+      getValidationFieldErrors(parsed.error)
+    );
   }
 
   const supabase = getSupabaseServiceClient();
@@ -632,7 +651,10 @@ export async function generateRoadmapAction(
 
   const parsed = validateMatchIdInput(readForm(formData));
   if (!parsed.success) {
-    return failure("Choose a valid match before generating a roadmap.");
+    return failure(
+      "Choose a valid match before generating a roadmap.",
+      getValidationFieldErrors(parsed.error)
+    );
   }
 
   const supabase = getSupabaseServiceClient();
@@ -713,7 +735,10 @@ export async function generateInterviewPrepAction(
 
   const parsed = validateMatchIdInput(readForm(formData));
   if (!parsed.success) {
-    return failure("Choose a valid match before generating interview prep.");
+    return failure(
+      "Choose a valid match before generating interview prep.",
+      getValidationFieldErrors(parsed.error)
+    );
   }
 
   const supabase = getSupabaseServiceClient();
