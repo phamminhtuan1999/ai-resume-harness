@@ -493,6 +493,7 @@ export async function getJobDetail(jobId: string) {
         "salary_range",
         "raw_description",
         "structured_json",
+        "extraction_json",
         "parse_status",
         "contact_name",
         "contact_email",

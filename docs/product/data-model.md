@@ -197,7 +197,11 @@ Required fields:
 
 - `id uuid primary key`
 - `user_id uuid references user_profiles(id) on delete cascade`
-- `workflow_type text` — `match_analysis | missing_skills | resume_suggestions | resume_draft | cover_letter | roadmap | interview_prep | assistant_insight | dashboard_summary | activity_description`
+- `workflow_type text` — `match_analysis | missing_skills | resume_suggestions | resume_draft | cover_letter | roadmap | interview_prep | assistant_insight | dashboard_summary | activity_description | draft_cv`
+
+`draft_cv` is added by Period 9 (migration `0018`, US-039). The
+`workflow_type` CHECK constraint from migration `0010` is extended in place
+(per `docs/stories/period-8/flows/README.md`).
 - `subject_type text` — `match | resume | job | dashboard`
 - `subject_id uuid` (nullable for dashboard-scoped runs)
 - `status text default 'queued'` — `queued | running | completed | needs_review | failed`
@@ -298,6 +302,54 @@ Required fields:
 - `confidence_score numeric`
 - `provider text` — `gemini | deterministic`
 - timestamps
+
+### `draft_cvs`
+
+The structured, truth-guarded, exportable draft CV versions for a match
+(Period 9, migration `0018`; US-039). **Append-only versions** per match —
+generate/regenerate inserts a new version; review actions update that version
+in place. See `docs/decisions/0013-draft-cv-export-architecture.md`.
+
+Required fields:
+
+- `id uuid primary key`
+- `user_id uuid not null references user_profiles(id) on delete cascade`
+- `match_id uuid not null references matches(id) on delete cascade`
+- `job_id uuid references jobs(id) on delete set null` — denormalized for
+  per-job listing; lifecycle governed by the match cascade
+- `resume_id uuid references resumes(id) on delete set null`
+- `version integer not null` — `unique (match_id, version)`
+- `title text not null` — auto `Draft CV — {company} {job title} v{n}`
+- `status text not null default 'draft'` —
+  `draft | needs_review | ready_to_export | exported`; **derived server-side**
+  (`needs_review` while `needs_confirmation` bullets are pending or run
+  confidence `< 0.5`; `ready_to_export` when none pending; `exported` after a
+  successful export). There is no `failed` status — failed generations write
+  only the `ai_workflow_runs` row.
+- `cv_json jsonb not null` — candidate contact (null when absent, never
+  invented), professional summary, skills `[{category, items}]` (open
+  vocabulary, empty categories omitted), work experience / projects /
+  education / certifications. Every experience/project bullet carries:
+  server-assigned stable `id`, `text` (≤ 240 chars), `source_evidence`,
+  `truth_guard_status` (`safe_to_use | needs_confirmation | do_not_use_yet`,
+  stored snake_case — unlike `resume_suggestions`, which stores title-case
+  display values), `keywords_used`, and `user_action`
+  (`pending | approved | rejected`; approvals do not carry across versions).
+- `cv_strategy_json jsonb` — summary, primary positioning,
+  `keywords_prioritized`, `keywords_excluded [{keyword, reason:
+  unsupported | weak_evidence | irrelevant}]`
+- `quality_notes_json jsonb` — server guard findings (`invented_metric`,
+  `metric_dropped`, `weak_action_verb`)
+- `confidence_score numeric`
+- `provider text` — `gemini | deterministic`
+- `model_name text`
+- `last_exported_pdf_at timestamptz`, `last_exported_docx_at timestamptz` —
+  exports are rendered on demand and streamed; **no export URLs and no binary
+  storage** (decision 0013)
+- timestamps
+
+Indexes: `(user_id, job_id, created_at desc)` for "saved under the job
+record" listing; `(match_id, version desc)`.
 
 ### `resume_suggestions`
 

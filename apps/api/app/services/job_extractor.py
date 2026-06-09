@@ -129,9 +129,13 @@ Rules:
 - If a value is missing, return null or an empty array.
 - work_type must be one of: remote, hybrid, onsite, or null if unstated.
 - employment_type must be one of: full-time, contract, internship, or null if unstated.
+- role_summary is a 2-4 sentence overview of the role in the posting's own
+  words: what the role is, what the team does, and what the hire will own.
+- about_company is the posting's short company introduction, when present.
 - required_skills are must-have skills; preferred_skills are nice-to-have.
 - ai_related_requirements captures LLM/ML/GenAI requirements when present.
 - cloud_requirements captures AWS/GCP/Azure/Kubernetes-style requirements.
+- benefits captures listed perks/benefits/compensation extras, one per item.
 - raw_description is the cleaned, human-readable job description text.
 - confidence_score is your 0..1 confidence that the page was a real job posting
   and the fields are accurate.

@@ -18,6 +18,7 @@ the work is selected or when a product decision needs a durable place to land.
 | Period 6 Job URL And Profile Automation | Firecrawl-backed job URL intake, manual fetch fallback, resume-based candidate profile autofill, and provider safety boundaries. | sliced |
 | Period 7 Design System Overhaul | Brand, tokens, typography, primitives, app shell, landing, light/dark parity across all surfaces. | implemented |
 | Period 8 AI Assistant Intelligence Overhaul | Replace deterministic analysis with real AI (Gemini + fallback); add cover letter, insight card, dashboard summary, AI activity feed, and workflow panel on a shared backend AI-workflow foundation. | sliced |
+| Period 9 AI Draft CV Export | Truth-guarded structured draft CV generation (enhancement-protocol prompt + server guards), review/approval flow, and on-demand ATS-safe PDF/DOCX export rendered in the backend. | sliced |
 
 ## Period 8 Epics (AI Overhaul)
 
@@ -31,6 +32,18 @@ Maps `applywise_ai_assistant_update_tasks.md` features to stories. See
 | Epic 2 AI Application Materials | Features 3, 4, 5 | US-031, US-032, US-033 |
 | Epic 3 AI Career Improvement | Features 6, 7 | US-034, US-035 |
 | Epic 4 AI Assistant Experience | Features 9, 10, 11 | US-036, US-037, US-038 |
+
+## Period 9 Epic (Draft CV Export)
+
+Maps the Period 9 brief (`docs/stories/period-9/brief.md`) to stories. See
+`docs/stories/period-9/README.md` (including the adversarial restatements
+table) and `docs/decisions/0013-draft-cv-export-architecture.md`.
+
+| Epic | Brief area | Stories |
+| --- | --- | --- |
+| Draft CV Generation | Protocol, JSON schema, `draft_cvs`, endpoints | US-039 |
+| Draft CV Review | Review/approval UI, versions, entry points | US-040 |
+| Draft CV Export | Standard template + PDF, then DOCX | US-041, US-042 |
 
 ## Sliced Stories
 
@@ -69,11 +82,15 @@ Maps `applywise_ai_assistant_update_tasks.md` features to stories. See
 | US-031 | AI Tailored Resume Suggestions + Truth Guard | high-risk | implemented (backend + web Truth Guard review + strategy/keywords/claims; unit tests; browser E2E pending) |
 | US-032 | AI Tailored Resume Markdown Draft | normal | implemented (backend + web rewired to AI; reuses resume_versions; unit tests; browser E2E pending) |
 | US-033 | AI Cover Letter Generation | high-risk | implemented (backend + new cover-letter page; migration 0014 applied + REST-reachable; unit tests; browser E2E pending) |
-| US-034 | AI 4-Week Improvement Roadmap | normal | planned (packet) |
-| US-035 | AI Interview Prep | normal | planned (packet) |
-| US-036 | Dashboard AI Summary | normal | planned (packet) |
-| US-037 | AI Activity Feed Descriptions | normal | planned (packet) |
-| US-038 | AI Workflow Panel | normal | planned (packet) |
+| US-034 | AI 4-Week Improvement Roadmap | normal | implemented (packet) |
+| US-035 | AI Interview Prep | normal | implemented (packet) |
+| US-036 | Dashboard AI Summary | normal | implemented (packet) |
+| US-037 | AI Activity Feed Descriptions | normal | implemented (packet) |
+| US-038 | AI Workflow Panel | normal | implemented (packet) |
+| US-039 | Draft CV Generation Workflow & Data Model | high-risk | planned (packet) |
+| US-040 | Draft CV Review & Approval UI | normal | planned (packet) |
+| US-041 | ATS Resume Template & PDF Export | high-risk | planned (packet) |
+| US-042 | Draft CV DOCX Export | normal | planned (packet) |
 
 All Period 8 stories now have full packets under `docs/stories/period-8/`
 (high-risk folders for US-027/US-028/US-031/US-033; flat files otherwise) plus
@@ -91,5 +108,7 @@ scripts/sync-backlog.sh --write   # rewrite statuses from the matrix
 `--write` updates only the leading status keyword and preserves annotations
 (e.g. `implemented (E2E pending)`). If the two ever disagree, the matrix wins.
 Harness status values are `planned → in_progress → implemented` (there is no
-"completed"; `implemented` is the terminal state). As of 2026-06-08:
-US-001–US-028 are `implemented`; US-029–US-038 are `planned` with full packets.
+"completed"; `implemented` is the terminal state). As of 2026-06-09:
+US-001–US-038 are `implemented`; US-039–US-042 (Period 9) are `planned` with
+full packets under `docs/stories/period-9/` (high-risk folders for
+US-039/US-041; flat files otherwise).

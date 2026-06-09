@@ -20,12 +20,15 @@ class JobExtraction(BaseModel):
     work_type: str | None = None
     employment_type: str | None = None
     salary_range: str | None = None
+    role_summary: str | None = None
+    about_company: str | None = None
     responsibilities: list[str] = Field(default_factory=list)
     required_skills: list[str] = Field(default_factory=list)
     preferred_skills: list[str] = Field(default_factory=list)
     required_experience_years: str | None = None
     ai_related_requirements: list[str] = Field(default_factory=list)
     cloud_requirements: list[str] = Field(default_factory=list)
+    benefits: list[str] = Field(default_factory=list)
     raw_description: str | None = None
     confidence_score: float = Field(default=0.0, ge=0, le=1)
 

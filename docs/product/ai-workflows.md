@@ -310,6 +310,74 @@ Truth Guard statuses:
 Suggestions marked `Do not use yet` must not be automatically included in a
 generated Markdown draft.
 
+## Draft CV Generator (Period 9)
+
+Runs on the AI Workflow Foundation (`workflow_type = 'draft_cv'`,
+`subject_type = 'match'`; US-039). Direction:
+`docs/decisions/0013-draft-cv-export-architecture.md`.
+
+Input:
+
+- match with a **saved match analysis (required)** — `missing_match_analysis`
+  guard otherwise
+- canonical resume text + parsed resume
+- candidate profile (contact fields come only from here; null when absent)
+- job raw description + structured/extraction keywords
+- missing-skill analysis (**optional** enrichment)
+- accepted / `safe_to_use` resume suggestions (optional input)
+
+Generation is **one structured call** whose prompt embeds the
+Cross-Referencing & Enhancement Protocol (keyword extraction with
+required/preferred priority, supported-only keyword injection, XYZ bullet
+rewriting, metrics preservation, truth-guard classification, ≤ 2-line
+bullets). The protocol's guarantees are then enforced by deterministic server
+guards after Pydantic validation:
+
+- **Metrics guard (hard):** a numeric token in an output bullet that does not
+  occur in the source corpus demotes the bullet to `do_not_use_yet`
+  (`invented_metric` note). Source metrics missing from the output produce
+  `metric_dropped` notes. No invented numbers can reach an export.
+- **Keyword-support guard (hard):** skills/keywords with no occurrence in the
+  source corpus move to `keywords_excluded(reason='unsupported')`.
+- **XYZ/ATS lint (soft):** action-verb start (curated lexicon) and length;
+  violations become quality notes and can mark the run `needs_review`.
+
+Every bullet carries a server-assigned stable `id`, `source_evidence`,
+`truth_guard_status` (`safe_to_use | needs_confirmation | do_not_use_yet`),
+`keywords_used`, and `user_action` (`pending | approved | rejected`). Output
+versions are append-only in `draft_cvs`; regenerate creates a new version and
+approvals do not carry over.
+
+Deterministic fallback: builds the CV mechanically from the candidate
+profile, parsed resume sections, job keywords, and accepted suggestions —
+copying source text **verbatim** (verbatim ⇒ `safe_to_use` by construction),
+`confidence_score = 0.0`.
+
+## Draft CV Export Rules (Period 9)
+
+Export (US-041 PDF, US-042 DOCX) is **not an AI run** — no model call, no
+`ai_workflow_runs` row; it writes a `draft_cv.exported` activity event.
+
+- One shared render-model serializer is the only path from `cv_json` to any
+  visible document (web preview, PDF, DOCX). A bullet renders iff
+  `safe_to_use` OR approved `needs_confirmation`. `do_not_use_yet` and
+  pending/rejected items never render — server-side filtering is
+  authoritative; the UI warning dialog is courtesy.
+- Files render on demand from the stored version and stream as downloads;
+  no rendered binary is persisted ("download again later" = deterministic
+  re-render).
+- Template contract ("ApplyWise standard resume template v1"): single column,
+  standard section headings, no tables/charts/icons/progress bars/images,
+  plain bullets ≤ 2 printed lines, consistent spacing, ATS-parseable
+  (copy-paste preserves reading order).
+- `export_notes` (included supported keywords, excluded unsupported keywords,
+  items needing review, metrics preserved) are computed server-side at export
+  time, never model-authored.
+- Export with zero renderable content fails with `empty_cv`. Render failures
+  mutate nothing.
+- Export logs carry draft id/format/latency only — never candidate or CV
+  text.
+
 ## Roadmap Generator
 
 Input:

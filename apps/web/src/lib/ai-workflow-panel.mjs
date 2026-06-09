@@ -40,30 +40,35 @@ export const STEP_MANIFEST = [
     name: "Missing Skill Analysis",
     description: "Classify every skill gap by importance and how to fix it.",
     href: "gaps",
+    artifact: "skill gaps",
   },
   {
     workflow_type: "resume_suggestions",
     name: "Tailored Resume",
     description: "Generate truth-guarded resume suggestions for this role.",
     href: "resume-suggestions",
+    artifact: "resume suggestions",
   },
   {
     workflow_type: "cover_letter",
     name: "Cover Letter",
     description: "Generate a personalized cover letter that positions your real experience for this role.",
     href: "cover-letter",
+    artifact: "cover letter",
   },
   {
     workflow_type: "roadmap",
     name: "4-Week Roadmap",
     description: "Build a 4-week improvement plan that closes your critical gaps.",
     href: "roadmap",
+    artifact: "4-week plan",
   },
   {
     workflow_type: "interview_prep",
     name: "Interview Prep",
     description: "Generate job-specific interview questions and honest answer guidance.",
     href: "interview-prep",
+    artifact: "interview questions",
   },
   {
     workflow_type: "assistant_insight",
@@ -159,103 +164,199 @@ export function deriveStepSummary(workflowType, snapshot) {
   }
 }
 
-function section(label, value) {
-  if (Array.isArray(value)) {
-    const items = value.map((item) => String(item ?? "").trim()).filter(Boolean);
-    return items.length > 0 ? { label, items } : null;
-  }
-  const text = String(value ?? "").trim();
-  return text ? { label, text } : null;
+/*
+  Inline step digest (US-038, surface revision 3).
+
+  Revision 2 expanded the step's full report inline, which buried the stepper
+  under walls of content. This revision is a deliberate digest: headline facts,
+  ONE summary block, and a count-aware link to the workspace page where the
+  full artifact (and its actions) live. Two steps return an empty digest on
+  purpose — match_analysis and assistant_insight are rendered natively on the
+  match page the panel sits on, so an expander would duplicate visible content.
+
+    { facts:      [{ label, value, tone }],          — headline badge row
+      blocks: [
+        { kind: "prose",    label, text },
+        { kind: "document", label, text },           — the deliverable itself
+        { kind: "list",     label, items: [string] },
+        { kind: "chips",    label, items: [{ label, tone }] },
+      ],
+      link_label: string | null }                    — workspace link text
+
+  tone is "success" | "warning" | "destructive" | "neutral"; the renderer maps
+  it onto badge variants.
+*/
+
+function humanize(value) {
+  const text = String(value ?? "").replaceAll("_", " ").trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
 }
 
-/*
-  Friendly inline rendering of a step's output_snapshot_json (US-038 "View
-  output" expands in place instead of forcing a page navigation). Returns
-  ordered sections: { label, text? } for prose, { label, items? } for lists.
-*/
-export function stepOutputDetails(workflowType, snapshot) {
+function clean(value) {
+  return String(value ?? "").trim();
+}
+
+function fact(label, value, tone = "neutral") {
+  const text = clean(value);
+  return text ? { label, value: text, tone } : null;
+}
+
+function prose(label, text) {
+  const value = clean(text);
+  return value ? { kind: "prose", label, text: value } : null;
+}
+
+function documentBlock(label, text) {
+  const value = clean(text);
+  return value ? { kind: "document", label, text: value } : null;
+}
+
+function listBlock(label, items) {
+  const kept = (Array.isArray(items) ? items : [])
+    .map((item) => clean(item))
+    .filter(Boolean);
+  return kept.length > 0 ? { kind: "list", label, items: kept } : null;
+}
+
+function chipsBlock(label, items) {
+  const kept = (Array.isArray(items) ? items : [])
+    .map((item) =>
+      typeof item === "string"
+        ? { label: clean(item), tone: "neutral" }
+        : { label: clean(item?.label), tone: item?.tone ?? "neutral" }
+    )
+    .filter((item) => item.label);
+  return kept.length > 0 ? { kind: "chips", label, items: kept } : null;
+}
+
+export function stepOutputView(workflowType, snapshot) {
   const data = snapshot && typeof snapshot === "object" ? snapshot : {};
+  const facts = [];
+  const blocks = [];
+  let linkLabel = null;
 
   switch (workflowType) {
-    case "match_analysis":
-      return [
-        section("Recommendation", data.apply_recommendation?.replaceAll?.("_", " ")),
-        section("Summary", data.assistant_summary),
-        section("Fit reasoning", data.fit_reasoning),
-        section(
-          "Top strengths",
-          (data.top_strengths ?? []).map((item) => item?.strength)
-        ),
-        section(
-          "Top gaps",
-          (data.top_gaps ?? []).map((item) => item?.gap)
-        ),
-        section("Next best action", data.next_best_action),
-      ].filter(Boolean);
-    case "missing_skills":
-      return [
-        section("Summary", data.summary),
-        section(
-          "Missing skills",
-          (data.missing_skills ?? []).map((item) =>
-            item?.skill ? `${item.skill} (${item.importance ?? "medium"})` : null
+    // match_analysis and assistant_insight: no digest — the match page renders
+    // their full content (score breakdown, strengths/gaps, insight card).
+    case "missing_skills": {
+      const skills = Array.isArray(data.missing_skills) ? data.missing_skills : [];
+      const byImportance = (importance) =>
+        skills.filter((item) => item?.importance === importance).length;
+      const critical = byImportance("critical");
+      const medium = byImportance("medium");
+      const nice = byImportance("nice_to_have");
+      facts.push(
+        critical > 0 ? fact("Critical", `${critical} critical`, "destructive") : null,
+        medium > 0 ? fact("Medium", `${medium} medium`, "warning") : null,
+        nice > 0 ? fact("Nice to have", `${nice} nice-to-have`) : null
+      );
+      blocks.push(
+        prose("Summary", data.summary),
+        chipsBlock(
+          "Top priorities",
+          (data.top_3_priority_gaps ?? []).map((item) => ({
+            label: item,
+            tone: "warning",
+          }))
+        )
+      );
+      linkLabel =
+        skills.length > 0
+          ? `Review all ${skills.length} gaps with how-to-fix guidance`
+          : null;
+      break;
+    }
+
+    case "resume_suggestions": {
+      const suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
+      const byStatus = (status) =>
+        suggestions.filter((item) => item?.truth_guard_status === status).length;
+      const safe = byStatus("safe_to_use");
+      const confirm = byStatus("needs_confirmation");
+      const avoid = byStatus("do_not_use_yet");
+      facts.push(
+        safe > 0 ? fact("Safe", `${safe} safe to use`, "success") : null,
+        confirm > 0 ? fact("Confirm", `${confirm} need confirmation`, "warning") : null,
+        avoid > 0 ? fact("Avoid", `${avoid} do not use yet`, "destructive") : null
+      );
+      blocks.push(prose("Strategy", data.resume_strategy));
+      linkLabel =
+        suggestions.length > 0
+          ? `Review all ${suggestions.length} suggestions`
+          : null;
+      break;
+    }
+
+    case "cover_letter": {
+      const words = clean(data.cover_letter).split(/\s+/).filter(Boolean).length;
+      facts.push(
+        words > 0 ? fact("Length", `${words} words`) : null,
+        fact("Tone", data.tone ? `${humanize(data.tone)} tone` : "")
+      );
+      blocks.push(documentBlock("Cover letter", data.cover_letter));
+      linkLabel = "Open the cover letter workspace";
+      break;
+    }
+
+    case "roadmap": {
+      const weeks = Array.isArray(data.weeks) ? data.weeks : [];
+      const tasks = weeks.reduce((total, week) => total + count(week?.tasks), 0);
+      facts.push(
+        weeks.length > 0 ? fact("Weeks", `${weeks.length} weeks`) : null,
+        tasks > 0 ? fact("Tasks", `${tasks} tasks`) : null
+      );
+      blocks.push(
+        prose("Summary", data.roadmap_summary),
+        listBlock(
+          "Week goals",
+          weeks.map((week) =>
+            week?.goal ? `Week ${week.week ?? "?"} — ${clean(week.goal)}` : null
           )
-        ),
-        section("Top priorities", data.top_3_priority_gaps),
-      ].filter(Boolean);
-    case "resume_suggestions":
-      return [
-        section("Strategy", data.resume_strategy),
-        section("Summary", data.assistant_summary),
-        section(
-          "Suggestions",
-          (data.suggestions ?? []).map((item) =>
-            item?.suggested_text
-              ? `${item.suggested_text} [${(item.truth_guard_status ?? "").replaceAll("_", " ")}]`
-              : null
-          )
-        ),
-        section("Do not claim", data.do_not_claim),
-      ].filter(Boolean);
-    case "cover_letter":
-      return [
-        section("Cover letter", data.cover_letter),
-        section("Strategy", data.cover_letter_strategy),
-        section("Key points used", data.key_points_used),
-        section("Claims avoided", data.claims_avoided),
-      ].filter(Boolean);
-    case "roadmap":
-      return [
-        section("Summary", data.roadmap_summary),
-        section("Project theme", data.recommended_project_theme),
-        section(
-          "Weeks",
-          (data.weeks ?? []).map((week) =>
-            week?.goal ? `Week ${week.week}: ${week.goal}` : null
-          )
-        ),
-        section("Success criteria", data.success_criteria),
-      ].filter(Boolean);
-    case "interview_prep":
-      return [
-        section("Prep summary", data.prep_summary),
-        section("Technical", data.technical_questions),
-        section("AI / LLM", data.ai_llm_questions),
-        section("System design", data.system_design_questions),
-        section("Behavioral", data.behavioral_questions),
-        section("Weak topics to study", data.weak_topics_to_study),
-      ].filter(Boolean);
-    case "assistant_insight":
-      return [
-        section("Summary", data.assistant_summary),
-        section("Recommendation", data.recommendation?.replaceAll?.("_", " ")),
-        section("Why", data.why_this_recommendation),
-        section("Next best action", data.next_best_action),
-        section("Application strategy", data.application_strategy),
-      ].filter(Boolean);
+        )
+      );
+      linkLabel = weeks.length > 0 ? "Open the full week-by-week plan" : null;
+      break;
+    }
+
+    case "interview_prep": {
+      const totalQuestions =
+        count(data.technical_questions) +
+        count(data.ai_llm_questions) +
+        count(data.system_design_questions) +
+        count(data.behavioral_questions);
+      const weakTopics = count(data.weak_topics_to_study);
+      facts.push(
+        totalQuestions > 0 ? fact("Questions", `${totalQuestions} questions`) : null,
+        weakTopics > 0
+          ? fact("Weak topics", `${weakTopics} weak topics`, "warning")
+          : null
+      );
+      blocks.push(
+        prose("Prep summary", data.prep_summary),
+        chipsBlock(
+          "Weak topics to study",
+          (data.weak_topics_to_study ?? []).map((item) => ({
+            label: item,
+            tone: "warning",
+          }))
+        )
+      );
+      linkLabel =
+        totalQuestions > 0
+          ? `Review all ${totalQuestions} questions with answer guidance`
+          : null;
+      break;
+    }
+
     default:
-      return [];
+      break;
   }
+
+  return {
+    facts: facts.filter(Boolean),
+    blocks: blocks.filter(Boolean),
+    link_label: linkLabel,
+  };
 }
 
 function runStatus(run) {

@@ -26,7 +26,7 @@ import {
   buildPanelRows,
   panelProgress,
   remainingActionableSteps,
-  stepOutputDetails,
+  stepOutputView,
   stepStatusMeta,
 } from "@/lib/ai-workflow-panel.mjs";
 import { formatShortDate } from "@/lib/data/server";
@@ -38,6 +38,7 @@ type PanelRow = {
   description: string;
   prematch?: boolean;
   href?: string;
+  artifact?: string;
   status: "not_started" | "running" | "completed" | "needs_review" | "failed" | "blocked";
   summary: string;
   model_name: string | null;
@@ -48,7 +49,26 @@ type PanelRow = {
   can_act: boolean;
 };
 
-type OutputSection = { label: string; text?: string; items?: string[] };
+type OutputTone = "success" | "warning" | "destructive" | "neutral";
+
+type OutputBlock =
+  | { kind: "prose"; label: string; text: string }
+  | { kind: "document"; label: string; text: string }
+  | { kind: "list"; label: string; items: string[] }
+  | { kind: "chips"; label: string; items: { label: string; tone: OutputTone }[] };
+
+type OutputView = {
+  facts: { label: string; value: string; tone: OutputTone }[];
+  blocks: OutputBlock[];
+  link_label: string | null;
+};
+
+const BADGE_BY_TONE: Record<OutputTone, "success" | "warning" | "destructive" | "secondary"> = {
+  success: "success",
+  warning: "warning",
+  destructive: "destructive",
+  neutral: "secondary",
+};
 
 type AiWorkflowPanelProps = {
   matchId: string;
@@ -117,44 +137,96 @@ function StepMarker({ row, index }: { row: PanelRow; index: number }) {
   }
 }
 
+function BlockLabel({ children }: { children: React.ReactNode }) {
+  return <p className="text-sm font-semibold">{children}</p>;
+}
+
+function OutputBlockView({ block }: { block: OutputBlock }) {
+  switch (block.kind) {
+    case "prose":
+      return (
+        <div>
+          <BlockLabel>{block.label}</BlockLabel>
+          <p className="mt-1 text-sm leading-6 whitespace-pre-wrap text-muted-foreground">
+            {block.text}
+          </p>
+        </div>
+      );
+    case "document":
+      // Capped height: the digest stays a digest even for a long letter.
+      return (
+        <div className="max-h-64 overflow-y-auto rounded-lg border bg-muted/20 p-4 text-sm leading-7 whitespace-pre-wrap">
+          {block.text}
+        </div>
+      );
+    case "list":
+      return (
+        <div>
+          <BlockLabel>{block.label}</BlockLabel>
+          <ul className="mt-1 grid list-disc gap-1 pl-5 text-sm leading-6 text-muted-foreground marker:text-border">
+            {block.items.map((item, index) => (
+              <li key={`${item}-${index}`}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      );
+    case "chips":
+      return (
+        <div>
+          <BlockLabel>{block.label}</BlockLabel>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {block.items.map((item, index) => (
+              <Badge key={`${item.label}-${index}`} variant={BADGE_BY_TONE[item.tone]}>
+                {item.label}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      );
+    default:
+      return null;
+  }
+}
+
 function StepOutput({ row, matchId }: { row: PanelRow; matchId: string }) {
-  const sections = stepOutputDetails(row.workflow_type, row.snapshot) as OutputSection[];
-  if (sections.length === 0) {
+  const view = stepOutputView(row.workflow_type, row.snapshot) as OutputView;
+  if (view.facts.length === 0 && view.blocks.length === 0) {
     return null;
   }
 
-  // Steps with a dedicated workspace page keep a link for actions (accept
-  // suggestions, regenerate from context, etc.); reviewing happens inline.
+  const artifact = row.artifact ?? "details";
   const pageHref = row.href ? `/matches/${matchId}/${row.href}` : null;
 
   return (
-    <DetailsSection className="mt-2" summary="View output">
+    <DetailsSection
+      className="mt-1"
+      variant="ghost"
+      summary={
+        <>
+          <span className="group-open:hidden">Show {artifact}</span>
+          <span className="hidden group-open:inline">Hide {artifact}</span>
+        </>
+      }
+    >
       <div className="grid gap-3">
-        {sections.map((outputSection) => (
-          <div key={outputSection.label}>
-            <p className="text-sm font-medium">{outputSection.label}</p>
-            {outputSection.text ? (
-              <p className="mt-1 text-sm leading-6 whitespace-pre-wrap text-muted-foreground">
-                {outputSection.text}
-              </p>
-            ) : null}
-            {outputSection.items ? (
-              <ul className="mt-1 grid gap-1">
-                {outputSection.items.map((item, index) => (
-                  <li
-                    key={`${item}-${index}`}
-                    className="rounded-lg border bg-muted/20 px-3 py-1.5 text-sm leading-6"
-                  >
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+        {view.facts.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {view.facts.map((item) => (
+              <Badge key={item.label} variant={BADGE_BY_TONE[item.tone]}>
+                {item.value}
+              </Badge>
+            ))}
           </div>
+        ) : null}
+        {view.blocks.map((block) => (
+          <OutputBlockView key={`${block.kind}-${block.label}`} block={block} />
         ))}
         {pageHref ? (
-          <Link href={pageHref} className="w-fit text-sm font-medium text-foreground underline">
-            Open full page
+          <Link
+            href={pageHref}
+            className="w-fit text-sm font-medium text-foreground underline underline-offset-4"
+          >
+            {view.link_label ?? "Open full page"}
           </Link>
         ) : null}
       </div>
