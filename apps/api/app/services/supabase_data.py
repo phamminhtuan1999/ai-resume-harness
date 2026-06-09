@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -259,6 +259,10 @@ class SupabaseDataClient:
             json=payload,
         )
 
+    # Activity events past this window are pruned opportunistically on write,
+    # so the feed cannot grow unbounded (US-037 retention decision).
+    ACTIVITY_RETENTION_DAYS = 90
+
     def insert_activity(
         self,
         *,
@@ -286,6 +290,18 @@ class SupabaseDataClient:
             },
         )
 
+        cutoff = (
+            datetime.now(UTC) - timedelta(days=self.ACTIVITY_RETENTION_DAYS)
+        ).isoformat()
+        self._request(
+            "DELETE",
+            "/activity_feed",
+            params={
+                "user_id": f"eq.{user_profile_id}",
+                "created_at": f"lt.{cutoff}",
+            },
+        )
+
     def get_latest_runs_for_match(
         self, *, match_id: str, user_profile_id: str
     ) -> list[dict[str, Any]]:
@@ -295,8 +311,9 @@ class SupabaseDataClient:
             "/ai_workflow_runs",
             params={
                 "select": (
-                    "workflow_type,status,model_provider,confidence_score,"
-                    "completed_at,created_at"
+                    "workflow_type,status,model_provider,model_name,confidence_score,"
+                    "completed_at,created_at,output_snapshot_json,error_code,"
+                    "error_message"
                 ),
                 "user_id": f"eq.{user_profile_id}",
                 "subject_type": "eq.match",
@@ -644,6 +661,378 @@ class SupabaseDataClient:
             user_profile_id=user_profile_id,
             payload=cover_letter,
         )
+
+    # --- Roadmap (US-034) ---------------------------------------------------------
+
+    def get_roadmap_for_match(
+        self, *, match_id: str, user_profile_id: str
+    ) -> dict[str, Any] | None:
+        """Latest saved roadmap for an owned match (None when absent/not owned)."""
+        response = self._request(
+            "GET",
+            "/roadmaps",
+            params={
+                "select": "id,match_id,title,roadmap_json,created_at,updated_at",
+                "match_id": f"eq.{match_id}",
+                "user_id": f"eq.{user_profile_id}",
+                "order": "created_at.desc",
+                "limit": "1",
+            },
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
+    def upsert_roadmap(
+        self,
+        *,
+        match_id: str,
+        user_profile_id: str,
+        title: str,
+        roadmap_json: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Replace the match's active roadmap (delete-then-insert).
+
+        ``roadmaps`` has no unique constraint on ``match_id`` (Period 3 kept
+        history), so the one-active-roadmap-per-match rule is enforced here.
+        Ownership is asserted upstream by the workflow's ``authorize``.
+        """
+        self._request(
+            "DELETE",
+            "/roadmaps",
+            params={"match_id": f"eq.{match_id}", "user_id": f"eq.{user_profile_id}"},
+        )
+        now = datetime.now(UTC).isoformat()
+        response = self._request(
+            "POST",
+            "/roadmaps",
+            params={"select": "id"},
+            json={
+                "user_id": user_profile_id,
+                "match_id": match_id,
+                "title": title,
+                "roadmap_json": roadmap_json,
+                "created_at": now,
+                "updated_at": now,
+            },
+            extra_headers={"Prefer": "return=representation"},
+        )
+        rows = response.json()
+        if not rows:
+            raise SupabaseDataError("Roadmap save returned no rows.")
+        return rows[0]
+
+    # --- Interview prep (US-035) ---------------------------------------------------
+
+    def get_interview_prep_by_match(
+        self, *, match_id: str, user_profile_id: str
+    ) -> dict[str, Any] | None:
+        """Latest saved interview prep for an owned match (None when absent)."""
+        response = self._request(
+            "GET",
+            "/interview_preps",
+            params={
+                "select": (
+                    "id,match_id,questions_json,weak_topics_json,study_plan_json,"
+                    "answer_guidance_json,created_at,updated_at"
+                ),
+                "match_id": f"eq.{match_id}",
+                "user_id": f"eq.{user_profile_id}",
+                "order": "created_at.desc",
+                "limit": "1",
+            },
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
+    def upsert_interview_prep(
+        self, *, match_id: str, user_profile_id: str, prep: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Replace the match's interview prep (delete-then-insert).
+
+        ``interview_preps`` has no unique constraint on ``match_id`` (Period 3
+        kept history), so the one-active-prep-per-match rule is enforced here.
+        Ownership is asserted upstream by the workflow's ``authorize``.
+        """
+        self._request(
+            "DELETE",
+            "/interview_preps",
+            params={"match_id": f"eq.{match_id}", "user_id": f"eq.{user_profile_id}"},
+        )
+        now = datetime.now(UTC).isoformat()
+        response = self._request(
+            "POST",
+            "/interview_preps",
+            params={"select": "id"},
+            json={
+                **prep,
+                "user_id": user_profile_id,
+                "match_id": match_id,
+                "created_at": now,
+                "updated_at": now,
+            },
+            extra_headers={"Prefer": "return=representation"},
+        )
+        rows = response.json()
+        if not rows:
+            raise SupabaseDataError("Interview prep save returned no rows.")
+        return rows[0]
+
+    # --- Dashboard AI summary (US-036) ---------------------------------------------
+
+    def count_analyzed_jobs(self, *, user_profile_id: str) -> int:
+        """Completed match/gap analysis runs for the §9 data gate (< 3 -> gate)."""
+        response = self._request(
+            "GET",
+            "/ai_workflow_runs",
+            params={
+                "select": "id",
+                "user_id": f"eq.{user_profile_id}",
+                "workflow_type": "in.(match_analysis,missing_skills)",
+                "status": "eq.completed",
+            },
+        )
+        return len(response.json())
+
+    def get_dashboard_summary_input(self, *, user_profile_id: str) -> dict[str, Any]:
+        """Aggregate the §9.2 cross-job payload (no raw resume/JD text included)."""
+        jobs = self._request(
+            "GET",
+            "/jobs",
+            params={
+                "select": "id,title,company,work_type,location",
+                "user_id": f"eq.{user_profile_id}",
+            },
+        ).json()
+        matches = self._request(
+            "GET",
+            "/matches",
+            params={
+                "select": "id,job_id,overall_score,apply_recommendation",
+                "user_id": f"eq.{user_profile_id}",
+                "overall_score": "not.is.null",
+            },
+        ).json()
+        applications = self._request(
+            "GET",
+            "/applications",
+            params={
+                "select": "job_id,status",
+                "user_id": f"eq.{user_profile_id}",
+            },
+        ).json()
+        skills = self._request(
+            "GET",
+            "/missing_skill_analyses",
+            params={
+                "select": "match_id,missing_skills_json",
+                "user_id": f"eq.{user_profile_id}",
+            },
+        ).json()
+        activities = self._request(
+            "GET",
+            "/activity_feed",
+            params={
+                "select": "activity_type,title,importance,created_at",
+                "user_id": f"eq.{user_profile_id}",
+                "order": "created_at.desc",
+                "limit": "30",
+            },
+        ).json()
+
+        return {
+            "candidate_profile": {},
+            "jobs": jobs,
+            "match_scores": [
+                {"job_id": m.get("job_id"), "overall_score": m.get("overall_score")}
+                for m in matches
+            ],
+            "application_statuses": applications,
+            "missing_skills_across_jobs": [
+                {
+                    "match_id": row.get("match_id"),
+                    "missing_skills": row.get("missing_skills_json") or [],
+                }
+                for row in skills
+            ],
+            "recent_activities": activities,
+        }
+
+    def get_dashboard_ai_summary(self, *, user_profile_id: str) -> dict[str, Any] | None:
+        response = self._request(
+            "GET",
+            "/dashboard_ai_summary",
+            params={
+                "select": (
+                    "id,dashboard_summary,best_fit_roles_json,repeated_skill_gaps_json,"
+                    "job_search_health,recommended_next_actions_json,confidence_score,"
+                    "provider,updated_at"
+                ),
+                "user_id": f"eq.{user_profile_id}",
+                "limit": "1",
+            },
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
+    def upsert_dashboard_summary(
+        self, *, user_profile_id: str, summary: dict[str, Any]
+    ) -> dict[str, Any]:
+        """One live summary per user (``ON CONFLICT (user_id) DO UPDATE``)."""
+        response = self._request(
+            "POST",
+            "/dashboard_ai_summary",
+            params={"on_conflict": "user_id", "select": "id"},
+            json={
+                **summary,
+                "user_id": user_profile_id,
+                "updated_at": datetime.now(UTC).isoformat(),
+            },
+            extra_headers={"Prefer": "resolution=merge-duplicates,return=representation"},
+        )
+        rows = response.json()
+        if not rows:
+            raise SupabaseDataError("Dashboard summary save returned no rows.")
+        return rows[0]
+
+    def get_latest_run_for_user(
+        self, *, user_profile_id: str, workflow_type: str
+    ) -> dict[str, Any] | None:
+        """Latest run of a user-scoped workflow (dashboard summary)."""
+        response = self._request(
+            "GET",
+            "/ai_workflow_runs",
+            params={
+                "select": (
+                    "id,workflow_type,status,model_provider,model_name,latency_ms,"
+                    "confidence_score,error_code,error_message,completed_at,created_at"
+                ),
+                "user_id": f"eq.{user_profile_id}",
+                "workflow_type": f"eq.{workflow_type}",
+                "order": "created_at.desc",
+                "limit": "1",
+            },
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
+    # --- AI workflow panel (US-038) -------------------------------------------------
+
+    def flip_application_status_prepared(
+        self, *, match_id: str, user_profile_id: str
+    ) -> bool:
+        """Mark the match's tracker row ``prepared`` after a full AI run.
+
+        Returns True when a row was updated; False when no applications row
+        exists for the match (the user has not saved it to the tracker) or it
+        is already prepared.
+        """
+        response = self._request(
+            "PATCH",
+            "/applications",
+            params={
+                "match_id": f"eq.{match_id}",
+                "user_id": f"eq.{user_profile_id}",
+                "status": "neq.prepared",
+                "select": "id",
+            },
+            json={
+                "status": "prepared",
+                "updated_at": datetime.now(UTC).isoformat(),
+            },
+            extra_headers={"Prefer": "return=representation"},
+        )
+        return bool(response.json())
+
+    # --- Activity feed (US-037) -----------------------------------------------------
+
+    _ACTIVITY_SELECT = (
+        "id,user_id,workflow_run_id,activity_type,title,assistant_description,"
+        "importance,created_at,related_job_id,related_match_id,"
+        "related_job:jobs(id,title,company)"
+    )
+
+    def list_activity_feed(
+        self, *, user_profile_id: str, limit: int = 20, offset: int = 0
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Newest-first feed page plus the exact total (for pagination)."""
+        response = self._request(
+            "GET",
+            "/activity_feed",
+            params={
+                "select": self._ACTIVITY_SELECT,
+                "user_id": f"eq.{user_profile_id}",
+                "order": "created_at.desc",
+                "limit": str(limit),
+                "offset": str(offset),
+            },
+            extra_headers={"Prefer": "count=exact"},
+        )
+        rows = response.json()
+        content_range = response.headers.get("content-range") or ""
+        total = len(rows)
+        if "/" in content_range:
+            try:
+                total = int(content_range.split("/")[-1])
+            except ValueError:
+                pass
+        return rows, total
+
+    def get_activity(self, *, activity_id: str) -> dict[str, Any] | None:
+        """One activity row with its joined job; the caller checks ownership."""
+        response = self._request(
+            "GET",
+            "/activity_feed",
+            params={
+                "select": self._ACTIVITY_SELECT,
+                "id": f"eq.{activity_id}",
+                "limit": "1",
+            },
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
+    def get_workflow_run_snapshot(self, *, run_id: str) -> dict[str, Any] | None:
+        if not run_id:
+            return None
+        response = self._request(
+            "GET",
+            "/ai_workflow_runs",
+            params={
+                "select": "id,workflow_type,status,confidence_score,output_snapshot_json",
+                "id": f"eq.{run_id}",
+                "limit": "1",
+            },
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
+    def update_activity_description(
+        self,
+        *,
+        activity_id: str,
+        user_profile_id: str,
+        title: str,
+        assistant_description: str | None,
+        importance: str,
+    ) -> dict[str, Any] | None:
+        """Ownership-guarded update; returns the updated row or None."""
+        response = self._request(
+            "PATCH",
+            "/activity_feed",
+            params={
+                "id": f"eq.{activity_id}",
+                "user_id": f"eq.{user_profile_id}",
+                "select": self._ACTIVITY_SELECT,
+            },
+            json={
+                "title": title,
+                "assistant_description": assistant_description,
+                "importance": importance,
+            },
+            extra_headers={"Prefer": "return=representation"},
+        )
+        rows = response.json()
+        return rows[0] if rows else None
 
     def _upsert_by_match(
         self,

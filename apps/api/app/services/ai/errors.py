@@ -75,6 +75,25 @@ class MatchAnalysisRequiredError(AIWorkflowError):
     retryable = False
 
 
+class MissingSkillAnalysisRequiredError(AIWorkflowError):
+    """The roadmap (US-034) was requested before a missing-skill analysis
+    (US-029) exists for the match. Pre-flight: raised before any run row is
+    written, per the US-034 contract (no run/roadmap/activity on this guard)."""
+
+    code = "missing_skill_analysis_required"
+    http_status = 422
+    retryable = False
+
+
+class UnknownStepError(AIWorkflowError):
+    """``POST .../ai-workflow/{step}/regenerate`` (US-038) received a ``step``
+    that is not a recognised, panel-orchestrated ``workflow_type``."""
+
+    code = "unknown_step"
+    http_status = 422
+    retryable = False
+
+
 class InvalidJSONError(AIWorkflowError):
     code = "invalid_json"
     http_status = 502
@@ -130,6 +149,10 @@ DEFAULT_MESSAGES: dict[str, str] = {
     "match_analysis_required": (
         "Run match analysis before generating resume suggestions."
     ),
+    "missing_skill_analysis_required": (
+        "Run gap analysis before generating a roadmap."
+    ),
+    "unknown_step": "That AI workflow step is not recognized.",
     "invalid_json": "The assistant returned an unexpected response. Please try again.",
     "schema_validation_failure": (
         "The assistant returned an unexpected response. Please try again."
@@ -148,6 +171,8 @@ ERROR_CLASSES: tuple[type[AIWorkflowError], ...] = (
     MissingJobRequirementsError,
     MissingMatchAnalysisError,
     MatchAnalysisRequiredError,
+    MissingSkillAnalysisRequiredError,
+    UnknownStepError,
     InvalidJSONError,
     SchemaValidationFailureError,
     LowConfidenceError,

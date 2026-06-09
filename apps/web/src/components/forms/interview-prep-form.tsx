@@ -11,9 +11,10 @@ import { generateInterviewPrepAction } from "@/lib/actions";
 
 type InterviewPrepFormProps = {
   matchId: string;
+  hasExisting?: boolean;
 };
 
-export function InterviewPrepForm({ matchId }: InterviewPrepFormProps) {
+export function InterviewPrepForm({ matchId, hasExisting = false }: InterviewPrepFormProps) {
   const [state, formAction] = useActionState(generateInterviewPrepAction, idleActionState);
 
   return (
@@ -21,9 +22,17 @@ export function InterviewPrepForm({ matchId }: InterviewPrepFormProps) {
       <input type="hidden" name="match_id" value={matchId} />
       <FormSuccessPopup state={state} title="Interview prep generated" />
       <FormStatusMessage state={state} />
-      <FormFieldHint text="Required match context is attached from this page." />
+      <FormFieldHint
+        text={
+          hasExisting
+            ? "Regenerating replaces the saved prep with a fresh set."
+            : "Required match context is attached from this page."
+        }
+      />
       <FormFieldError error={state.fieldErrors?.match_id} />
-      <SubmitButton pendingLabel="Generating...">Generate interview prep</SubmitButton>
+      <SubmitButton pendingLabel="Generating...">
+        {hasExisting ? "Regenerate interview prep" : "Generate interview prep"}
+      </SubmitButton>
     </form>
   );
 }

@@ -9,14 +9,17 @@ import {
 } from "../src/lib/application-tracker.mjs";
 
 test("application tracker exposes the MVP status workflow", () => {
+  // "prepared" added by US-038: run-full completion marks an application Prepared.
   assert.deepEqual(APPLICATION_STATUSES, [
     "saved",
+    "prepared",
     "applied",
     "interviewing",
     "offer",
     "rejected",
     "archived",
   ]);
+  assert.equal(getApplicationStatusLabel("prepared"), "Prepared");
 });
 
 test("application tracker labels machine statuses for the UI", () => {

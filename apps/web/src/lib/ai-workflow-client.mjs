@@ -205,6 +205,133 @@ export async function patchResumeSuggestion({
   return { ok: true, suggestion: payload?.suggestion ?? null };
 }
 
+export async function runFullWorkflow({
+  apiBaseUrl,
+  matchId,
+  sessionToken,
+  force = false,
+  fetchImpl = fetch,
+}) {
+  if (!apiBaseUrl) {
+    return { ok: false, message: "The assistant API is not configured." };
+  }
+  if (!sessionToken) {
+    return { ok: false, message: "Unable to authenticate the request." };
+  }
+  if (!matchId) {
+    return { ok: false, message: "A match is required." };
+  }
+
+  let response;
+  try {
+    response = await fetchImpl(
+      `${apiBaseUrl}/api/matches/${matchId}/ai-workflow/run-full`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ force }),
+      }
+    );
+  } catch {
+    return { ok: false, message: "We could not reach the assistant. Please try again." };
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = toAIWorkflowError(payload, response.status);
+    return { ok: false, message: error.message, retryable: error.retryable };
+  }
+
+  return {
+    ok: true,
+    status: payload?.status ?? "complete",
+    applicationStatus: payload?.application_status ?? null,
+    stepsCompleted: Number(payload?.steps_completed) || 0,
+    stepsFailed: Number(payload?.steps_failed) || 0,
+    stepsBlocked: Number(payload?.steps_blocked) || 0,
+    failedStep: payload?.failed_step ?? null,
+    error: payload?.error ?? null,
+  };
+}
+
+export async function fetchActivityFeed({
+  apiBaseUrl,
+  sessionToken,
+  limit = 20,
+  offset = 0,
+  fetchImpl = fetch,
+}) {
+  if (!apiBaseUrl) {
+    return { ok: false, message: "The assistant API is not configured." };
+  }
+  if (!sessionToken) {
+    return { ok: false, message: "Unable to authenticate the request." };
+  }
+
+  let response;
+  try {
+    response = await fetchImpl(
+      `${apiBaseUrl}/api/activities?limit=${limit}&offset=${offset}`,
+      { headers: { Authorization: `Bearer ${sessionToken}` } }
+    );
+  } catch {
+    return { ok: false, message: "We could not reach the assistant. Please try again." };
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = toAIWorkflowError(payload, response.status);
+    return { ok: false, message: error.message, retryable: error.retryable };
+  }
+
+  return {
+    ok: true,
+    activities: Array.isArray(payload?.activities) ? payload.activities : [],
+    total: Number(payload?.total) || 0,
+  };
+}
+
+export async function regenerateActivityDescription({
+  apiBaseUrl,
+  activityId,
+  sessionToken,
+  fetchImpl = fetch,
+}) {
+  if (!apiBaseUrl) {
+    return { ok: false, message: "The assistant API is not configured." };
+  }
+  if (!sessionToken) {
+    return { ok: false, message: "Unable to authenticate the request." };
+  }
+  if (!activityId) {
+    return { ok: false, message: "An activity is required." };
+  }
+
+  let response;
+  try {
+    response = await fetchImpl(
+      `${apiBaseUrl}/api/activities/${activityId}/generate-description`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionToken}` },
+      }
+    );
+  } catch {
+    return { ok: false, message: "We could not reach the assistant. Please try again." };
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = toAIWorkflowError(payload, response.status);
+    return { ok: false, message: error.message, retryable: error.retryable };
+  }
+
+  return { ok: true, activity: payload?.activity ?? null };
+}
+
 function toAIWorkflowError(payload, status) {
   const envelope =
     typeof payload === "object" && payload !== null && typeof payload.error === "object"

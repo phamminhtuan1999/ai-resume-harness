@@ -11,9 +11,10 @@ import { generateRoadmapAction } from "@/lib/actions";
 
 type RoadmapFormProps = {
   matchId: string;
+  hasExisting?: boolean;
 };
 
-export function RoadmapForm({ matchId }: RoadmapFormProps) {
+export function RoadmapForm({ matchId, hasExisting = false }: RoadmapFormProps) {
   const [state, formAction] = useActionState(generateRoadmapAction, idleActionState);
 
   return (
@@ -21,9 +22,17 @@ export function RoadmapForm({ matchId }: RoadmapFormProps) {
       <input type="hidden" name="match_id" value={matchId} />
       <FormSuccessPopup state={state} title="Roadmap generated" />
       <FormStatusMessage state={state} />
-      <FormFieldHint text="Required match context is attached from this page." />
+      <FormFieldHint
+        text={
+          hasExisting
+            ? "Regenerating replaces the saved roadmap with a fresh plan."
+            : "Required match context is attached from this page."
+        }
+      />
       <FormFieldError error={state.fieldErrors?.match_id} />
-      <SubmitButton pendingLabel="Generating...">Generate roadmap</SubmitButton>
+      <SubmitButton pendingLabel="Generating...">
+        {hasExisting ? "Regenerate roadmap" : "Generate roadmap"}
+      </SubmitButton>
     </form>
   );
 }

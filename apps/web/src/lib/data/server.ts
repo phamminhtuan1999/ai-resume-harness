@@ -448,6 +448,14 @@ export async function getResumeDetail(resumeId: string) {
     notFound();
   }
 
+  // The imported candidate profile (US-019) is account-level; surface it on
+  // the resume page so the parsed view, not raw text, is the primary detail.
+  const { data: profileRow } = await supabase
+    .from("user_profiles")
+    .select("candidate_profile_json")
+    .eq("id", profile.id)
+    .maybeSingle();
+
   return {
     appUser,
     profile,
@@ -457,6 +465,9 @@ export async function getResumeDetail(resumeId: string) {
       source_size_bytes: number | null;
       import_error: string | null;
     },
+    candidateProfile:
+      (profileRow as { candidate_profile_json?: unknown } | null)
+        ?.candidate_profile_json ?? null,
   };
 }
 
@@ -478,7 +489,10 @@ export async function getJobDetail(jobId: string) {
         "job_url",
         "location",
         "work_type",
+        "employment_type",
+        "salary_range",
         "raw_description",
+        "structured_json",
         "parse_status",
         "contact_name",
         "contact_email",
@@ -974,33 +988,54 @@ export async function getRoadmapDetail(matchId: string) {
   }
 
   const supabase = getSupabaseServiceClient();
-  const [{ data: matchRow, error: matchError }, { data: roadmapRows, error: roadmapsError }] =
-    await Promise.all([
-      supabase
-        .from("matches")
-        .select(
-          [
-            "id",
-            "resume_id",
-            "job_id",
-            "overall_score",
-            "missing_skills_json",
-            "created_at",
-            "updated_at",
-            "resumes(id,title)",
-            "jobs(id,company,title)",
-          ].join(",")
-        )
-        .eq("id", matchId)
-        .eq("user_id", profile.id)
-        .single(),
-      supabase
-        .from("roadmaps")
-        .select("id,user_id,match_id,title,roadmap_json,created_at,updated_at")
-        .eq("match_id", matchId)
-        .eq("user_id", profile.id)
-        .order("created_at", { ascending: false }),
-    ]);
+  const [
+    { data: matchRow, error: matchError },
+    { data: roadmapRows, error: roadmapsError },
+    { data: gapRow },
+    { data: roadmapRunRow },
+  ] = await Promise.all([
+    supabase
+      .from("matches")
+      .select(
+        [
+          "id",
+          "resume_id",
+          "job_id",
+          "overall_score",
+          "missing_skills_json",
+          "created_at",
+          "updated_at",
+          "resumes(id,title)",
+          "jobs(id,company,title)",
+        ].join(",")
+      )
+      .eq("id", matchId)
+      .eq("user_id", profile.id)
+      .single(),
+    supabase
+      .from("roadmaps")
+      .select("id,user_id,match_id,title,roadmap_json,created_at,updated_at")
+      .eq("match_id", matchId)
+      .eq("user_id", profile.id)
+      .order("created_at", { ascending: false }),
+    // Dependency guard (US-034): the roadmap needs a missing-skill analysis.
+    supabase
+      .from("missing_skill_analyses")
+      .select("id")
+      .eq("match_id", matchId)
+      .eq("user_id", profile.id)
+      .maybeSingle(),
+    supabase
+      .from("ai_workflow_runs")
+      .select("status,model_provider,confidence_score,completed_at")
+      .eq("user_id", profile.id)
+      .eq("subject_type", "match")
+      .eq("subject_id", matchId)
+      .eq("workflow_type", "roadmap")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
   if (matchError || !matchRow) {
     notFound();
@@ -1015,6 +1050,13 @@ export async function getRoadmapDetail(matchId: string) {
     profile,
     match: matchRow as unknown as WorkspaceMatch,
     roadmaps: (roadmapRows ?? []) as unknown as Roadmap[],
+    hasGapAnalysis: Boolean(gapRow?.id),
+    roadmapRun: (roadmapRunRow ?? null) as {
+      status: string;
+      model_provider: string | null;
+      confidence_score: number | null;
+      completed_at: string | null;
+    } | null,
   };
 }
 
@@ -1026,48 +1068,61 @@ export async function getInterviewPrepDetail(matchId: string) {
   }
 
   const supabase = getSupabaseServiceClient();
-  const [{ data: matchRow, error: matchError }, { data: prepRows, error: prepsError }] =
-    await Promise.all([
-      supabase
-        .from("matches")
-        .select(
-          [
-            "id",
-            "resume_id",
-            "job_id",
-            "overall_score",
-            "strengths_json",
-            "weaknesses_json",
-            "missing_skills_json",
-            "risks_json",
-            "created_at",
-            "updated_at",
-            "resumes(id,title)",
-            "jobs(id,company,title)",
-          ].join(",")
-        )
-        .eq("id", matchId)
-        .eq("user_id", profile.id)
-        .single(),
-      supabase
-        .from("interview_preps")
-        .select(
-          [
-            "id",
-            "user_id",
-            "match_id",
-            "questions_json",
-            "weak_topics_json",
-            "study_plan_json",
-            "answer_guidance_json",
-            "created_at",
-            "updated_at",
-          ].join(",")
-        )
-        .eq("match_id", matchId)
-        .eq("user_id", profile.id)
-        .order("created_at", { ascending: false }),
-    ]);
+  const [
+    { data: matchRow, error: matchError },
+    { data: prepRows, error: prepsError },
+    { data: prepRunRow },
+  ] = await Promise.all([
+    supabase
+      .from("matches")
+      .select(
+        [
+          "id",
+          "resume_id",
+          "job_id",
+          "overall_score",
+          "strengths_json",
+          "weaknesses_json",
+          "missing_skills_json",
+          "risks_json",
+          "created_at",
+          "updated_at",
+          "resumes(id,title)",
+          "jobs(id,company,title)",
+        ].join(",")
+      )
+      .eq("id", matchId)
+      .eq("user_id", profile.id)
+      .single(),
+    supabase
+      .from("interview_preps")
+      .select(
+        [
+          "id",
+          "user_id",
+          "match_id",
+          "questions_json",
+          "weak_topics_json",
+          "study_plan_json",
+          "answer_guidance_json",
+          "created_at",
+          "updated_at",
+        ].join(",")
+      )
+      .eq("match_id", matchId)
+      .eq("user_id", profile.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("ai_workflow_runs")
+      .select("status,model_provider,confidence_score,completed_at")
+      .eq("user_id", profile.id)
+      .eq("subject_type", "match")
+      .eq("subject_id", matchId)
+      .eq("workflow_type", "interview_prep")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
   if (matchError || !matchRow) {
     notFound();
@@ -1082,6 +1137,169 @@ export async function getInterviewPrepDetail(matchId: string) {
     profile,
     match: matchRow as unknown as WorkspaceMatch,
     interviewPreps: (prepRows ?? []) as unknown as InterviewPrep[],
+    prepRun: (prepRunRow ?? null) as {
+      status: string;
+      model_provider: string | null;
+      confidence_score: number | null;
+      completed_at: string | null;
+    } | null,
+  };
+}
+
+export async function getMatchAiWorkflowRuns(matchId: string) {
+  const { profile } = await getWorkspaceProfile();
+
+  if (!profile) {
+    return { runs: [], profileReady: false, jobImported: false, jobParsed: false };
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const [{ data: runRows }, { data: matchRow }, { data: profileRow }] =
+    await Promise.all([
+      supabase
+        .from("ai_workflow_runs")
+        .select(
+          [
+            "workflow_type",
+            "status",
+            "model_provider",
+            "model_name",
+            "confidence_score",
+            "completed_at",
+            "created_at",
+            "output_snapshot_json",
+            "error_code",
+            "error_message",
+          ].join(",")
+        )
+        .eq("user_id", profile.id)
+        .eq("subject_type", "match")
+        .eq("subject_id", matchId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("matches")
+        .select("id,job_id,jobs(id,parse_status,raw_description)")
+        .eq("id", matchId)
+        .eq("user_id", profile.id)
+        .maybeSingle(),
+      supabase
+        .from("user_profiles")
+        .select("candidate_profile_json,current_role,target_role")
+        .eq("id", profile.id)
+        .maybeSingle(),
+    ]);
+
+  const job = (matchRow as { jobs?: { parse_status?: string; raw_description?: string } } | null)
+    ?.jobs;
+  const profileData = profileRow as {
+    candidate_profile_json?: unknown;
+    current_role?: string | null;
+    target_role?: string | null;
+  } | null;
+
+  return {
+    runs: (runRows ?? []) as unknown as Record<string, unknown>[],
+    profileReady: Boolean(
+      profileData?.candidate_profile_json ||
+        profileData?.current_role ||
+        profileData?.target_role
+    ),
+    jobImported: Boolean(job?.raw_description),
+    jobParsed: job?.parse_status === "parsed",
+  };
+}
+
+export async function getActivityFeedPage(offset = 0, pageSize = 20) {
+  const { profile } = await getWorkspaceProfile();
+
+  if (!profile) {
+    return { rows: [] as Record<string, unknown>[], total: 0 };
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data: rows, error, count } = await supabase
+    .from("activity_feed")
+    .select(
+      [
+        "id",
+        "activity_type",
+        "title",
+        "assistant_description",
+        "importance",
+        "created_at",
+        "related_job_id",
+        "related_job:jobs(id,title,company)",
+      ].join(","),
+      { count: "exact" }
+    )
+    .eq("user_id", profile.id)
+    .order("created_at", { ascending: false })
+    .range(offset, offset + pageSize - 1);
+
+  if (error) {
+    console.warn("[ApplyWise data skipped] Unable to load recent activity.");
+    return { rows: [] as Record<string, unknown>[], total: 0 };
+  }
+
+  return {
+    rows: (rows ?? []) as unknown as Record<string, unknown>[],
+    total: count ?? 0,
+  };
+}
+
+export async function getDashboardAiSummary() {
+  const { profile } = await getWorkspaceProfile();
+
+  if (!profile) {
+    return { hasEnoughData: false, summary: null, run: null };
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const [{ data: analyzedRuns }, { data: summaryRow }, { data: runRow }] =
+    await Promise.all([
+      // US-036 data gate: completed match/gap analyses across all jobs.
+      supabase
+        .from("ai_workflow_runs")
+        .select("id")
+        .eq("user_id", profile.id)
+        .in("workflow_type", ["match_analysis", "missing_skills"])
+        .eq("status", "completed"),
+      supabase
+        .from("dashboard_ai_summary")
+        .select(
+          [
+            "id",
+            "dashboard_summary",
+            "best_fit_roles_json",
+            "repeated_skill_gaps_json",
+            "job_search_health",
+            "recommended_next_actions_json",
+            "confidence_score",
+            "provider",
+            "updated_at",
+          ].join(",")
+        )
+        .eq("user_id", profile.id)
+        .maybeSingle(),
+      supabase
+        .from("ai_workflow_runs")
+        .select("status,model_provider,confidence_score,completed_at")
+        .eq("user_id", profile.id)
+        .eq("workflow_type", "dashboard_summary")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+  return {
+    hasEnoughData: (analyzedRuns?.length ?? 0) >= 3,
+    summary: (summaryRow ?? null) as Record<string, unknown> | null,
+    run: (runRow ?? null) as {
+      status: string;
+      model_provider: string | null;
+      confidence_score: number | null;
+      completed_at: string | null;
+    } | null,
   };
 }
 

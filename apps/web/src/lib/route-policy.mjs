@@ -5,6 +5,7 @@ export const protectedRoutePatterns = [
   "/jobs(.*)",
   "/matches(.*)",
   "/tracker(.*)",
+  "/activity(.*)",
   "/settings(.*)",
 ];
 
@@ -15,6 +16,7 @@ const protectedPathPrefixes = [
   "/jobs",
   "/matches",
   "/tracker",
+  "/activity",
   "/settings",
 ];
 

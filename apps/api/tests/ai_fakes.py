@@ -242,6 +242,216 @@ def gemini_valid_resume_suggestions(**overrides: Any) -> SimpleNamespace:
     return gemini_response(text=json.dumps(valid_resume_suggestions(**overrides)))
 
 
+# --- US-034 roadmap fixtures ------------------------------------------------------
+
+
+def saved_missing_skills_row(**overrides: Any) -> dict:
+    """A saved US-029 row (what ``get_missing_skill_analysis`` returns)."""
+    base = {
+        "id": "msa_1",
+        "match_id": "match_1",
+        "summary": "RAG and embeddings are the priority gaps for this role.",
+        "missing_skills_json": [
+            {
+                "skill": "RAG",
+                "importance": "critical",
+                "gap_type": "true_gap",
+                "how_to_fix": "Build a small RAG project.",
+            },
+            {
+                "skill": "Embeddings",
+                "importance": "critical",
+                "gap_type": "true_gap",
+                "how_to_fix": "Index a corpus with pgvector.",
+            },
+            {
+                "skill": "Kafka",
+                "importance": "medium",
+                "gap_type": "wording_gap",
+                "how_to_fix": "Surface your queue work on the resume.",
+            },
+        ],
+        "top_3_priority_gaps_json": ["RAG", "Embeddings", "Kafka"],
+        "confidence_score": 0.81,
+        "provider": "gemini",
+    }
+    base.update(overrides)
+    return base
+
+
+def _roadmap_week(week: int, skills: list[str], **overrides: Any) -> dict:
+    base = {
+        "week": week,
+        "goal": f"Close the {skills[0]} gap with a working demo.",
+        "skills_covered": skills,
+        "tasks": [f"Build a small {skills[0]} example.", "Document the tradeoffs."],
+        "deliverables": [f"Working {skills[0]} demo with tests."],
+        "project_feature": f"{skills[0]} feature on the portfolio project.",
+        "resume_bullet_after_completion": (
+            f"Built a verified {skills[0]} capability into a portfolio project."
+        ),
+        "interview_talking_point": f"Can explain {skills[0]} design tradeoffs.",
+    }
+    base.update(overrides)
+    return base
+
+
+def valid_roadmap(**overrides: Any) -> dict:
+    base = {
+        "roadmap_summary": "Closes RAG, embeddings, and evaluation gaps in 4 weeks.",
+        "recommended_project_theme": "Multi-document Q&A assistant with pgvector retrieval.",
+        "weeks": [
+            _roadmap_week(1, ["RAG"]),
+            _roadmap_week(2, ["Embeddings"]),
+            _roadmap_week(3, ["Evaluation"]),
+            _roadmap_week(4, ["Deployment"]),
+        ],
+        "success_criteria": [
+            "A public demo URL exists.",
+            "The evaluation harness produces reproducible scores.",
+        ],
+        "confidence_score": 0.82,
+    }
+    base.update(overrides)
+    return base
+
+
+def gemini_valid_roadmap(**overrides: Any) -> SimpleNamespace:
+    return gemini_response(text=json.dumps(valid_roadmap(**overrides)))
+
+
+def gemini_three_week_roadmap() -> SimpleNamespace:
+    payload = valid_roadmap()
+    payload["weeks"] = payload["weeks"][:3]
+    return gemini_response(text=json.dumps(payload))
+
+
+# --- US-035 interview prep fixtures -----------------------------------------------
+
+
+def valid_interview_prep(**overrides: Any) -> dict:
+    base = {
+        "prep_summary": "Expect deep RAG and evaluation questions; lead with FastAPI.",
+        "technical_questions": ["How have you used FastAPI in production?"],
+        "ai_llm_questions": ["How would you design a RAG pipeline for matching?"],
+        "system_design_questions": ["Design a scalable job-matching service."],
+        "behavioral_questions": ["Tell me about learning a missing skill quickly."],
+        "weak_topics_to_study": ["vector databases", "embeddings evaluation"],
+        "answer_guidance": [
+            {
+                "question": "How have you used FastAPI in production?",
+                "recommended_angle": "Lead with the production services you built.",
+                "resume_evidence_to_use": "Built FastAPI services for 3 years.",
+                "warning": None,
+            },
+            {
+                "question": "What is your hands-on experience with vector databases?",
+                "recommended_angle": "Be honest that proof is limited.",
+                "resume_evidence_to_use": None,
+                "warning": "No vector-DB evidence found. Build a pgvector prototype first.",
+            },
+        ],
+        "confidence_score": 0.84,
+    }
+    base.update(overrides)
+    return base
+
+
+def gemini_valid_interview_prep(**overrides: Any) -> SimpleNamespace:
+    return gemini_response(text=json.dumps(valid_interview_prep(**overrides)))
+
+
+# --- US-036 dashboard summary fixtures ---------------------------------------------
+
+
+def dashboard_input_payload(**overrides: Any) -> dict:
+    """The §9.2 aggregated payload ``get_dashboard_summary_input`` returns."""
+    base = {
+        "candidate_profile": {},
+        "jobs": [
+            {"id": "job_1", "title": "Senior AI Engineer", "company": "Acme AI"},
+            {"id": "job_2", "title": "ML Platform Engineer", "company": "Beta"},
+            {"id": "job_3", "title": "Research Scientist", "company": "Gamma"},
+        ],
+        "match_scores": [
+            {"job_id": "job_1", "overall_score": 72},
+            {"job_id": "job_2", "overall_score": 68},
+            {"job_id": "job_3", "overall_score": 41},
+        ],
+        "application_statuses": [{"job_id": "job_1", "status": "preparing"}],
+        "missing_skills_across_jobs": [
+            {
+                "match_id": "match_1",
+                "missing_skills": [{"skill": "RAG"}, {"skill": "Embeddings"}],
+            },
+            {
+                "match_id": "match_2",
+                "missing_skills": [{"skill": "RAG"}, {"skill": "Kubernetes"}],
+            },
+        ],
+        "recent_activities": [
+            {"activity_type": "match_analysis.completed", "title": "Analyzed", "importance": "medium"}
+        ],
+    }
+    base.update(overrides)
+    return base
+
+
+def valid_dashboard_summary(**overrides: Any) -> dict:
+    base = {
+        "dashboard_summary": "You match backend-heavy AI roles best; RAG keeps repeating.",
+        "best_fit_roles": ["AI Engineer", "ML Platform Engineer"],
+        "repeated_skill_gaps": ["RAG"],
+        "job_search_health": "moderate",
+        "recommended_next_actions": ["Build a RAG portfolio project."],
+        "confidence_score": 0.78,
+    }
+    base.update(overrides)
+    return base
+
+
+def gemini_valid_dashboard_summary(**overrides: Any) -> SimpleNamespace:
+    return gemini_response(text=json.dumps(valid_dashboard_summary(**overrides)))
+
+
+# --- US-037 activity feed fixtures --------------------------------------------------
+
+
+def activity_row(**overrides: Any) -> dict:
+    base = {
+        "id": "act_1",
+        "user_id": "profile_1",
+        "workflow_run_id": "run_orig",
+        "activity_type": "match_analysis.completed",
+        "title": "Match Analysis — Senior AI Engineer",
+        "assistant_description": "ApplyWise scored the role at 78%.",
+        "importance": "high",
+        "created_at": "2026-06-08T10:32:14Z",
+        "related_job_id": "job_1",
+        "related_match_id": "match_1",
+        "related_job": {"id": "job_1", "title": "Senior AI Engineer", "company": "Acme AI"},
+    }
+    base.update(overrides)
+    return base
+
+
+def valid_activity_description(**overrides: Any) -> dict:
+    base = {
+        "activity_title": "Match Analysis — Senior AI Engineer",
+        "assistant_description": (
+            "ApplyWise scored the Senior AI Engineer role at 78%. Your backend "
+            "experience is relevant, but the role expects stronger RAG depth."
+        ),
+        "importance": "high",
+    }
+    base.update(overrides)
+    return base
+
+
+def gemini_valid_activity_description(**overrides: Any) -> SimpleNamespace:
+    return gemini_response(text=json.dumps(valid_activity_description(**overrides)))
+
+
 # --- US-032 resume draft + US-033 cover letter fixtures -------------------------
 
 
@@ -360,6 +570,11 @@ class FakeData:
         resume_suggestions_rows: list[dict] | None = None,
         latest_run: dict | None = None,
         suggestion_owner: bool = True,
+        analyzed_jobs_count: int = 3,
+        dashboard_input: dict | None = None,
+        activity_rows: list[dict] | None = None,
+        run_snapshot: dict | None = None,
+        has_application: bool = True,
     ) -> None:
         self._match = match if match is not None else {"id": "match_1"}
         self._resume = resume if resume is not None else default_resume()
@@ -373,6 +588,13 @@ class FakeData:
         self._resume_suggestions_rows = resume_suggestions_rows or []
         self._latest_run = latest_run
         self._suggestion_owner = suggestion_owner
+        self._analyzed_jobs_count = analyzed_jobs_count
+        self._dashboard_input = dashboard_input or dashboard_input_payload()
+        self._activity_rows = activity_rows if activity_rows is not None else []
+        self._run_snapshot = run_snapshot
+        self.activity_updates = 0
+        self._has_application = has_application
+        self.prepared_flips: list[str] = []
 
         self.runs: list[dict] = []
         self.run_updates: list[tuple[str, dict]] = []
@@ -385,6 +607,10 @@ class FakeData:
         self.patched: dict | None = None
         self.saved_resume_version: dict | None = None
         self.saved_cover_letter: dict | None = None
+        self.saved_roadmap: dict | None = None
+        self.saved_interview_prep: dict | None = None
+        self.saved_dashboard_summary: dict | None = None
+        self.dashboard_upserts = 0
         self._counter = 0
 
     # --- router helpers ---
@@ -431,6 +657,9 @@ class FakeData:
     def get_saved_match_analysis(self, *, match_id, user_profile_id):
         return self._saved_analysis_row
 
+    def get_latest_workflow_run(self, *, match_id, user_profile_id, workflow_type):
+        return self._latest_run
+
     # --- US-029 missing skills persistence / reads ---
     def save_missing_skill_analysis(self, *, match_id, user_profile_id, analysis):
         self.saved_missing_skills = analysis
@@ -470,6 +699,82 @@ class FakeData:
         if suggested_text is not None:
             row["suggested_text"] = suggested_text
         return row
+
+    # --- US-034 roadmap persistence / reads ---
+    def upsert_roadmap(self, *, match_id, user_profile_id, title, roadmap_json):
+        self.saved_roadmap = {
+            "match_id": match_id,
+            "user_id": user_profile_id,
+            "title": title,
+            "roadmap_json": roadmap_json,
+        }
+        return {"id": "roadmap_1"}
+
+    def get_roadmap_for_match(self, *, match_id, user_profile_id):
+        return self.saved_roadmap
+
+    # --- US-035 interview prep persistence / reads ---
+    def upsert_interview_prep(self, *, match_id, user_profile_id, prep):
+        self.saved_interview_prep = {
+            "match_id": match_id,
+            "user_id": user_profile_id,
+            **prep,
+        }
+        return {"id": "prep_1"}
+
+    def get_interview_prep_by_match(self, *, match_id, user_profile_id):
+        return self.saved_interview_prep
+
+    # --- US-036 dashboard summary persistence / reads ---
+    def count_analyzed_jobs(self, *, user_profile_id):
+        return self._analyzed_jobs_count
+
+    def get_dashboard_summary_input(self, *, user_profile_id):
+        return dict(self._dashboard_input)
+
+    def get_dashboard_ai_summary(self, *, user_profile_id):
+        return self.saved_dashboard_summary
+
+    def upsert_dashboard_summary(self, *, user_profile_id, summary):
+        self.dashboard_upserts += 1
+        self.saved_dashboard_summary = {"user_id": user_profile_id, **summary}
+        return {"id": "summary_1"}
+
+    def get_latest_run_for_user(self, *, user_profile_id, workflow_type):
+        return self._latest_run
+
+    # --- US-038 panel orchestration ---
+    def flip_application_status_prepared(self, *, match_id, user_profile_id):
+        self.prepared_flips.append(match_id)
+        return self._has_application
+
+    # --- US-037 activity feed reads / updates ---
+    def list_activity_feed(self, *, user_profile_id, limit=20, offset=0):
+        rows = [r for r in self._activity_rows if r.get("user_id") == user_profile_id]
+        return rows[offset : offset + limit], len(rows)
+
+    def get_activity(self, *, activity_id):
+        for row in self._activity_rows:
+            if row.get("id") == activity_id:
+                return row
+        return None
+
+    def get_workflow_run_snapshot(self, *, run_id):
+        return self._run_snapshot
+
+    def update_activity_description(
+        self, *, activity_id, user_profile_id, title, assistant_description, importance
+    ):
+        for row in self._activity_rows:
+            if row.get("id") == activity_id and row.get("user_id") == user_profile_id:
+                row.update(
+                    title=title,
+                    assistant_description=assistant_description,
+                    importance=importance,
+                )
+                self.activity_updates += 1
+                return row
+        return None
 
     # --- US-032 resume draft persistence ---
     def insert_resume_version(

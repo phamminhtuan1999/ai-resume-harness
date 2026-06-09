@@ -2,7 +2,16 @@
 
 ## Status
 
-planned
+implemented — `RoadmapWorkflow` (Gemini + Python port of `buildFourWeekRoadmap`
+as the typed fallback), exactly-4-weeks schema validator, pre-flight dependency
+guards (`missing_skill_analysis_required` writes no run row), critical-gap and
+empty-deliverables confidence caps (`needs_review` below 0.7), `/roadmap`
+POST/GET/regenerate endpoints, roadmap page upgraded to the 6.4 schema with
+"Use after completion" labels and a gap-analysis dependency guard. No migration
+(reuses `roadmaps`; one active roadmap per match via delete+insert). Unit tests
+pass (`tests/test_roadmap_workflow.py`); backend suite green; web tests/lint/tsc
+clean; live endpoint smoke → 401 (wired + auth-enforced). Remaining: browser
+E2E of generate → view → regenerate.
 
 ## Lane
 

@@ -1,11 +1,17 @@
 import Link from "next/link";
 import { ArrowUpRight, FileText, Upload } from "lucide-react";
 
+import { DashboardAiSummaryCard } from "@/components/dashboard/dashboard-ai-summary-card";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { quickActions, resumeSources } from "@/lib/app-data";
 import { getWorkspaceCounts, getWorkspaceRecommendation } from "@/lib/dashboard-summary.mjs";
-import { formatShortDate, getContactLabel, getWorkspaceData } from "@/lib/data/server";
+import {
+  formatShortDate,
+  getContactLabel,
+  getDashboardAiSummary,
+  getWorkspaceData,
+} from "@/lib/data/server";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -27,6 +33,9 @@ import {
 
 export default async function DashboardPage() {
   const { profile, resumes, jobs } = await getWorkspaceData();
+  // The AI summary card is the dashboard's activity story; the raw feed lives
+  // on /activity (sidebar nav).
+  const aiSummary = await getDashboardAiSummary();
   const primaryResume = resumes[0];
   const profileTarget = profile?.target_role || "AI Engineer";
   const profileRole = profile?.current_role || "Software Engineer";
@@ -107,7 +116,13 @@ export default async function DashboardPage() {
           </Card>
         </section>
 
-        <section className="grid gap-5 xl:grid-cols-[1fr_360px]">
+        <DashboardAiSummaryCard
+          hasEnoughData={aiSummary.hasEnoughData}
+          summary={aiSummary.summary}
+          run={aiSummary.run}
+        />
+
+        <section className="grid gap-5">
           <Card>
             <CardHeader>
               <CardTitle>Primary resume</CardTitle>
@@ -155,25 +170,6 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>AI workflow status</CardTitle>
-              <CardDescription>Demo-ready MVP workflow modules.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              {[
-                "Resume import",
-                "Match analyzer",
-                "Resume suggestions",
-                "Roadmap and interview prep",
-              ].map((item) => (
-                  <div key={item} className="flex items-center justify-between rounded-lg border p-3">
-                    <span className="text-sm font-medium">{item}</span>
-                    <Badge variant="success">implemented</Badge>
-                  </div>
-                ))}
-            </CardContent>
-          </Card>
         </section>
 
         <Card>

@@ -14,7 +14,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { formatShortDate, getMatchDetail, type WorkspaceMatch } from "@/lib/data/server";
+import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
+import {
+  formatShortDate,
+  getMatchAiWorkflowRuns,
+  getMatchDetail,
+  type WorkspaceMatch,
+} from "@/lib/data/server";
 
 type MatchDetailPageProps = {
   params: Promise<{ matchId: string }>;
@@ -177,7 +183,10 @@ function GapList({ empty, items }: { empty: string; items: Gap[] }) {
 
 export default async function MatchDetailPage({ params }: MatchDetailPageProps) {
   const { matchId } = await params;
-  const { match, insight } = await getMatchDetail(matchId);
+  const [{ match, insight }, aiWorkflow] = await Promise.all([
+    getMatchDetail(matchId),
+    getMatchAiWorkflowRuns(matchId),
+  ]);
 
   const scoreExplanations =
     match.score_explanations_json && typeof match.score_explanations_json === "object"
@@ -433,6 +442,14 @@ export default async function MatchDetailPage({ params }: MatchDetailPageProps) 
           </CardContent>
         </Card>
       </section>
+
+      <AiWorkflowPanel
+        matchId={match.id}
+        runs={aiWorkflow.runs}
+        profileReady={aiWorkflow.profileReady}
+        jobImported={aiWorkflow.jobImported}
+        jobParsed={aiWorkflow.jobParsed}
+      />
 
       <section className="grid gap-5 lg:grid-cols-2">
         <Card>

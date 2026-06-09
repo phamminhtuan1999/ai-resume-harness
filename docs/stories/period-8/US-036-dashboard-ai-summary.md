@@ -2,7 +2,17 @@
 
 ## Status
 
-planned
+implemented — `DashboardSummaryWorkflow` (user-scoped, `subject_type =
+dashboard`), §4 deterministic aggregation fallback (repeated gaps ≥2 jobs,
+best-fit ≥65, health bands 70/50, confidence 0.4), data gate enforced in the
+router before any run row (< 3 completed match/gap analyses → verbatim
+`not_enough_data`, no model call), `missing_profile` pre-flight, cached
+GET/POST + 204 empty + `/regenerate` endpoints, dashboard card with health/
+best-fit/gaps/next-actions and the verbatim gate message. Migration
+`0016_period8_dashboard_ai_summary.sql` applied via psql (UNIQUE `user_id`).
+Unit + router tests pass (`tests/test_dashboard_summary.py`); web
+tests/lint/tsc clean; live endpoint smoke → 401. Remaining: browser E2E of
+generate → reload-cached → regenerate.
 
 ## Lane
 

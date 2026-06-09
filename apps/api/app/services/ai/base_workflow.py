@@ -33,6 +33,10 @@ from app.schemas.ai_workflow import (
     WorkflowStatus,
     WorkflowType,
 )
+from app.services.ai.activity_description import (
+    ActivityDescriptionHelper,
+    fallback_description,
+)
 from app.services.ai.errors import (
     DEFAULT_MESSAGES,
     AIWorkflowError,
@@ -317,16 +321,74 @@ class BaseAIWorkflow(ABC):
         context: Any,
     ) -> None:
         spec = self.build_activity(status=status, output=output, context=context)
+
+        # US-037: enrich the event with an assistant-style description inline.
+        # The workflow's own deterministic spec text is the fallback; the helper
+        # never raises, so the activity row is always written.
+        description = fallback_description(
+            activity_type=spec.activity_type,
+            title=spec.title,
+            assistant_description=spec.assistant_description,
+            importance=spec.importance,
+        )
+        if status != "failed":
+            helper = ActivityDescriptionHelper(
+                settings=self.settings, gemini_client=self._gemini_client
+            )
+            description = helper.generate(
+                event_context=self._build_event_context(
+                    spec=spec, status=status, output=output, context=context
+                ),
+                fallback=description,
+            )
+
         self.data.insert_activity(
             user_profile_id=user_profile_id,
             workflow_run_id=run_id,
             activity_type=spec.activity_type,
-            title=spec.title,
-            importance=spec.importance,
+            title=description.activity_title,
+            importance=description.importance,
             related_job_id=spec.related_job_id,
             related_match_id=spec.related_match_id,
-            assistant_description=spec.assistant_description,
+            assistant_description=description.assistant_description,
         )
+
+    def _build_event_context(
+        self,
+        *,
+        spec: ActivitySpec,
+        status: WorkflowStatus,
+        output: AIOutputBase | None,
+        context: Any,
+    ) -> dict:
+        """The Feature 10.2 input shape. Default keeps to safe, non-raw fields
+        (no resume/JD text); subclasses may override for richer analysis data."""
+        event_context: dict[str, Any] = {
+            "activity_event": {
+                "activity_type": spec.activity_type,
+                "workflow_type": self.workflow_type,
+                "status": status,
+                "related_job_id": spec.related_job_id,
+                "related_match_id": spec.related_match_id,
+            },
+            "deterministic_summary": {
+                "title": spec.title,
+                "assistant_description": spec.assistant_description,
+                "importance": spec.importance,
+            },
+        }
+        job = context.get("job") if isinstance(context, dict) else None
+        if isinstance(job, dict) and job:
+            event_context["related_job"] = {
+                "title": job.get("title"),
+                "company": job.get("company"),
+                "location": job.get("location"),
+            }
+        if output is not None:
+            event_context["related_analysis"] = {
+                "confidence_score": output.confidence_score
+            }
+        return event_context
 
     def _fail_run(
         self,

@@ -1,4 +1,5 @@
 import {
+  Activity,
   BadgeDollarSign,
   BriefcaseBusiness,
   ClipboardList,
@@ -18,6 +19,7 @@ export const navItems = [
   { label: "Jobs", href: "/jobs", icon: BriefcaseBusiness },
   { label: "Matches", href: "/matches", icon: ListChecks },
   { label: "Tracker", href: "/tracker", icon: ClipboardList },
+  { label: "Activity", href: "/activity", icon: Activity },
   { label: "Pricing", href: "/pricing", icon: BadgeDollarSign },
   { label: "Settings", href: "/settings", icon: Settings },
 ] as const;

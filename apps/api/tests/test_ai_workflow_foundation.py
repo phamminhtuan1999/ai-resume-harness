@@ -125,7 +125,9 @@ def test_retry_once_on_invalid_json_then_success() -> None:
     wf = _stub(make_settings(gemini_api_key="key"), gemini_client=client)
     result = wf.run(subject_id="match_1", user_profile_id="profile_1")
 
-    assert client.models.calls == 2  # one invalid, one valid retry
+    # one invalid + one valid retry, plus the US-037 activity-description
+    # attempt (exhausts the fake behaviors and falls back to the spec text).
+    assert client.models.calls == 3
     assert result["workflow_run"]["model_provider"] == "gemini"
     assert result["workflow_run"]["status"] == "completed"
 
@@ -146,7 +148,8 @@ def test_invalid_json_twice_then_falls_back_to_deterministic() -> None:
     wf = _stub(make_settings(gemini_api_key="key"), gemini_client=client)
     result = wf.run(subject_id="match_1", user_profile_id="profile_1")
 
-    assert client.models.calls == 2  # invalid, retry-once invalid, then fallback
+    # invalid, retry-once invalid, then fallback; +1 US-037 description attempt.
+    assert client.models.calls == 3
     assert result["workflow_run"]["model_provider"] == "deterministic"
 
 

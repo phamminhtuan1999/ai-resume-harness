@@ -2,7 +2,16 @@
 
 ## Status
 
-planned
+implemented — `InterviewPrepWorkflow` (Gemini + Python port of
+`buildInterviewPrep` upgraded to the 7.4 schema), answer-guidance truthfulness
+contract (null evidence ⇒ study/build-proof warning), weak topics from US-029,
+`do_not_claim` from the US-031 snapshot, 0.6 `needs_review` bar, new
+`/interview-prep` router (POST/GET/regenerate) with §5 column mapping into
+`interview_preps`, page rebuilt as the 7-tab layout on a new `ui/tabs.tsx`
+primitive with warning badges. No migration. Unit tests pass
+(`tests/test_interview_prep_workflow.py`); backend suite green; web
+tests/lint/tsc clean; live endpoint smoke → 401. Remaining: browser E2E of the
+7-tab flow.
 
 ## Lane
 

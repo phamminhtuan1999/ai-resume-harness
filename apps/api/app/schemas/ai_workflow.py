@@ -59,13 +59,22 @@ class WorkflowResponse(BaseModel):
 
 
 class WorkflowRunSummary(BaseModel):
-    """One row of ``GET /api/matches/{matchId}/ai-workflow`` (latest per type)."""
+    """One row of ``GET /api/matches/{matchId}/ai-workflow`` (latest per type).
+
+    ``output_snapshot_json`` and ``error_message`` were added for the US-038
+    panel so it can derive step summaries and show failure reasons without a
+    second call. ``error_code = blocked_by_dependency`` marks a skipped step.
+    """
 
     workflow_type: WorkflowType
     status: WorkflowStatus
     model_provider: ModelProvider | None = None
+    model_name: str | None = None
     confidence_score: float | None = None
     completed_at: str | None = None
+    output_snapshot_json: dict | None = None
+    error_code: str | None = None
+    error_message: str | None = None
 
 
 class MatchWorkflowRunsResponse(BaseModel):

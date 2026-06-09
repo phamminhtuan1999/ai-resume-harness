@@ -2,7 +2,26 @@
 
 ## Status
 
-planned
+implemented — `ActivityDescriptionHelper` (never raises) enriches every
+non-failed activity inline in `BaseAIWorkflow._write_activity`, with each
+workflow's own `ActivitySpec` text as the fallback so no event is ever
+dropped; safe event context only (no raw resume/JD). New `/api/activities`
+router: paginated newest-first feed with `related_job`, plus ownership-gated
+per-item `generate-description` that records an `activity_description`
+observability run. Surface revision (2026-06-09, product decision after adversarial review): the
+dashboard shows NO raw activity feed — the US-036 AI summary card is the
+dashboard's activity synthesis. The feed lives solely on the `/activity`
+table-list page (protected route + sidebar nav item). Run-full bursts are
+grouped client-side: same-job events within a 30-minute window collapse into
+one row headlined by the highest-importance event, with the remaining steps as
+"Also ran" labels. Generic fallback descriptions ("ApplyWise completed a X
+workflow.") are suppressed in views; the fallback template got a/an article
+handling; cover-letter and interview-prep events are now `high` importance per
+the Feature 10 signal rule. Inline Gemini description enrichment is retained
+(the /activity page is its surface, one click away). No migration.
+Tests pass (`tests/test_activity_description.py`,
+`tests/test_activities_router.py`); web tests/lint/tsc clean; smoke → 401.
+Remaining: browser E2E of the feed + regenerate-in-place.
 
 ## Lane
 

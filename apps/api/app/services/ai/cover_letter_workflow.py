@@ -156,7 +156,8 @@ Match analysis:
         return ActivitySpec(
             activity_type=f"{self.workflow_type}.{status}",
             title=f"ApplyWise drafted a cover letter for {job_title} at {company}.",
-            importance="medium",
+            # Feature 10 rule: a generated cover letter is a direct hiring signal.
+            importance="high",
             related_match_id=related_match_id,
             related_job_id=related_job_id,
             assistant_description=output.cover_letter_strategy or None,

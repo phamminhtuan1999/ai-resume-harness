@@ -1,5 +1,6 @@
 export const APPLICATION_STATUSES = [
   "saved",
+  "prepared",
   "applied",
   "interviewing",
   "offer",
@@ -9,6 +10,7 @@ export const APPLICATION_STATUSES = [
 
 export const APPLICATION_STATUS_LABELS = {
   saved: "Saved",
+  prepared: "Prepared",
   applied: "Applied",
   interviewing: "Interviewing",
   offer: "Offer",

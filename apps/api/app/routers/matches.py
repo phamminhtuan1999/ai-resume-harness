@@ -25,6 +25,11 @@ from app.services.ai.match_analysis_workflow import MatchAnalysisWorkflow
 from app.services.ai.missing_skills_workflow import MissingSkillsWorkflow
 from app.services.ai.resume_draft_workflow import ResumeDraftWorkflow
 from app.services.ai.resume_suggestions_workflow import ResumeSuggestionsWorkflow
+from app.services.ai.roadmap_workflow import RoadmapWorkflow
+from app.services.ai.run_full_orchestrator import (
+    STEP_WORKFLOWS,
+    RunFullOrchestrator,
+)
 from app.services.supabase_data import (
     SupabaseConfigurationError,
     SupabaseDataClient,
@@ -325,6 +330,70 @@ def get_cover_letter(
     return _get_saved(match_id, user, "get_cover_letter", "Cover letter not found.")
 
 
+# --- US-034 Roadmap ---------------------------------------------------------------
+
+
+@router.post("/{match_id}/roadmap")
+def roadmap(
+    match_id: str,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> JSONResponse:
+    return _run_match_workflow(
+        RoadmapWorkflow, match_id=match_id, request=request, user=user, regenerate=False
+    )
+
+
+@router.post("/{match_id}/roadmap/regenerate")
+def regenerate_roadmap(
+    match_id: str,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> JSONResponse:
+    return _run_match_workflow(
+        RoadmapWorkflow, match_id=match_id, request=request, user=user, regenerate=True
+    )
+
+
+@router.get("/{match_id}/roadmap")
+def get_roadmap(
+    match_id: str,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> JSONResponse:
+    """Return the persisted roadmap plus the latest run metadata (no re-generation)."""
+    data_client = _data_client()
+    try:
+        user_profile_id = _resolve_profile(data_client, user)
+        row = data_client.get_roadmap_for_match(
+            match_id=match_id, user_profile_id=user_profile_id
+        )
+        run = data_client.get_latest_workflow_run(
+            match_id=match_id, user_profile_id=user_profile_id, workflow_type="roadmap"
+        )
+    except SupabaseConfigurationError as exc:
+        raise HTTPException(status_code=500, detail="Match data source is misconfigured.") from exc
+    except SupabaseDataError as exc:
+        raise HTTPException(status_code=503, detail="Match data is unavailable.") from exc
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Roadmap not found.")
+
+    roadmap_json = row.get("roadmap_json") or {}
+    return JSONResponse(
+        status_code=200,
+        content={
+            "match_id": match_id,
+            "workflow_run": run,
+            "result": {
+                "roadmap_id": row.get("id"),
+                "title": row.get("title"),
+                **(roadmap_json if isinstance(roadmap_json, dict) else {}),
+                "saved_at": row.get("updated_at"),
+            },
+        },
+    )
+
+
 @router.get("/{match_id}/match-analysis")
 def get_match_analysis(
     match_id: str,
@@ -372,9 +441,75 @@ def get_match_ai_workflow(
                 workflow_type=run["workflow_type"],
                 status=run["status"],
                 model_provider=run.get("model_provider"),
+                model_name=run.get("model_name"),
                 confidence_score=run.get("confidence_score"),
                 completed_at=run.get("completed_at"),
+                output_snapshot_json=run.get("output_snapshot_json"),
+                error_code=run.get("error_code"),
+                error_message=run.get("error_message"),
             )
             for run in runs
         ],
+    )
+
+
+# --- US-038 AI workflow panel orchestration ----------------------------------------
+
+
+@router.post("/{match_id}/ai-workflow/run-full")
+def run_full_ai_workflow(
+    match_id: str,
+    request: Request,
+    body: dict | None = None,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> JSONResponse:
+    """Sequentially run every panel step in dependency order (US-038)."""
+    data_client = _data_client()
+    try:
+        user_profile_id = _resolve_profile(data_client, user)
+    except SupabaseConfigurationError as exc:
+        raise HTTPException(status_code=500, detail="Match data source is misconfigured.") from exc
+    except SupabaseDataError as exc:
+        raise HTTPException(status_code=503, detail="Match data is unavailable.") from exc
+
+    orchestrator = RunFullOrchestrator(data_client=data_client, settings=get_settings())
+    try:
+        result = orchestrator.run(
+            match_id=match_id,
+            user_profile_id=user_profile_id,
+            force=bool((body or {}).get("force")),
+            request_id=request.headers.get("x-request-id"),
+        )
+    except AIWorkflowError as exc:
+        return JSONResponse(status_code=exc.http_status, content=exc.to_envelope())
+    except SupabaseConfigurationError as exc:
+        raise HTTPException(status_code=500, detail="Match data source is misconfigured.") from exc
+    except SupabaseDataError as exc:
+        raise HTTPException(status_code=503, detail="Match data is unavailable.") from exc
+
+    return JSONResponse(status_code=200, content=result)
+
+
+@router.post("/{match_id}/ai-workflow/{step}/regenerate")
+def regenerate_ai_workflow_step(
+    match_id: str,
+    step: str,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> JSONResponse:
+    """Re-run one panel step; ``step`` is its ``workflow_type`` string."""
+    workflow_cls = STEP_WORKFLOWS.get(step)
+    if workflow_cls is None:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": {
+                    "code": "unknown_step",
+                    "message": "That AI workflow step is not recognized.",
+                    "retryable": False,
+                }
+            },
+        )
+    return _run_match_workflow(
+        workflow_cls, match_id=match_id, request=request, user=user, regenerate=True
     )

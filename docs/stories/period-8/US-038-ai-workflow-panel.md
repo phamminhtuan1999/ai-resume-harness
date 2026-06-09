@@ -2,7 +2,20 @@
 
 ## Status
 
-planned
+implemented — `RunFullOrchestrator` drives the 7 match-scoped workflows
+sequentially in dependency order (pre-match steps 1–3 render as derived rows
+from profile/job parse state; no workflow_type enum change); failures write
+`blocked_by_dependency` run rows for dependents; full completion flips the
+tracker row to `prepared` (migration `0017_period8_add_prepared_status.sql`
+applied via psql; `prepared` added to the web status vocabulary). New
+`run-full` + `{step}/regenerate` endpoints (`unknown_step` 422); `GET
+ai-workflow` extended with `output_snapshot_json`/`error_message`/`model_name`.
+`AiWorkflowPanel` renders all ten run-driven step rows on the match page with
+client-side `deriveStepSummary`, Run Full Workflow, per-step
+Regenerate/Retry/View output, and a 3s auto-refresh while steps run. Tests
+pass (`tests/test_ai_workflow_panel.py`, `tests/ai-workflow-panel.test.mjs`);
+build/lint/tsc clean; smoke → 401. Remaining: browser E2E of run-full with
+mixed step outcomes.
 
 ## Lane
 

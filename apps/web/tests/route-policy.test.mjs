@@ -15,6 +15,7 @@ test("protected route policy covers authenticated app sections", () => {
     "/jobs",
     "/jobs/abc",
     "/tracker",
+    "/activity",
     "/settings",
   ]) {
     assert.equal(isApplyWiseProtectedPath(pathname), true, pathname);
@@ -42,6 +43,7 @@ test("proxy exports Clerk-compatible protected route patterns", () => {
     "/jobs(.*)",
     "/matches(.*)",
     "/tracker(.*)",
+    "/activity(.*)",
     "/settings(.*)",
   ]);
 });

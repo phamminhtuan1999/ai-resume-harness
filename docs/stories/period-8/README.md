@@ -80,12 +80,16 @@ All twelve stories (US-027–US-038) now have full packets — high-risk folders
 US-027/US-028/US-031/US-033, flat files otherwise — plus per-story dev-flow docs
 under `flows/`.
 
-**Epics 1 and 2 are complete:** US-027–US-033 are all `implemented`; migrations
-`0010`–`0014` are applied and REST-reachable. Each AI feature runs Gemini +
+**All four epics are complete:** US-027–US-038 are all `implemented`; migrations
+`0010`–`0017` are applied and REST-reachable. Each AI feature runs Gemini +
 deterministic fallback through the US-027 foundation, with unit tests and a live
-unauthenticated endpoint smoke (all wired + Clerk-enforced). Only authenticated
-browser E2E remains as verification. US-034–US-038 (Epics 3–4) are planned and
-should ship in epic order so each reuses the analysis the prior epic produced.
+unauthenticated endpoint smoke (all wired + Clerk-enforced). Epics 3–4 added the
+roadmap and interview-prep AI upgrades, the dashboard cross-job summary
+(`dashboard_ai_summary`, data-gated under 3 analyzed jobs), inline AI activity
+descriptions + the dashboard Recent Activity feed, and the AI Workflow Panel
+with run-full orchestration (full completion can mark an application
+`prepared`). Only authenticated browser E2E remains as verification across the
+suite.
 
 ## Validation Shape
 
