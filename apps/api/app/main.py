@@ -1,7 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import health, profile, resumes
+from app.routers import (
+    health,
+    jobs,
+    matches,
+    profile,
+    resume_suggestions,
+    resumes,
+)
 from app.settings import get_settings
 
 settings = get_settings()
@@ -23,3 +30,10 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(resumes.router, prefix="/api/resumes", tags=["resumes"])
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
+app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
+app.include_router(matches.router, prefix="/api/matches", tags=["matches"])
+app.include_router(
+    resume_suggestions.router,
+    prefix="/api/resume-suggestions",
+    tags=["resume-suggestions"],
+)

@@ -23,7 +23,15 @@ import {
 } from "@/components/ui/table";
 
 export default async function JobsPage() {
-  const { jobs } = await getWorkspaceData();
+  const { jobs, matches } = await getWorkspaceData();
+
+  const bestScoreByJob = new Map<string, number>();
+  for (const match of matches) {
+    const current = bestScoreByJob.get(match.job_id);
+    if (current === undefined || match.overall_score > current) {
+      bestScoreByJob.set(match.job_id, match.overall_score);
+    }
+  }
 
   return (
     
@@ -34,7 +42,7 @@ export default async function JobsPage() {
             Analyze new job
           </Link>
           }
-          description="Save job descriptions, company details, and contact context before analysis."
+          description="Add a job by URL or paste a description, then track company and contact context."
           title="Jobs"
         />
         <Card>
@@ -43,7 +51,7 @@ export default async function JobsPage() {
             <CardDescription>
               {jobs.length > 0
                 ? "Jobs saved under your account."
-                : "Saved jobs will appear after manual intake."}
+                : "Saved jobs will appear here once you add one."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -53,6 +61,7 @@ export default async function JobsPage() {
                   <TableRow>
                     <TableHead>Company</TableHead>
                     <TableHead>Role</TableHead>
+                    <TableHead>Match</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead className="text-right">Saved</TableHead>
@@ -67,6 +76,7 @@ export default async function JobsPage() {
                           {job.title}
                         </Link>
                       </TableCell>
+                      <TableCell>{renderMatchScore(bestScoreByJob.get(job.id))}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{job.parse_status}</Badge>
                       </TableCell>
@@ -84,7 +94,7 @@ export default async function JobsPage() {
                     Add job
                   </Link>
                 }
-                description="Add a job description to start tracking company, role, and contact details."
+                description="Add a job by URL or paste a description to start tracking company, role, and contact details."
                 icon={BriefcaseBusiness}
                 title="No saved jobs"
               />
@@ -93,4 +103,13 @@ export default async function JobsPage() {
         </Card>
       </div>
   );
+}
+
+function renderMatchScore(score: number | undefined) {
+  if (score === undefined) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  const variant: "success" | "warning" | "secondary" =
+    score >= 70 ? "success" : score >= 45 ? "warning" : "secondary";
+  return <Badge variant={variant}>{score}</Badge>;
 }

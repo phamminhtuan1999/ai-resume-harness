@@ -146,6 +146,24 @@ that tag, or set `HARNESS_CLI_BASE_URL` to point at an alternate artifact
 directory, such as a local `file:///.../dist` directory created by
 `scripts/build-harness-cli-release.sh`.
 
+## Backlog Sync
+
+`scripts/sync-backlog.sh` keeps the "Sliced Stories" status column in
+`docs/stories/backlog.md` in sync with the durable matrix, which is the source
+of truth. The markdown table is treated as **derived**, not hand-maintained.
+
+```bash
+scripts/sync-backlog.sh            # check (default): report drift, exit 1 if any
+scripts/sync-backlog.sh --check    # same
+scripts/sync-backlog.sh --write    # rewrite each row's status from the matrix
+```
+
+`--write` updates only the leading status keyword of an existing row and
+preserves any annotation (e.g. `implemented (E2E pending)`). Stories present in
+the matrix but missing from the table are reported by `--check`, not auto-added.
+Run `--check` before committing backlog changes; it is a candidate for the
+future validation contract below.
+
 ## Schema Migrations
 
 Migration files live under `scripts/schema/` and are named `NNN-description.sql`

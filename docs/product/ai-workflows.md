@@ -22,6 +22,45 @@
 - AI prompts should include only the minimum user data needed for the requested
   workflow.
 
+## AI Workflow Foundation
+
+Every AI feature runs in the FastAPI backend on one shared flow (US-027,
+realized; see `docs/decisions/0012-ai-workflow-standards.md`):
+
+```text
+authorize (enforce ownership) -> insert ai_workflow_runs row (queued -> running)
+-> load minimum input -> build prompt with the standard preamble
+-> call provider (Gemini; retry once on invalid JSON) OR deterministic fallback
+-> validate output with Pydantic -> recompute/postprocess -> map confidence to status
+-> persist domain result + output snapshot -> update run -> write activity_feed event
+-> return the standard envelope
+```
+
+Provider rule: real Gemini is primary when `gemini_api_key` is configured; the
+deterministic generators are the typed fallback used when no key is set or after
+a terminal provider failure. Fallback output must satisfy the same schema, so
+local/dev and provider-outage paths never regress shipped behavior.
+
+Standard prompt preamble (every prompt begins with it): role (ApplyWise AI job
+hunting assistant), source-of-truth (only the provided profile/resume/job),
+truthfulness (invent nothing), output (valid JSON matching the schema), tone.
+
+Standard success envelope (reused by every Period 8 endpoint):
+
+```json
+{ "workflow_run": { "id", "workflow_type", "status", "model_provider", "model_name", "latency_ms", "confidence_score", "error_message" }, "result": { } }
+```
+
+Error envelope and codes: `{ "error": { "code", "message", "retryable" } }` with
+codes `unauthorized`, `missing_profile`, `missing_job_requirements`,
+`invalid_json`, `schema_validation_failure`, `low_confidence`, `model_timeout`,
+`provider_rate_limit`, `network_failure`. Failed runs still write the run row and
+an activity event; no partial domain result is written on failure.
+
+Confidence below 0.5 marks the run `needs_review` (the result is still
+persisted). Each run writes one redacted JSON log line; no resume/JD text, prompt
+bodies, or provider payloads appear in logs.
+
 ## Resume Import Normalization
 
 Input:
@@ -167,24 +206,32 @@ Rules:
 
 ## Match Analyzer
 
+Runs on the AI Workflow Foundation (US-028, realized). Gemini generates
+evidence-based analysis; the deterministic baseline analyzer is the typed
+fallback. Regenerate creates a new run and overwrites the saved analysis.
+
 Input:
 
-- structured resume
-- structured job
+- candidate profile
+- canonical resume text (and parsed resume when present)
+- job requirements + raw job description
+- user preferences (target role, location)
 
-Output:
+Output (validated `MatchAnalysisOutput`):
 
-- `overall_score`
-- `skill_score`
-- `experience_score`
-- `ai_readiness_score`
-- `ats_keyword_score`
-- `seniority_score`
-- strengths
-- weaknesses
-- missing skills
-- risks
-- explanations
+- `overall_score` (recomputed server-side from the weighting below; the model's
+  value is advisory)
+- `skill_score`, `experience_score`, `ai_readiness_score`, `ats_keyword_score`,
+  `seniority_score`, `location_score`
+- `seniority_match_label`
+- `apply_recommendation` — `apply_now | apply_with_improvements | improve_first | not_recommended` (derived from the reconciled score band)
+- `assistant_summary`, `fit_reasoning`
+- `score_explanations` — one short line per score
+- `top_strengths` — each with `resume_evidence`, `job_requirement`,
+  `why_it_matters`; a strength with no `resume_evidence` is dropped
+- `top_gaps` — each typed `true_gap | wording_gap | proof_gap`
+- `risks`, `next_best_action`
+- `confidence_score`
 
 Score formula:
 
@@ -206,6 +253,19 @@ Score categories:
 | 60-74 | Possible match with gaps |
 | 40-59 | Weak match |
 | 0-39 | Not recommended yet |
+
+Deduplication and freshness:
+
+- There is **one analysis per `(user, resume, job)`** (unique index; see
+  `data-model.md`). Generating an analysis for a resume/job pair that was already
+  analyzed opens the existing report instead of creating a duplicate — the user
+  regenerates from there for a fresh run.
+- The match records `analyzed_at`. When the resume or job is edited afterwards
+  (its `updated_at` moves past `analyzed_at`), the analysis is **stale**: the UI
+  flags it "Out of date" and offers regenerate. Analyses are never
+  auto-regenerated (cost), and stale results are never shown as current. This is
+  timestamp-based (Option A); a content hash would avoid flagging edits that do
+  not change the analyzed text.
 
 ## Missing Skill Analysis
 

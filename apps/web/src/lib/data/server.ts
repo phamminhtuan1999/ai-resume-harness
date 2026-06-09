@@ -58,18 +58,55 @@ export type WorkspaceMatch = {
   missing_skills_json: unknown;
   risks_json: unknown;
   explanation_json: unknown;
+  // Period 8 AI analysis columns (US-028, migration 0011). Optional: matches
+  // created before the analyzer ran (or by older queries) will not carry them.
+  apply_recommendation?: string | null;
+  assistant_summary?: string | null;
+  fit_reasoning?: string | null;
+  score_explanations_json?: unknown;
+  top_strengths_json?: unknown;
+  top_gaps_json?: unknown;
+  next_best_action?: string | null;
+  seniority_match_label?: string | null;
+  location_score?: number | null;
+  confidence_score?: number | null;
+  analyzer_provider?: string | null;
+  // When the analysis was generated (migration 0015), for staleness detection.
+  analyzed_at?: string | null;
+  // Derived: true when the resume or job changed after analyzed_at. Set by the
+  // data readers, not a DB column.
+  is_stale?: boolean;
   created_at: string;
   updated_at: string;
   resumes: {
     id: string;
     title: string;
+    updated_at?: string | null;
   } | null;
   jobs: {
     id: string;
     company: string;
     title: string;
+    updated_at?: string | null;
   } | null;
 };
+
+// True when the resume or job was edited after the analysis was generated.
+// Timestamp-based (Option A): bumping any job field marks it stale even if the
+// analyzed text did not change — acceptable tradeoff vs a content hash.
+export function isMatchStale(row: {
+  analyzed_at?: string | null;
+  resumes?: { updated_at?: string | null } | null;
+  jobs?: { updated_at?: string | null } | null;
+}): boolean {
+  if (!row.analyzed_at) {
+    return false;
+  }
+  const analyzed = new Date(row.analyzed_at).getTime();
+  const resumeAt = row.resumes?.updated_at ? new Date(row.resumes.updated_at).getTime() : 0;
+  const jobAt = row.jobs?.updated_at ? new Date(row.jobs.updated_at).getTime() : 0;
+  return resumeAt > analyzed || jobAt > analyzed;
+}
 
 export type ApplicationTrackerItem = {
   id: string;
@@ -155,6 +192,45 @@ export type InterviewPrep = {
   updated_at: string;
 };
 
+export type MissingSkillAnalysis = {
+  id: string;
+  match_id: string;
+  summary: string | null;
+  missing_skills_json: unknown;
+  top_3_priority_gaps_json: unknown;
+  confidence_score: number | null;
+  provider: string | null;
+  updated_at: string;
+};
+
+export type AssistantInsight = {
+  id: string;
+  match_id: string;
+  assistant_summary: string | null;
+  recommendation: string | null;
+  why_this_recommendation: string | null;
+  next_best_action: string | null;
+  application_strategy: string | null;
+  risk_level: string | null;
+  confidence_score: number | null;
+  provider: string | null;
+  updated_at: string;
+};
+
+export type CoverLetter = {
+  id: string;
+  match_id: string;
+  job_id: string | null;
+  cover_letter: string | null;
+  cover_letter_strategy: string | null;
+  key_points_json: unknown;
+  claims_avoided_json: unknown;
+  tone: string | null;
+  confidence_score: number | null;
+  provider: string | null;
+  updated_at: string;
+};
+
 export type WorkspaceData = {
   appUser: AppUser | null;
   profile: WorkspaceProfile | null;
@@ -163,6 +239,10 @@ export type WorkspaceData = {
   matches: WorkspaceMatch[];
   isConfigured: boolean;
 };
+
+const ASSISTANT_INSIGHT_COLUMNS =
+  "id,match_id,assistant_summary,recommendation,why_this_recommendation," +
+  "next_best_action,application_strategy,risk_level,confidence_score,provider,updated_at";
 
 export async function getWorkspaceData(): Promise<WorkspaceData> {
   const appUser = await getCurrentAppUser();
@@ -438,6 +518,49 @@ export async function getMatchWorkspaceData() {
   };
 }
 
+export async function getMatchesList() {
+  const { appUser, profile } = await getWorkspaceProfile();
+
+  if (!profile) {
+    return { appUser, profile: null, matches: [] as WorkspaceMatch[] };
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("matches")
+    .select(
+      [
+        "id",
+        "resume_id",
+        "job_id",
+        "overall_score",
+        "apply_recommendation",
+        "assistant_summary",
+        "confidence_score",
+        "analyzer_provider",
+        "analyzed_at",
+        "created_at",
+        "updated_at",
+        "resumes(id,title,updated_at)",
+        "jobs(id,company,title,updated_at)",
+      ].join(",")
+    )
+    .eq("user_id", profile.id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    console.warn("[ApplyWise data skipped] Unable to load matches list.");
+  }
+
+  const matches = ((data ?? []) as unknown as WorkspaceMatch[]).map((match) => ({
+    ...match,
+    is_stale: isMatchStale(match),
+  }));
+
+  return { appUser, profile, matches };
+}
+
 export async function getTrackerData(): Promise<TrackerData> {
   const { appUser, profile } = await getWorkspaceProfile();
 
@@ -505,42 +628,179 @@ export async function getMatchDetail(matchId: string) {
   }
 
   const supabase = getSupabaseServiceClient();
-  const { data: matchRow, error } = await supabase
-    .from("matches")
-    .select(
-      [
-        "id",
-        "resume_id",
-        "job_id",
-        "overall_score",
-        "skill_score",
-        "experience_score",
-        "ai_readiness_score",
-        "ats_keyword_score",
-        "seniority_score",
-        "strengths_json",
-        "weaknesses_json",
-        "missing_skills_json",
-        "risks_json",
-        "explanation_json",
-        "created_at",
-        "updated_at",
-        "resumes(id,title)",
-        "jobs(id,company,title)",
-      ].join(",")
-    )
-    .eq("id", matchId)
-    .eq("user_id", profile.id)
-    .single();
+  const [{ data: matchRow, error }, { data: insightRow, error: insightError }] = await Promise.all([
+    supabase
+      .from("matches")
+      .select(
+        [
+          "id",
+          "resume_id",
+          "job_id",
+          "overall_score",
+          "skill_score",
+          "experience_score",
+          "ai_readiness_score",
+          "ats_keyword_score",
+          "seniority_score",
+          "strengths_json",
+          "weaknesses_json",
+          "missing_skills_json",
+          "risks_json",
+          "explanation_json",
+          "apply_recommendation",
+          "assistant_summary",
+          "fit_reasoning",
+          "score_explanations_json",
+          "top_strengths_json",
+          "top_gaps_json",
+          "next_best_action",
+          "seniority_match_label",
+          "location_score",
+          "confidence_score",
+          "analyzer_provider",
+          "analyzed_at",
+          "created_at",
+          "updated_at",
+          "resumes(id,title,updated_at)",
+          "jobs(id,company,title,updated_at)",
+        ].join(",")
+      )
+      .eq("id", matchId)
+      .eq("user_id", profile.id)
+      .single(),
+    supabase
+      .from("assistant_insights")
+      .select(ASSISTANT_INSIGHT_COLUMNS)
+      .eq("match_id", matchId)
+      .eq("user_id", profile.id)
+      .maybeSingle(),
+  ]);
 
   if (error || !matchRow) {
     notFound();
+  }
+
+  if (insightError) {
+    console.warn("[ApplyWise data skipped] Unable to load assistant insight.");
+  }
+
+  const match = matchRow as unknown as WorkspaceMatch;
+
+  return {
+    appUser,
+    profile,
+    match: { ...match, is_stale: isMatchStale(match) },
+    insight: (insightRow ?? null) as AssistantInsight | null,
+  };
+}
+
+export async function getMissingSkillsDetail(matchId: string) {
+  const { appUser, profile } = await getWorkspaceProfile();
+
+  if (!profile) {
+    notFound();
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const [{ data: matchRow, error: matchError }, { data: analysisRow, error: analysisError }] =
+    await Promise.all([
+      supabase
+        .from("matches")
+        .select(
+          [
+            "id",
+            "resume_id",
+            "job_id",
+            "overall_score",
+            "apply_recommendation",
+            "created_at",
+            "updated_at",
+            "resumes(id,title)",
+            "jobs(id,company,title)",
+          ].join(",")
+        )
+        .eq("id", matchId)
+        .eq("user_id", profile.id)
+        .single(),
+      supabase
+        .from("missing_skill_analyses")
+        .select(
+          "id,match_id,summary,missing_skills_json,top_3_priority_gaps_json," +
+            "confidence_score,provider,updated_at"
+        )
+        .eq("match_id", matchId)
+        .eq("user_id", profile.id)
+        .maybeSingle(),
+    ]);
+
+  if (matchError || !matchRow) {
+    notFound();
+  }
+
+  if (analysisError) {
+    console.warn("[ApplyWise data skipped] Unable to load missing skill analysis.");
   }
 
   return {
     appUser,
     profile,
     match: matchRow as unknown as WorkspaceMatch,
+    analysis: (analysisRow ?? null) as MissingSkillAnalysis | null,
+  };
+}
+
+export async function getCoverLetterDetail(matchId: string) {
+  const { appUser, profile } = await getWorkspaceProfile();
+
+  if (!profile) {
+    notFound();
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const [{ data: matchRow, error: matchError }, { data: letterRow, error: letterError }] =
+    await Promise.all([
+      supabase
+        .from("matches")
+        .select(
+          [
+            "id",
+            "resume_id",
+            "job_id",
+            "overall_score",
+            "apply_recommendation",
+            "created_at",
+            "updated_at",
+            "resumes(id,title)",
+            "jobs(id,company,title)",
+          ].join(",")
+        )
+        .eq("id", matchId)
+        .eq("user_id", profile.id)
+        .single(),
+      supabase
+        .from("cover_letters")
+        .select(
+          "id,match_id,job_id,cover_letter,cover_letter_strategy,key_points_json," +
+            "claims_avoided_json,tone,confidence_score,provider,updated_at"
+        )
+        .eq("match_id", matchId)
+        .eq("user_id", profile.id)
+        .maybeSingle(),
+    ]);
+
+  if (matchError || !matchRow) {
+    notFound();
+  }
+
+  if (letterError) {
+    console.warn("[ApplyWise data skipped] Unable to load cover letter.");
+  }
+
+  return {
+    appUser,
+    profile,
+    match: matchRow as unknown as WorkspaceMatch,
+    coverLetter: (letterRow ?? null) as CoverLetter | null,
   };
 }
 
@@ -555,6 +815,7 @@ export async function getResumeSuggestionsDetail(matchId: string) {
   const [
     { data: matchRow, error: matchError },
     { data: suggestionRows, error: suggestionsError },
+    { data: runRow },
   ] = await Promise.all([
     supabase
       .from("matches")
@@ -596,6 +857,16 @@ export async function getResumeSuggestionsDetail(matchId: string) {
       )
       .eq("match_id", matchId)
       .order("created_at", { ascending: true }),
+    supabase
+      .from("ai_workflow_runs")
+      .select("output_snapshot_json")
+      .eq("user_id", profile.id)
+      .eq("subject_type", "match")
+      .eq("subject_id", matchId)
+      .eq("workflow_type", "resume_suggestions")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   if (matchError || !matchRow) {
@@ -606,11 +877,17 @@ export async function getResumeSuggestionsDetail(matchId: string) {
     console.warn("[ApplyWise data skipped] Unable to load resume suggestions.");
   }
 
+  const snapshot =
+    ((runRow as { output_snapshot_json?: unknown } | null)?.output_snapshot_json ?? null) as
+      | Record<string, unknown>
+      | null;
+
   return {
     appUser,
     profile,
     match: matchRow as unknown as WorkspaceMatch,
     suggestions: (suggestionRows ?? []) as unknown as ResumeSuggestion[],
+    snapshot,
   };
 }
 

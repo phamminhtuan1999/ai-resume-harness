@@ -2,7 +2,7 @@
 
 ## Status
 
-planned
+implemented (delivered via Period 7 / US-026)
 
 ## Lane
 
@@ -62,4 +62,24 @@ checks are not left as informal polish.
 
 ## Evidence
 
-Add the Period 5 validation report after implementation.
+This QA pass was delivered as US-026 (Motion, state, accessibility, and
+dual-theme QA) during the Period 7 overhaul. Its closeout report covers every
+acceptance criterion of this story:
+`docs/stories/period-7/US-026-validation-report.md`.
+
+- **Contrast** — WCAG AA computed from the oklch tokens for body, muted,
+  primary, badges, and destructive text in both themes; all text/control pairs
+  >= 4.5.
+- **Focus and keyboard** — token-driven `focus-visible` ring on all primitives;
+  verified visible focus and Tab-reachable sidebar nav via screenshot.
+- **Field labels, helper, and error text** — Period 5 form validation work
+  (US-015) plus the restyled `input`/`textarea`/`select` primitives.
+- **Copy** — zero em/en-dashes across `.tsx`/`.ts`/`.css`; implementation jargon
+  removed from user-facing surfaces; no fabricated metrics or testimonials.
+- **Clean console** — 0 errors across all screenshot runs.
+- **Validation report** — surfaces, viewports, and deferred items listed in the
+  US-026 report (mechanical checks: 58/58 tests, lint clean, 23 routes build).
+
+Deferred (carried from US-026): the four AI sub-pages were code-verified but not
+screenshotted (need seeded Supabase data); Clerk's hosted widget theming is
+Harness backlog #7.

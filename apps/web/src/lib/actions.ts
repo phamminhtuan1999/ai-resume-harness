@@ -7,6 +7,7 @@ import {
   getValidationFieldErrors,
   readForm,
   validateJobInput,
+  validateJobUrlInput,
   validateMatchIdInput,
   validateMatchInput,
   validateProfileInput,
@@ -22,12 +23,16 @@ import {
   importResumeFile,
   isUploadedResumeFile,
 } from "@/lib/resume-import-flow.mjs";
+import { importJobByUrl } from "@/lib/job-import-flow.mjs";
+import {
+  patchResumeSuggestion,
+  runMatchAnalysis,
+  runMatchSubWorkflow,
+} from "@/lib/ai-workflow-client.mjs";
 import { buildInterviewPrep } from "@/lib/interview-prep-generator.mjs";
 import { analyzeResumeJobFit } from "@/lib/match-analyzer.mjs";
 import { saveImportedCandidateProfile } from "@/lib/profile-import-flow.mjs";
 import { buildFourWeekRoadmap } from "@/lib/roadmap-generator.mjs";
-import { buildTailoredResumeDraft } from "@/lib/resume-draft-generator.mjs";
-import { buildResumeSuggestions } from "@/lib/resume-suggestion-generator.mjs";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 
 async function requireWritableContext(): Promise<
@@ -286,6 +291,116 @@ export async function saveJobAction(
   return success("Job saved.");
 }
 
+export async function importJobByUrlAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const parsed = validateJobUrlInput(readForm(formData));
+  if (!parsed.success) {
+    return failure("Enter a valid job URL.", getValidationFieldErrors(parsed.error));
+  }
+
+  const sessionToken = await getCurrentSessionToken();
+  const result = await importJobByUrl({
+    apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
+    sourceUrl: parsed.data.source_url,
+    sessionToken,
+  });
+
+  if (!result.ok) {
+    // Any fetch/extract failure surfaces on the URL field so the form can offer
+    // the manual-paste fallback with the link preserved.
+    return failure(result.message, { source_url: result.message });
+  }
+
+  // Best-effort: score the freshly imported job against the most recent resume
+  // so it is immediately analyzable. Never blocks or fails the import.
+  if (!result.job.duplicate) {
+    await scoreImportedJob({ userProfileId: context.userProfileId, jobId: result.job.job_id });
+  }
+
+  revalidatePath("/jobs");
+  revalidatePath("/tracker");
+  revalidatePath("/dashboard");
+  const message = result.job.duplicate
+    ? "This job was already saved. Opening it."
+    : "Job fetched and saved.";
+  return successWithRedirect(message, `/jobs/${result.job.job_id}`);
+}
+
+async function scoreImportedJob({
+  userProfileId,
+  jobId,
+}: {
+  userProfileId: string;
+  jobId: string;
+}): Promise<void> {
+  try {
+    const supabase = getSupabaseServiceClient();
+    const [{ data: resumeRows }, { data: job }] = await Promise.all([
+      supabase
+        .from("resumes")
+        .select("id,raw_text")
+        .eq("user_id", userProfileId)
+        .order("updated_at", { ascending: false })
+        .limit(5),
+      supabase
+        .from("jobs")
+        .select("id,raw_description")
+        .eq("id", jobId)
+        .eq("user_id", userProfileId)
+        .single(),
+    ]);
+
+    const resume = (resumeRows ?? []).find(
+      (row) => typeof row?.raw_text === "string" && row.raw_text.trim().length > 0
+    );
+    if (!resume?.raw_text || !job?.raw_description) {
+      return;
+    }
+
+    const analysis = analyzeResumeJobFit({
+      resumeText: resume.raw_text,
+      jobDescription: job.raw_description,
+    });
+    const now = new Date().toISOString();
+    await Promise.all([
+      supabase
+        .from("jobs")
+        .update({
+          structured_json: analysis.structured_job,
+          parse_status: "parsed",
+          updated_at: now,
+        })
+        .eq("id", jobId)
+        .eq("user_id", userProfileId),
+      supabase.from("matches").insert({
+        user_id: userProfileId,
+        resume_id: resume.id,
+        job_id: jobId,
+        overall_score: analysis.overall_score,
+        skill_score: analysis.skill_score,
+        experience_score: analysis.experience_score,
+        ai_readiness_score: analysis.ai_readiness_score,
+        ats_keyword_score: analysis.ats_keyword_score,
+        seniority_score: analysis.seniority_score,
+        strengths_json: analysis.strengths_json,
+        weaknesses_json: analysis.weaknesses_json,
+        missing_skills_json: analysis.missing_skills_json,
+        risks_json: analysis.risks_json,
+        explanation_json: analysis.explanation_json,
+      }),
+    ]);
+  } catch (error) {
+    logSkippedAction(`Auto-scoring imported job skipped: ${String(error)}`);
+  }
+}
+
 export async function saveApplicationAction(
   _previousState: ActionState,
   formData: FormData
@@ -467,60 +582,85 @@ export async function generateMatchAction(
       .single(),
   ]);
 
-  if (resumeError || jobError || !resume?.raw_text || !job?.raw_description) {
+  if (resumeError || jobError || !resume?.id || !job?.id) {
     return failure("Unable to load the selected resume and job for analysis.");
   }
 
-  const analysis = analyzeResumeJobFit({
-    resumeText: resume.raw_text,
-    jobDescription: job.raw_description,
+  // Duplicate guard: one analysis per (resume, job) pair. If this resume has
+  // already been analyzed against this job, open the existing report instead of
+  // creating a duplicate. The user can Regenerate from there for a fresh run.
+  const { data: existing } = await supabase
+    .from("matches")
+    .select("id")
+    .eq("user_id", context.userProfileId)
+    .eq("resume_id", parsed.data.resume_id)
+    .eq("job_id", parsed.data.job_id)
+    .limit(1)
+    .maybeSingle();
+
+  if (existing?.id) {
+    return successWithRedirect(
+      "You already analyzed this resume against this job — opening the existing report.",
+      `/matches/${existing.id}`
+    );
+  }
+
+  // Per decision 0012, analysis now runs in the backend. The web creates the
+  // match shell so the analyze endpoint (path param :matchId) has a subject to
+  // fill in; the backend overwrites these placeholder scores with the AI result.
+  const { data: match, error: matchError } = await supabase
+    .from("matches")
+    .insert({
+      user_id: context.userProfileId,
+      resume_id: parsed.data.resume_id,
+      job_id: parsed.data.job_id,
+      overall_score: 0,
+      skill_score: 0,
+      experience_score: 0,
+      ai_readiness_score: 0,
+      ats_keyword_score: 0,
+      seniority_score: 0,
+    })
+    .select("id")
+    .single();
+
+  if (matchError || !match?.id) {
+    // Race backstop: the unique (user, resume, job) index rejects a concurrent
+    // duplicate insert; open the existing report instead of erroring.
+    if (matchError?.code === "23505") {
+      const { data: raced } = await supabase
+        .from("matches")
+        .select("id")
+        .eq("user_id", context.userProfileId)
+        .eq("resume_id", parsed.data.resume_id)
+        .eq("job_id", parsed.data.job_id)
+        .limit(1)
+        .maybeSingle();
+      if (raced?.id) {
+        return successWithRedirect(
+          "You already analyzed this resume against this job — opening the existing report.",
+          `/matches/${raced.id}`
+        );
+      }
+    }
+    return failure("Match analysis save failed. Confirm the Period 2 matches schema exists.");
+  }
+
+  const sessionToken = await getCurrentSessionToken();
+  const result = await runMatchAnalysis({
+    apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
+    matchId: match.id,
+    sessionToken,
   });
 
-  const now = new Date().toISOString();
-  const [{ error: resumeUpdateError }, { error: jobUpdateError }, { data: match, error: matchError }] =
-    await Promise.all([
-      supabase
-        .from("resumes")
-        .update({
-          structured_json: analysis.structured_resume,
-          parse_status: "parsed",
-          updated_at: now,
-        })
-        .eq("id", parsed.data.resume_id)
-        .eq("user_id", context.userProfileId),
-      supabase
-        .from("jobs")
-        .update({
-          structured_json: analysis.structured_job,
-          parse_status: "parsed",
-          updated_at: now,
-        })
-        .eq("id", parsed.data.job_id)
-        .eq("user_id", context.userProfileId),
-      supabase
-        .from("matches")
-        .insert({
-          user_id: context.userProfileId,
-          resume_id: parsed.data.resume_id,
-          job_id: parsed.data.job_id,
-          overall_score: analysis.overall_score,
-          skill_score: analysis.skill_score,
-          experience_score: analysis.experience_score,
-          ai_readiness_score: analysis.ai_readiness_score,
-          ats_keyword_score: analysis.ats_keyword_score,
-          seniority_score: analysis.seniority_score,
-          strengths_json: analysis.strengths_json,
-          weaknesses_json: analysis.weaknesses_json,
-          missing_skills_json: analysis.missing_skills_json,
-          risks_json: analysis.risks_json,
-          explanation_json: analysis.explanation_json,
-        })
-        .select("id")
-        .single(),
-    ]);
-
-  if (resumeUpdateError || jobUpdateError || matchError || !match?.id) {
-    return failure("Match analysis save failed. Confirm the Period 2 matches schema exists.");
+  if (!result.ok) {
+    // Remove the shell so the matches list never shows a half-finished analysis.
+    await supabase
+      .from("matches")
+      .delete()
+      .eq("id", match.id)
+      .eq("user_id", context.userProfileId);
+    return failure(result.message ?? "Match analysis failed.");
   }
 
   revalidatePath("/matches");
@@ -534,7 +674,7 @@ export async function generateMatchAction(
   return successWithRedirect("Match analysis generated.", `/matches/${match.id}`);
 }
 
-export async function generateResumeSuggestionsAction(
+export async function regenerateMatchAction(
   _previousState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
@@ -546,149 +686,211 @@ export async function generateResumeSuggestionsAction(
   const parsed = validateMatchIdInput(readForm(formData));
   if (!parsed.success) {
     return failure(
-      "Choose a valid match before generating resume suggestions.",
+      "A match is required to regenerate analysis.",
       getValidationFieldErrors(parsed.error)
     );
   }
 
   const supabase = getSupabaseServiceClient();
-  const { data: match, error: matchError } = await supabase
+  const { data: match, error } = await supabase
     .from("matches")
-    .select(
-      [
-        "id",
-        "strengths_json",
-        "weaknesses_json",
-        "missing_skills_json",
-      ].join(",")
-    )
+    .select("id,job_id")
     .eq("id", parsed.data.match_id)
     .eq("user_id", context.userProfileId)
     .single();
 
-  if (matchError || !match) {
-    return failure("Unable to load the selected match for resume suggestions.");
+  if (error || !match?.id) {
+    return failure("Unable to load that match for this account.");
   }
 
-  const sourceMatch = match as unknown as {
-    id: string;
-    strengths_json: unknown;
-    weaknesses_json: unknown;
-    missing_skills_json: unknown;
-  };
+  const sessionToken = await getCurrentSessionToken();
+  const result = await runMatchAnalysis({
+    apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
+    matchId: match.id,
+    sessionToken,
+    regenerate: true,
+  });
 
-  const suggestions = buildResumeSuggestions({ match: sourceMatch }).map((suggestion) => ({
-    match_id: parsed.data.match_id,
-    ...suggestion,
-  }));
-
-  const { error: deleteError } = await supabase
-    .from("resume_suggestions")
-    .delete()
-    .eq("match_id", parsed.data.match_id);
-
-  if (deleteError) {
-    return failure("Resume suggestion save failed. Confirm the Period 3 schema exists.");
+  if (!result.ok) {
+    return failure(result.message ?? "Match analysis regeneration failed.");
   }
 
-  const { error: insertError } = await supabase.from("resume_suggestions").insert(suggestions);
+  revalidatePath(`/matches/${match.id}`);
+  revalidatePath("/matches");
+  if (match.job_id) {
+    revalidatePath(`/jobs/${match.job_id}`);
+  }
+  revalidatePath("/dashboard");
 
-  if (insertError) {
-    return failure("Resume suggestion save failed. Confirm the Period 3 schema exists.");
+  return success("Match analysis regenerated.");
+}
+
+async function runMatchSubWorkflowAction(
+  formData: FormData,
+  options: {
+    segment: string;
+    successMessage: string;
+    failureMessage: string;
+    extraPaths?: (matchId: string) => string[];
+  }
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
   }
 
-  revalidatePath(`/matches/${parsed.data.match_id}`);
-  revalidatePath(`/matches/${parsed.data.match_id}/resume-suggestions`);
+  const parsed = validateMatchIdInput(readForm(formData));
+  if (!parsed.success) {
+    return failure(
+      "A match is required for this step.",
+      getValidationFieldErrors(parsed.error)
+    );
+  }
 
-  return success("Resume suggestions generated.");
+  const supabase = getSupabaseServiceClient();
+  const { data: match, error } = await supabase
+    .from("matches")
+    .select("id,job_id")
+    .eq("id", parsed.data.match_id)
+    .eq("user_id", context.userProfileId)
+    .single();
+
+  if (error || !match?.id) {
+    return failure("Unable to load that match for this account.");
+  }
+
+  const sessionToken = await getCurrentSessionToken();
+  const result = await runMatchSubWorkflow({
+    apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
+    matchId: match.id,
+    segment: options.segment,
+    sessionToken,
+  });
+
+  if (!result.ok) {
+    return failure(result.message ?? options.failureMessage);
+  }
+
+  revalidatePath(`/matches/${match.id}`);
+  for (const path of options.extraPaths?.(match.id) ?? []) {
+    revalidatePath(path);
+  }
+  if (match.job_id) {
+    revalidatePath(`/jobs/${match.job_id}`);
+  }
+  revalidatePath("/dashboard");
+
+  return success(options.successMessage);
+}
+
+export async function generateMissingSkillsAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  return runMatchSubWorkflowAction(formData, {
+    segment: "missing-skills",
+    successMessage: "Skill gap analysis generated.",
+    failureMessage: "Skill gap analysis failed.",
+    extraPaths: (matchId) => [`/matches/${matchId}/gaps`],
+  });
+}
+
+export async function generateAssistantInsightAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  return runMatchSubWorkflowAction(formData, {
+    segment: "assistant-insight",
+    successMessage: "Assistant insight generated.",
+    failureMessage: "Assistant insight failed.",
+  });
+}
+
+export async function generateResumeSuggestionsAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  // Per decision 0012, generation now runs the US-031 backend workflow (Gemini +
+  // deterministic fallback, Truth Guard) instead of the inline deterministic path.
+  return runMatchSubWorkflowAction(formData, {
+    segment: "resume-suggestions",
+    successMessage: "Resume suggestions generated.",
+    failureMessage: "Resume suggestions failed.",
+    extraPaths: (matchId) => [`/matches/${matchId}/resume-suggestions`],
+  });
+}
+
+export async function updateSuggestionAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const raw = readForm(formData);
+  const suggestionId = typeof raw.suggestion_id === "string" ? raw.suggestion_id : "";
+  const matchId = typeof raw.match_id === "string" ? raw.match_id : "";
+  const userAction = typeof raw.user_action === "string" ? raw.user_action : "";
+  const editedText = typeof raw.suggested_text === "string" ? raw.suggested_text.trim() : "";
+
+  if (!suggestionId || !["accepted", "rejected", "pending"].includes(userAction)) {
+    return failure("Invalid suggestion update.");
+  }
+
+  const sessionToken = await getCurrentSessionToken();
+  const result = await patchResumeSuggestion({
+    apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
+    suggestionId,
+    sessionToken,
+    userAction,
+    // Only send edited text on accept, when the user actually changed it.
+    suggestedText: userAction === "accepted" && editedText ? editedText : null,
+  });
+
+  if (!result.ok) {
+    return failure(result.message ?? "Could not update the suggestion.");
+  }
+
+  if (matchId) {
+    revalidatePath(`/matches/${matchId}/resume-suggestions`);
+  }
+
+  const label =
+    userAction === "accepted"
+      ? "Suggestion accepted."
+      : userAction === "rejected"
+        ? "Suggestion rejected."
+        : "Suggestion reset.";
+  return success(label);
 }
 
 export async function generateResumeDraftAction(
   _previousState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  const context = await requireWritableContext();
-  if (!context.ok) {
-    return failure(context.message);
-  }
-
-  const parsed = validateMatchIdInput(readForm(formData));
-  if (!parsed.success) {
-    return failure(
-      "Choose a valid match before generating a resume draft.",
-      getValidationFieldErrors(parsed.error)
-    );
-  }
-
-  const supabase = getSupabaseServiceClient();
-  const { data: match, error: matchError } = await supabase
-    .from("matches")
-    .select(
-      [
-        "id",
-        "resume_id",
-        "job_id",
-        "resumes(id,title,raw_text)",
-        "jobs(id,company,title)",
-      ].join(",")
-    )
-    .eq("id", parsed.data.match_id)
-    .eq("user_id", context.userProfileId)
-    .single();
-
-  if (matchError || !match) {
-    return failure("Unable to load the selected match for resume draft generation.");
-  }
-
-  const sourceMatch = match as unknown as {
-    id: string;
-    resume_id: string;
-    job_id: string;
-    resumes: { id: string; title: string; raw_text: string } | null;
-    jobs: { id: string; company: string; title: string } | null;
-  };
-
-  if (!sourceMatch.resumes?.raw_text || !sourceMatch.jobs?.title) {
-    return failure("The selected match is missing resume or job context.");
-  }
-
-  const { data: suggestions, error: suggestionsError } = await supabase
-    .from("resume_suggestions")
-    .select("suggested_text,truth_guard_status")
-    .eq("match_id", parsed.data.match_id)
-    .order("created_at", { ascending: true });
-
-  if (suggestionsError) {
-    return failure("Unable to load resume suggestions for this match.");
-  }
-
-  const draft = buildTailoredResumeDraft({
-    resume: sourceMatch.resumes,
-    job: sourceMatch.jobs,
-    suggestions: suggestions ?? [],
+  // Per decision 0012, the draft is now generated by the US-032 backend workflow
+  // (Gemini + deterministic fallback) which excludes unsupported suggestions and
+  // saves a resume_versions row.
+  return runMatchSubWorkflowAction(formData, {
+    segment: "tailored-resume",
+    successMessage: "Markdown resume draft generated.",
+    failureMessage: "Resume draft generation failed.",
+    extraPaths: (matchId) => [`/matches/${matchId}/resume-draft`],
   });
+}
 
-  const { data: version, error: versionError } = await supabase
-    .from("resume_versions")
-    .insert({
-      user_id: context.userProfileId,
-      resume_id: sourceMatch.resume_id,
-      job_id: sourceMatch.job_id,
-      match_id: parsed.data.match_id,
-      title: draft.title,
-      content_markdown: draft.content_markdown,
-    })
-    .select("id")
-    .single();
-
-  if (versionError || !version?.id) {
-    return failure("Resume draft save failed. Confirm the Period 3 resume_versions schema exists.");
-  }
-
-  revalidatePath(`/matches/${parsed.data.match_id}`);
-  revalidatePath(`/matches/${parsed.data.match_id}/resume-draft`);
-
-  return success("Markdown resume draft generated.");
+export async function generateCoverLetterAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  return runMatchSubWorkflowAction(formData, {
+    segment: "cover-letter",
+    successMessage: "Cover letter generated.",
+    failureMessage: "Cover letter generation failed.",
+    extraPaths: (matchId) => [`/matches/${matchId}/cover-letter`],
+  });
 }
 
 export async function generateRoadmapAction(

@@ -11,7 +11,7 @@ import { SubmitButton } from "@/components/forms/submit-button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
-export function JobForm() {
+export function JobForm({ defaultJobUrl = "" }: { defaultJobUrl?: string }) {
   const [state, formAction] = useActionState(saveJobAction, idleActionState);
 
   return (
@@ -55,6 +55,7 @@ export function JobForm() {
       >
         <Input
           aria-invalid={Boolean(state.fieldErrors?.job_url)}
+          defaultValue={defaultJobUrl}
           name="job_url"
           placeholder="https://example.com/jobs/123"
           type="url"

@@ -156,6 +156,149 @@ Required fields:
 - `explanation_json jsonb`
 - timestamps
 
+Period 8 AI analysis columns (additive, migration `0011`; US-028). The existing
+columns above are preserved and kept in sync for backward compatibility:
+
+- `apply_recommendation text` — `apply_now | apply_with_improvements | improve_first | not_recommended`
+- `assistant_summary text`
+- `fit_reasoning text`
+- `score_explanations_json jsonb`
+- `top_strengths_json jsonb` — evidence-linked; a strength with no `resume_evidence` is dropped
+- `top_gaps_json jsonb` — each gap typed `true_gap | wording_gap | proof_gap`
+- `next_best_action text`
+- `seniority_match_label text`
+- `location_score int`
+- `confidence_score numeric`
+- `analyzer_provider text` — `gemini | deterministic`
+
+`overall_score` is always recomputed server-side from the accepted weighting
+(`skill*0.30 + experience*0.20 + ai_readiness*0.25 + ats_keyword*0.15 +
+seniority*0.10`); the model's `overall_score` is advisory only.
+
+Dedup + freshness columns (migration `0015`):
+
+- `analyzed_at timestamptz` — when the AI analysis was generated. Set by
+  `save_match_analysis`. A match is **stale** when its resume or job
+  `updated_at` is later than `analyzed_at` (timestamp-based freshness, Option A).
+  The UI shows an "Out of date" affordance and offers regenerate; matches are
+  never auto-regenerated.
+
+There is **one analysis per `(user_id, resume_id, job_id)`**, enforced by a
+unique index `matches_user_resume_job_uniq (user_id, resume_id, job_id)`. The web
+generate flow pre-checks for an existing match (redirecting to it) and also
+handles the unique-violation race by redirecting to the existing report.
+
+### `ai_workflow_runs`
+
+The audit/observability record for every AI feature (Period 8, migration `0010`;
+US-027). One row per execution of one workflow for one subject.
+
+Required fields:
+
+- `id uuid primary key`
+- `user_id uuid references user_profiles(id) on delete cascade`
+- `workflow_type text` — `match_analysis | missing_skills | resume_suggestions | resume_draft | cover_letter | roadmap | interview_prep | assistant_insight | dashboard_summary | activity_description`
+- `subject_type text` — `match | resume | job | dashboard`
+- `subject_id uuid` (nullable for dashboard-scoped runs)
+- `status text default 'queued'` — `queued | running | completed | needs_review | failed`
+- `model_provider text` — `gemini | deterministic`
+- `model_name text`
+- `started_at timestamptz`
+- `completed_at timestamptz`
+- `latency_ms int`
+- `confidence_score numeric`
+- `output_snapshot_json jsonb` — validated output for reuse without re-running
+- `error_code text`
+- `error_message text`
+- timestamps
+
+Index: `(user_id, subject_type, subject_id, workflow_type)`.
+
+### `activity_feed`
+
+The user-facing record that an AI step happened (Period 8, migration `0010`;
+US-027). Distinct from `ai_workflow_runs` (the durable per-run record) and from
+app logs.
+
+Required fields:
+
+- `id uuid primary key`
+- `user_id uuid references user_profiles(id) on delete cascade`
+- `workflow_run_id uuid references ai_workflow_runs(id) on delete set null`
+- `activity_type text` — workflow type + lifecycle (e.g. `match_analysis.completed`)
+- `related_job_id uuid references jobs(id) on delete set null`
+- `related_match_id uuid references matches(id) on delete set null`
+- `title text`
+- `assistant_description text` — short AI text; filled by US-037, deterministic fallback allowed
+- `importance text default 'low'` — `low | medium | high`
+- `created_at timestamptz`
+
+Index: `(user_id, created_at desc)`.
+
+### `missing_skill_analyses`
+
+The AI missing-skill / gap analysis for a match (Period 8, migration `0012`;
+US-029). One row per match (upserted on regenerate).
+
+Required fields:
+
+- `id uuid primary key`
+- `user_id uuid references user_profiles(id) on delete cascade`
+- `match_id uuid not null unique references matches(id) on delete cascade`
+- `summary text`
+- `missing_skills_json jsonb` — each gap: skill, importance
+  (`critical | medium | nice_to_have`), gap_type
+  (`true_gap | wording_gap | proof_gap`), evidence_status
+  (`no_evidence | weak_evidence | strong_evidence`), resume_evidence, fix,
+  suggested project task, interview risk
+- `top_3_priority_gaps_json jsonb`
+- `confidence_score numeric`
+- `provider text` — `gemini | deterministic`
+- timestamps
+
+### `assistant_insights`
+
+The decision-oriented job assistant insight for a match (Period 8, migration
+`0013`; US-030). One row per match (upserted on regenerate). The
+`recommendation`, `risk_level`, and routed `next_best_action` are derived
+server-side from the saved match analysis so the card can never contradict the
+score.
+
+Required fields:
+
+- `id uuid primary key`
+- `user_id uuid references user_profiles(id) on delete cascade`
+- `match_id uuid not null unique references matches(id) on delete cascade`
+- `assistant_summary text`
+- `recommendation text` — `apply_now | tailor_resume_first | build_project_first | low_priority`
+- `why_this_recommendation text`
+- `next_best_action text`
+- `application_strategy text`
+- `risk_level text` — `low | medium | high`
+- `confidence_score numeric`
+- `provider text` — `gemini | deterministic`
+- timestamps
+
+### `cover_letters`
+
+The AI-generated cover letter for a match (Period 8, migration `0014`; US-033).
+One row per match (upserted on regenerate).
+
+Required fields:
+
+- `id uuid primary key`
+- `user_id uuid references user_profiles(id) on delete cascade`
+- `match_id uuid not null unique references matches(id) on delete cascade`
+- `job_id uuid references jobs(id) on delete set null`
+- `cover_letter text`
+- `cover_letter_strategy text`
+- `key_points_json jsonb`
+- `claims_avoided_json jsonb`
+- `tone text` — `professional | concise | enthusiastic`
+- `confidence_score numeric`
+- `provider text` — `gemini | deterministic`
+- timestamps
+
 ### `resume_suggestions`
 
 Stores generated resume suggestions and Truth Guard state.

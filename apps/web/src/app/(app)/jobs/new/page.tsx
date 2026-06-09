@@ -1,4 +1,4 @@
-import { JobForm } from "@/components/forms/job-form";
+import { JobIntake } from "@/components/forms/job-intake";
 import { PageHeader } from "@/components/page-header";
 import { SetupNotice } from "@/components/setup-notice";
 import {
@@ -11,22 +11,23 @@ import {
 
 export default function NewJobPage() {
   return (
-    
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
-        <PageHeader
-          description="Paste a job description and save contact details for tracking."
-          title="Analyze new job"
-        />
-        <SetupNotice />
-        <Card>
-          <CardHeader>
-            <CardTitle>Job description</CardTitle>
-            <CardDescription>Manual intake only for MVP.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <JobForm />
-          </CardContent>
-        </Card>
-      </div>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+      <PageHeader
+        description="Paste a job URL to fetch it automatically, or add the description yourself."
+        title="Add a job"
+      />
+      <SetupNotice />
+      <Card>
+        <CardHeader>
+          <CardTitle>Add a job</CardTitle>
+          <CardDescription>
+            Fetch a posting from its link, or paste the description manually.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <JobIntake />
+        </CardContent>
+      </Card>
+    </div>
   );
 }

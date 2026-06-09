@@ -2,7 +2,7 @@
 
 ## Status
 
-planned
+implemented (delivered via Period 7)
 
 ## Lane
 
@@ -62,4 +62,25 @@ navigation and dense workflow layout have different risk than color/type cleanup
 
 ## Evidence
 
-Add browser screenshots and verification notes after implementation.
+This story's acceptance criteria were delivered by the Period 7 design overhaul
+(decision `docs/decisions/0011-design-system-overhaul.md`) rather than as a
+standalone Period 5 effort:
+
+- **Mobile nav parity** and **persistent workflow context** — US-023 (app shell
+  and responsive navigation): `apps/web/src/components/app-shell.tsx`,
+  `sidebar-nav.tsx`, `mobile-nav.tsx` (portal drawer), with active-state via
+  `isNavItemActive` in `apps/web/src/lib/app-data.ts`.
+- **Page hierarchy and direct next actions** on dashboard, list, and detail
+  surfaces — US-025 (workspace page sweep).
+- **Intentional empty / loading / error / success states** and **no layout
+  break on long URLs, generated text, snippets, and contacts** — US-025 plus the
+  shared primitives and `(app)/loading.tsx` skeleton.
+- **Browser verification on desktop and mobile widths** with clean console —
+  US-026 validation report (`docs/stories/period-7/US-026-validation-report.md`),
+  Playwright screenshots in light and dark.
+
+Carried-forward caveat (same as US-026): the full resume-to-job-to-match E2E
+across the AI generation surfaces still needs seeded Supabase match data; those
+sub-pages were build- and code-verified but not screenshotted. Their UI rework
+is intentionally deferred (Harness backlog #8) until their features are
+refactored.

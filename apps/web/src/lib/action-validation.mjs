@@ -75,6 +75,14 @@ const jobSchema = z.object({
   contact_notes: z.string().trim().optional(),
 });
 
+const jobUrlSchema = z.object({
+  source_url: z
+    .string()
+    .trim()
+    .min(1, "Enter a job URL.")
+    .url("Enter a valid job URL, including https://."),
+});
+
 const matchSchema = z.object({
   resume_id: z.string().trim().uuid("Choose a resume."),
   job_id: z.string().trim().uuid("Choose a job."),
@@ -156,6 +164,10 @@ export function validateImportedResumePayload(input) {
 
 export function validateJobInput(input) {
   return jobSchema.safeParse(input);
+}
+
+export function validateJobUrlInput(input) {
+  return jobUrlSchema.safeParse(input);
 }
 
 export function validateMatchInput(input) {

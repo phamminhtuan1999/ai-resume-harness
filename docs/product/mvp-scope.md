@@ -54,6 +54,7 @@ The MVP is complete when a user can:
 | Period 5 | UI/UX rework, validation consistency, responsive workflow polish, copy cleanup, and visual QA. | Future story packets |
 | Period 6 | Job URL intake and resume-based profile autofill. | Future story packets |
 | Period 7 | Commercial-grade design-system overhaul: brand, tokens, typography, primitives, app shell, landing, light/dark parity. | US-021 through US-026 |
+| Period 8 | AI assistant intelligence overhaul: replace deterministic analysis with real AI (Gemini + fallback) on a shared backend workflow foundation; add cover letter, insight card, dashboard summary, AI activity feed, and workflow panel. | US-027 through US-038 |
 
 ## Period 1 Exit Criteria
 

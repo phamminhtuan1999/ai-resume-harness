@@ -77,8 +77,12 @@ Protected pages:
 - `/jobs`
 - `/jobs/new`
 - `/jobs/:id`
+- `/matches`
 - `/matches/:id`
+- `/matches/:id/gaps`
 - `/matches/:id/resume-suggestions`
+- `/matches/:id/resume-draft`
+- `/matches/:id/cover-letter`
 - `/matches/:id/roadmap`
 - `/matches/:id/interview-prep`
 - `/tracker`

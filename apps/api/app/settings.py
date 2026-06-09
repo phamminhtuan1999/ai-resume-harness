@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = Field(default="", alias="SUPABASE_SERVICE_ROLE_KEY")
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
     gemini_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_MODEL")
+    firecrawl_api_key: str = Field(default="", alias="FIRECRAWL_API_KEY")
+    firecrawl_api_base: str = Field(
+        default="https://api.firecrawl.dev", alias="FIRECRAWL_API_BASE"
+    )
+    firecrawl_timeout_seconds: int = Field(
+        default=45, ge=1, alias="FIRECRAWL_TIMEOUT_SECONDS"
+    )
     gemini_max_attempts: int = Field(default=3, ge=1, alias="GEMINI_MAX_ATTEMPTS")
     gemini_retry_base_delay_seconds: float = Field(
         default=0.5, ge=0, alias="GEMINI_RETRY_BASE_DELAY_SECONDS"
