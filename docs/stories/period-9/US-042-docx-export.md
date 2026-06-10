@@ -2,7 +2,13 @@
 
 ## Status
 
-planned
+implemented — `app/services/export/docx_renderer.py` (python-docx) renders the
+shared render model; `POST /api/draft-cvs/{id}/export/docx` streams the file,
+stamps `last_exported_docx_at`, derives `exported`, writes a `draft_cv.exported`
+activity. Proof: `test_draft_cv_export.py` (DOCX content gating, ATS-safe
+structure — no tables/images, heading styles, PDF↔DOCX parity) +
+`test_draft_cv_router.py` (stream + stamp). Web Export DOCX button shared with
+US-041. Platform (open-in-Word) pending.
 
 ## Lane
 

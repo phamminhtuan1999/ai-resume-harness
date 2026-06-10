@@ -981,6 +981,114 @@ export async function getResumeDraftDetail(matchId: string) {
   };
 }
 
+export type DraftCvMatch = {
+  id: string;
+  resume_id: string | null;
+  job_id: string | null;
+  apply_recommendation: string | null;
+  analyzed_at: string | null;
+  jobs?: { id: string; company: string | null; title: string | null } | null;
+  resumes?: { id: string; title: string | null } | null;
+};
+
+export type DraftCvRecord = {
+  id: string;
+  match_id: string;
+  job_id: string | null;
+  resume_id: string | null;
+  version: number;
+  title: string;
+  status: string;
+  cv_json: Record<string, unknown>;
+  cv_strategy_json: Record<string, unknown> | null;
+  quality_notes_json: Array<{ code: string; detail: string }> | null;
+  confidence_score: number | null;
+  provider: string | null;
+  last_exported_pdf_at: string | null;
+  last_exported_docx_at: string | null;
+  rendering_json: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export async function getDraftCvDetail(matchId: string) {
+  const { appUser, profile } = await getWorkspaceProfile();
+
+  if (!profile) {
+    notFound();
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const [
+    { data: matchRow, error: matchError },
+    { data: draftRows, error: draftsError },
+  ] = await Promise.all([
+    supabase
+      .from("matches")
+      .select(
+        [
+          "id",
+          "resume_id",
+          "job_id",
+          "overall_score",
+          "apply_recommendation",
+          "analyzed_at",
+          "created_at",
+          "updated_at",
+          "resumes(id,title)",
+          "jobs(id,company,title)",
+        ].join(",")
+      )
+      .eq("id", matchId)
+      .eq("user_id", profile.id)
+      .single(),
+    supabase
+      .from("draft_cvs")
+      .select(
+        [
+          "id",
+          "match_id",
+          "job_id",
+          "resume_id",
+          "version",
+          "title",
+          "status",
+          "cv_json",
+          "cv_strategy_json",
+          "quality_notes_json",
+          "confidence_score",
+          "provider",
+          "last_exported_pdf_at",
+          "last_exported_docx_at",
+          "rendering_json",
+          "created_at",
+          "updated_at",
+        ].join(",")
+      )
+      .eq("match_id", matchId)
+      .eq("user_id", profile.id)
+      .order("version", { ascending: false }),
+  ]);
+
+  if (matchError || !matchRow) {
+    notFound();
+  }
+
+  if (draftsError) {
+    console.warn("[ApplyWise data skipped] Unable to load draft CVs.");
+  }
+
+  const versions = (draftRows ?? []) as unknown as DraftCvRecord[];
+
+  return {
+    appUser,
+    profile,
+    match: matchRow as unknown as DraftCvMatch,
+    draft: versions[0] ?? null,
+    versions,
+  };
+}
+
 export async function getRoadmapDetail(matchId: string) {
   const { appUser, profile } = await getWorkspaceProfile();
 

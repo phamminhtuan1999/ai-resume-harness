@@ -422,6 +422,12 @@ export default async function MatchDetailPage({ params }: MatchDetailPageProps) 
               Resume draft
             </Link>
             <Link
+              href={`/matches/${match.id}/draft-cv`}
+              className={buttonVariants({ variant: "outline" })}
+            >
+              Draft CV (PDF/DOCX)
+            </Link>
+            <Link
               href={`/matches/${match.id}/cover-letter`}
               className={buttonVariants({ variant: "outline" })}
             >

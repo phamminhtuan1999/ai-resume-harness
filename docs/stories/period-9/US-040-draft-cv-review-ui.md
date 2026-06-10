@@ -2,7 +2,15 @@
 
 ## Status
 
-planned
+implemented — backend `PATCH /api/draft-cvs/{id}/bullets/{bulletId}` recomputes
+the derived status (`set_bullet_action` + `derive_draft_status`); web page
+`/matches/[matchId]/draft-cv` (RSC) with generate/regenerate, CV strategy +
+keyword-alignment cards, Truth Guard review panel (per-bullet approve/reject),
+gated CV preview (`draft-cv-view.mjs` mirrors the backend `is_renderable`),
+quality notes, version-history table, and a match-page entry link. Export
+buttons (US-041/042) live on this page. Proof: `test_draft_cv_router.py` (PATCH
+approve→ready_to_export, unknown-bullet 404, not-owned 404) + web
+`draft-cv-view`/`draft-cv-client` tests; tsc + eslint clean. Browser E2E pending.
 
 ## Lane
 

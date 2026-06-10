@@ -1,5 +1,19 @@
 # Overview
 
+## Status
+
+implemented — shared render-model serializer
+(`app/services/export/render_model.py`, the single `is_renderable` gating
+boundary) + ATS resume template v1 via **fpdf2** (not WeasyPrint: its native
+Pango/cairo libs are unavailable here, so decision 0013's pre-authorized
+fallback was used — recorded in 0013 and its Implementation Note) +
+`POST /api/draft-cvs/{id}/export/pdf` streaming download +
+`GET /export-preview` + `empty_cv` guard + `exported` stamp/activity. Web Export
+PDF button uses Clerk token + blob download. Proof: `test_draft_cv_export.py`
+(pypdf text-extraction inclusion/exclusion, unicode-name, parity) +
+`test_draft_cv_router.py` (stream/stamp/empty_cv). Platform (open-in-viewer +
+ATS copy-paste sanity) pending.
+
 ## Current Behavior
 
 No ApplyWise surface produces a file. Drafts and cover letters render as

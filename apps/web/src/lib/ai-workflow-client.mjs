@@ -205,6 +205,52 @@ export async function patchResumeSuggestion({
   return { ok: true, suggestion: payload?.suggestion ?? null };
 }
 
+export async function patchDraftCvBullet({
+  apiBaseUrl,
+  draftCvId,
+  bulletId,
+  sessionToken,
+  userAction,
+  fetchImpl = fetch,
+}) {
+  if (!apiBaseUrl) {
+    return { ok: false, message: "The assistant API is not configured." };
+  }
+  if (!sessionToken) {
+    return { ok: false, message: "Unable to authenticate the request." };
+  }
+  if (!draftCvId || !bulletId) {
+    return { ok: false, message: "A draft CV bullet is required." };
+  }
+
+  let response;
+  try {
+    response = await fetchImpl(
+      `${apiBaseUrl}/api/draft-cvs/${draftCvId}/bullets/${bulletId}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ user_action: userAction }),
+      }
+    );
+  } catch {
+    return { ok: false, message: "We could not reach the assistant. Please try again." };
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message =
+      payload?.error?.message ||
+      (typeof payload?.detail === "string" ? payload.detail : "Could not update the bullet.");
+    return { ok: false, message };
+  }
+
+  return { ok: true, draftCv: payload?.draft_cv ?? null };
+}
+
 export async function runFullWorkflow({
   apiBaseUrl,
   matchId,

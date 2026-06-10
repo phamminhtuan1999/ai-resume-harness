@@ -183,7 +183,7 @@ class SupabaseDataClient:
             table="jobs",
             select=(
                 "id,company,title,location,work_type,raw_description,"
-                "structured_json,parse_status"
+                "structured_json,parse_status,job_url"
             ),
             row_id=match.get("job_id"),
             user_profile_id=user_profile_id,
@@ -1029,6 +1029,154 @@ class SupabaseDataClient:
                 "assistant_description": assistant_description,
                 "importance": importance,
             },
+            extra_headers={"Prefer": "return=representation"},
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
+    # --- Draft CV (US-039 / US-040 / US-041 / US-042) ----------------------------
+
+    _DRAFT_CV_SELECT = (
+        "id,user_id,match_id,job_id,resume_id,version,title,status,cv_json,"
+        "cv_strategy_json,quality_notes_json,confidence_score,provider,model_name,"
+        "last_exported_pdf_at,last_exported_docx_at,rendering_json,created_at,updated_at"
+    )
+    _DRAFT_CV_VERSION_SELECT = (
+        "id,version,status,provider,confidence_score,created_at,updated_at"
+    )
+
+    def insert_draft_cv(
+        self,
+        *,
+        user_profile_id: str,
+        match_id: str,
+        job_id: str | None,
+        resume_id: str | None,
+        title: str,
+        status: str,
+        cv_json: dict[str, Any],
+        cv_strategy_json: dict[str, Any] | None,
+        quality_notes_json: list[dict[str, Any]] | None,
+        confidence_score: float | None,
+        provider: str | None,
+        model_name: str | None,
+        rendering_json: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Append a new draft CV version for a match (history kept).
+
+        The next ``version`` is computed from the current max for the match. The
+        ``unique (match_id, version)`` constraint rejects a concurrent duplicate;
+        the caller surfaces that as a retryable failure. Ownership is asserted
+        upstream by the workflow's ``authorize``.
+        """
+        existing = self._request(
+            "GET",
+            "/draft_cvs",
+            params={
+                "select": "version",
+                "match_id": f"eq.{match_id}",
+                "order": "version.desc",
+                "limit": "1",
+            },
+        ).json()
+        next_version = (existing[0]["version"] + 1) if existing else 1
+
+        now = datetime.now(UTC).isoformat()
+        response = self._request(
+            "POST",
+            "/draft_cvs",
+            params={"select": self._DRAFT_CV_SELECT},
+            json={
+                "user_id": user_profile_id,
+                "match_id": match_id,
+                "job_id": job_id,
+                "resume_id": resume_id,
+                "version": next_version,
+                "title": title,
+                "status": status,
+                "cv_json": cv_json,
+                "cv_strategy_json": cv_strategy_json,
+                "quality_notes_json": quality_notes_json or [],
+                "confidence_score": confidence_score,
+                "provider": provider,
+                "model_name": model_name,
+                "rendering_json": rendering_json,
+                "created_at": now,
+                "updated_at": now,
+            },
+            extra_headers={"Prefer": "return=representation"},
+        )
+        rows = response.json()
+        if not rows:
+            raise SupabaseDataError("Draft CV insert returned no rows.")
+        return rows[0]
+
+    def get_latest_draft_cv(
+        self, *, match_id: str, user_profile_id: str
+    ) -> dict[str, Any] | None:
+        response = self._request(
+            "GET",
+            "/draft_cvs",
+            params={
+                "select": self._DRAFT_CV_SELECT,
+                "match_id": f"eq.{match_id}",
+                "user_id": f"eq.{user_profile_id}",
+                "order": "version.desc",
+                "limit": "1",
+            },
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
+    def list_draft_cv_versions(
+        self, *, match_id: str, user_profile_id: str
+    ) -> list[dict[str, Any]]:
+        response = self._request(
+            "GET",
+            "/draft_cvs",
+            params={
+                "select": self._DRAFT_CV_VERSION_SELECT,
+                "match_id": f"eq.{match_id}",
+                "user_id": f"eq.{user_profile_id}",
+                "order": "version.desc",
+            },
+        )
+        return response.json()
+
+    def get_draft_cv_by_id(
+        self, *, draft_cv_id: str, user_profile_id: str
+    ) -> dict[str, Any] | None:
+        response = self._request(
+            "GET",
+            "/draft_cvs",
+            params={
+                "select": self._DRAFT_CV_SELECT,
+                "id": f"eq.{draft_cv_id}",
+                "user_id": f"eq.{user_profile_id}",
+                "limit": "1",
+            },
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
+    def update_draft_cv(
+        self,
+        *,
+        draft_cv_id: str,
+        user_profile_id: str,
+        fields: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Ownership-guarded update of one draft row (status, cv_json, export
+        stamps). Returns the updated row or ``None`` when not owned."""
+        response = self._request(
+            "PATCH",
+            "/draft_cvs",
+            params={
+                "id": f"eq.{draft_cv_id}",
+                "user_id": f"eq.{user_profile_id}",
+                "select": self._DRAFT_CV_SELECT,
+            },
+            json={**fields, "updated_at": datetime.now(UTC).isoformat()},
             extra_headers={"Prefer": "return=representation"},
         )
         rows = response.json()

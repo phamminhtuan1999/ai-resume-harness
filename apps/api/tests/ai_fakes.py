@@ -472,6 +472,122 @@ def gemini_valid_resume_draft(**overrides: Any) -> SimpleNamespace:
     return gemini_response(text=json.dumps(valid_resume_draft(**overrides)))
 
 
+def valid_draft_cv(**overrides: Any) -> dict:
+    """A clean draft whose skills/keywords/metrics are all backed by the default
+    resume corpus and whose bullets start with strong action verbs."""
+    base = {
+        "candidate": {"full_name": "Model Guess", "email": "model@guess.test"},
+        "target_job": {"company": "Model Co", "title": "Model Role"},
+        "cv_strategy": {
+            "summary": "Lead with production FastAPI and Postgres experience.",
+            "primary_positioning": "Backend engineer moving toward AI roles.",
+            "keywords_prioritized": ["Python", "FastAPI"],
+            "keywords_excluded": [],
+        },
+        "professional_summary": "Senior Python engineer with FastAPI and AWS experience.",
+        "skills": [
+            {"category": "Programming Languages", "items": ["Python"]},
+            {"category": "Backend", "items": ["FastAPI"]},
+            {"category": "Databases", "items": ["Postgres"]},
+            {"category": "Cloud & DevOps", "items": ["AWS", "Docker"]},
+        ],
+        "work_experience": [
+            {
+                "company": "Acme",
+                "title": "Senior Engineer",
+                "location": "Remote",
+                "start_date": "2020",
+                "end_date": "2024",
+                "bullets": [
+                    {
+                        "text": "Built FastAPI services supporting production workflows.",
+                        "source_evidence": "Built FastAPI services",
+                        "truth_guard_status": "safe_to_use",
+                        "keywords_used": ["FastAPI"],
+                    },
+                    {
+                        "text": "Designed Postgres schemas to strengthen data reliability.",
+                        "source_evidence": "Postgres",
+                        "truth_guard_status": "needs_confirmation",
+                        "keywords_used": ["Postgres"],
+                    },
+                ],
+            }
+        ],
+        "projects": [],
+        "education": [],
+        "certifications": [],
+        "quality_notes": [],
+        "confidence_score": 0.82,
+    }
+    base.update(overrides)
+    return base
+
+
+def gemini_valid_draft_cv(**overrides: Any) -> SimpleNamespace:
+    return gemini_response(text=json.dumps(valid_draft_cv(**overrides)))
+
+
+def rich_candidate_profile() -> dict:
+    """A structured candidate_profile_json the deterministic fallback can build
+    a full CV from (verbatim)."""
+    return {
+        "basic_info": {
+            "full_name": "Dana Engineer",
+            "email": "dana@example.com",
+            "phone": "555-0100",
+            "location": "Remote US",
+            "linkedin_url": "https://linkedin.com/in/dana",
+            "github_url": None,
+            "portfolio_url": None,
+        },
+        "professional_summary": {
+            "candidate_summary": "Senior backend engineer with FastAPI depth.",
+            "primary_engineering_background": "Python backend systems",
+        },
+        "skills": {
+            "programming_languages": ["Python"],
+            "backend": ["FastAPI"],
+            "databases": ["Postgres"],
+            "cloud_devops": ["AWS", "Docker"],
+        },
+        "work_experience": [
+            {
+                "company": "Acme",
+                "title": "Senior Engineer",
+                "location": "Remote",
+                "start_date": "2020",
+                "end_date": "2024",
+                "bullet_points": [
+                    "Built FastAPI services for production workflows.",
+                    "Reduced p95 latency by 38% on the core API.",
+                ],
+            }
+        ],
+        "projects": [
+            {
+                "project_name": "Vector Search Demo",
+                "description": "A retrieval prototype.",
+                "tech_stack": ["Python", "Postgres"],
+                "key_features": ["Indexed a corpus with pgvector."],
+                "links": ["https://github.com/dana/vsd"],
+            }
+        ],
+        "education": [
+            {"school": "State University", "degree": "BSc", "field_of_study": "CS", "dates": "2016"}
+        ],
+        "certifications": [
+            {"name": "AWS SAA", "issuer": "Amazon", "date": "2022", "credential_url": None}
+        ],
+    }
+
+
+def profile_with_cv(profile_json: dict | None = None) -> dict:
+    row = dict(default_profile())
+    row["candidate_profile_json"] = profile_json if profile_json is not None else rich_candidate_profile()
+    return row
+
+
 def valid_cover_letter(**overrides: Any) -> dict:
     base = {
         "cover_letter": "Dear Acme AI Hiring Team,\n\nI am applying for the Senior AI Engineer role.",
@@ -606,6 +722,8 @@ class FakeData:
         self.upsert_calls = 0
         self.patched: dict | None = None
         self.saved_resume_version: dict | None = None
+        self.draft_cvs: list[dict] = []
+        self.draft_cv_updates: list[dict] = []
         self.saved_cover_letter: dict | None = None
         self.saved_roadmap: dict | None = None
         self.saved_interview_prep: dict | None = None
@@ -791,6 +909,68 @@ class FakeData:
 
     def get_latest_resume_version(self, *, match_id, user_profile_id):
         return self.saved_resume_version
+
+    # --- US-039 draft CV persistence / reads ---
+    def insert_draft_cv(
+        self,
+        *,
+        user_profile_id,
+        match_id,
+        job_id,
+        resume_id,
+        title,
+        status,
+        cv_json,
+        cv_strategy_json,
+        quality_notes_json,
+        confidence_score,
+        provider,
+        model_name,
+        rendering_json=None,
+    ):
+        row = {
+            "id": f"draftcv_{len(self.draft_cvs) + 1}",
+            "user_id": user_profile_id,
+            "match_id": match_id,
+            "job_id": job_id,
+            "resume_id": resume_id,
+            "version": len(self.draft_cvs) + 1,
+            "title": title,
+            "status": status,
+            "cv_json": cv_json,
+            "cv_strategy_json": cv_strategy_json,
+            "quality_notes_json": quality_notes_json,
+            "confidence_score": confidence_score,
+            "provider": provider,
+            "model_name": model_name,
+            "last_exported_pdf_at": None,
+            "last_exported_docx_at": None,
+            "rendering_json": rendering_json,
+        }
+        self.draft_cvs.append(row)
+        return row
+
+    def get_latest_draft_cv(self, *, match_id, user_profile_id):
+        owned = [r for r in self.draft_cvs if r["match_id"] == match_id]
+        return owned[-1] if owned else None
+
+    def list_draft_cv_versions(self, *, match_id, user_profile_id):
+        owned = [r for r in self.draft_cvs if r["match_id"] == match_id]
+        return list(reversed(owned))
+
+    def get_draft_cv_by_id(self, *, draft_cv_id, user_profile_id):
+        for row in self.draft_cvs:
+            if row["id"] == draft_cv_id and row.get("user_id") == user_profile_id:
+                return row
+        return None
+
+    def update_draft_cv(self, *, draft_cv_id, user_profile_id, fields):
+        for row in self.draft_cvs:
+            if row["id"] == draft_cv_id and row.get("user_id") == user_profile_id:
+                row.update(fields)
+                self.draft_cv_updates.append({"id": draft_cv_id, **fields})
+                return row
+        return None
 
     # --- US-033 cover letter persistence ---
     def save_cover_letter(self, *, match_id, user_profile_id, cover_letter):

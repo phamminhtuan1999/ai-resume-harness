@@ -4,7 +4,11 @@ Date: 2026-06-09
 
 ## Status
 
-Accepted
+Accepted (amended 2026-06-09: PDF renderer switched WeasyPrint → fpdf2, the
+pre-authorized fallback in §5/alternative 5 below — WeasyPrint's native
+Pango/cairo libraries are not available in the target environment. The render
+model remains the durable contract, so preview/PDF/DOCX stay identical and no
+other part of this decision changes.)
 
 ## Context
 
@@ -163,6 +167,25 @@ token-based and conservative (it can demote a legitimately reworded metric —
 demotion surfaces it for review rather than losing it silently); US-032's
 Markdown draft and the Draft CV overlap until a consolidation decision is
 made.
+
+## Implementation Note (2026-06-09)
+
+All four stories landed backend + web, 283 API tests + 130 web tests green:
+
+- **Renderer:** fpdf2 (pure Python) replaced WeasyPrint after its native
+  Pango/cairo deps proved unavailable locally; `app/services/export/pdf_renderer.py`
+  hand-lays the single-column template, `docx_renderer.py` uses python-docx.
+  fpdf2 actually yields cleaner ATS text extraction (asserted via pypdf).
+- **Gating proven:** `app/services/export/render_model.py` is the single
+  `is_renderable` boundary; export tests extract PDF/DOCX text and assert
+  approved/safe content present and `do_not_use_yet`/pending/rejected absent in
+  both formats, plus a PDF↔DOCX parity test.
+- **Web download:** authenticated export is browser-native (Clerk `getToken()` +
+  `fetch` + blob download in `draft-cv-export-buttons.tsx`) rather than a Next
+  route handler — no route-handler precedent existed in this non-standard Next
+  16 build, and CORS is already configured on the API.
+- **Unicode:** the PDF normalizes non-latin-1 name glyphs (core-font limit);
+  DOCX preserves full Unicode. Both asserted.
 
 ## Follow-Up
 

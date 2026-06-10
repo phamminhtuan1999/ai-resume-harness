@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 from app.auth import AuthenticatedUser, require_authenticated_user
 from app.main import app
 from app.services.ai.errors import AIWorkflowError, UnauthorizedError
-from app.services.ai.missing_skills_workflow import MissingSkillsWorkflow
 from app.services.ai.run_full_orchestrator import (
     BLOCKED_ERROR_CODE,
     STEP_MANIFEST,

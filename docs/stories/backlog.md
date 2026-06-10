@@ -18,7 +18,8 @@ the work is selected or when a product decision needs a durable place to land.
 | Period 6 Job URL And Profile Automation | Firecrawl-backed job URL intake, manual fetch fallback, resume-based candidate profile autofill, and provider safety boundaries. | sliced |
 | Period 7 Design System Overhaul | Brand, tokens, typography, primitives, app shell, landing, light/dark parity across all surfaces. | implemented |
 | Period 8 AI Assistant Intelligence Overhaul | Replace deterministic analysis with real AI (Gemini + fallback); add cover letter, insight card, dashboard summary, AI activity feed, and workflow panel on a shared backend AI-workflow foundation. | sliced |
-| Period 9 AI Draft CV Export | Truth-guarded structured draft CV generation (enhancement-protocol prompt + server guards), review/approval flow, and on-demand ATS-safe PDF/DOCX export rendered in the backend. | sliced |
+| Period 9 AI Draft CV Export | Truth-guarded structured draft CV generation (enhancement-protocol prompt + server guards), review/approval flow, and on-demand ATS-safe PDF/DOCX export rendered in the backend. | implemented |
+| Period 10 Draft CV Rendering Rework | Deterministic page-count policy clamping the model's recommendation, vendored embedded Unicode font profiles, page-aware layout configs, selection-only deterministic compression with a protected floor + report, and a bounded user page override. | implemented |
 
 ## Period 8 Epics (AI Overhaul)
 
@@ -44,6 +45,20 @@ table) and `docs/decisions/0013-draft-cv-export-architecture.md`.
 | Draft CV Generation | Protocol, JSON schema, `draft_cvs`, endpoints | US-039 |
 | Draft CV Review | Review/approval UI, versions, entry points | US-040 |
 | Draft CV Export | Standard template + PDF, then DOCX | US-041, US-042 |
+
+## Period 10 Epic (Draft CV Rendering Rework)
+
+Maps the Period 10 brief (`docs/stories/period-10/brief.md`) to stories. See
+`docs/stories/period-10/README.md` (adversarial restatements #1–#15) and
+`docs/decisions/0014-draft-cv-rendering-rework.md`. Strict order:
+US-043 → US-044 → US-045 → US-046.
+
+| Epic | Brief area | Stories |
+| --- | --- | --- |
+| Rendering Recommendation | §1 §2 §8: recommendation object, page policy, storage | US-043 |
+| Font System | §3 §6: font profiles, embedded fonts, DOCX mapping, fallback | US-044 |
+| Page-Aware Export | §4 §5 §8: render configs, compression, measure loop, override | US-045 |
+| Rendering UI | §7: recommendation panel, override control, copy | US-046 |
 
 ## Sliced Stories
 
@@ -87,10 +102,14 @@ table) and `docs/decisions/0013-draft-cv-export-architecture.md`.
 | US-036 | Dashboard AI Summary | normal | implemented (packet) |
 | US-037 | AI Activity Feed Descriptions | normal | implemented (packet) |
 | US-038 | AI Workflow Panel | normal | implemented (packet) |
-| US-039 | Draft CV Generation Workflow & Data Model | high-risk | planned (packet) |
-| US-040 | Draft CV Review & Approval UI | normal | planned (packet) |
-| US-041 | ATS Resume Template & PDF Export | high-risk | planned (packet) |
-| US-042 | Draft CV DOCX Export | normal | planned (packet) |
+| US-039 | Draft CV Generation Workflow & Data Model | high-risk | implemented (packet) |
+| US-040 | Draft CV Review & Approval UI | normal | implemented (packet) |
+| US-041 | ATS Resume Template & PDF Export | high-risk | implemented (packet) |
+| US-042 | Draft CV DOCX Export | normal | implemented (packet) |
+| US-043 | Draft CV Rendering Recommendation & Page-Count Policy | high-risk | implemented |
+| US-044 | Draft CV Font Profiles & Embedded Unicode Font Rendering | high-risk | implemented |
+| US-045 | Draft CV Page-Aware Layout & Deterministic Compression | high-risk | implemented |
+| US-046 | Draft CV UI: Rendering Recommendation & Page Override | normal | implemented |
 
 All Period 8 stories now have full packets under `docs/stories/period-8/`
 (high-risk folders for US-027/US-028/US-031/US-033; flat files otherwise) plus
@@ -109,6 +128,7 @@ scripts/sync-backlog.sh --write   # rewrite statuses from the matrix
 (e.g. `implemented (E2E pending)`). If the two ever disagree, the matrix wins.
 Harness status values are `planned → in_progress → implemented` (there is no
 "completed"; `implemented` is the terminal state). As of 2026-06-09:
-US-001–US-038 are `implemented`; US-039–US-042 (Period 9) are `planned` with
-full packets under `docs/stories/period-9/` (high-risk folders for
-US-039/US-041; flat files otherwise).
+US-001–US-042 are `implemented`. Period 9 (US-039–US-042) shipped backend + web
+with unit + integration proof; packets under `docs/stories/period-9/` (high-risk
+folders for US-039/US-041; flat files otherwise). Remaining suite-wide gaps:
+browser E2E, live-DB migration apply, and open-in-viewer platform checks.

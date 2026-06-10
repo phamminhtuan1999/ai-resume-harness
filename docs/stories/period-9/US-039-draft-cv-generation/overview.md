@@ -1,5 +1,18 @@
 # Overview
 
+## Status
+
+implemented (backend) — migration `0018_period9_draft_cvs.sql` (draft_cvs +
+`workflow_type` CHECK extended in place); `DraftCvOutput` schema; `DraftCvWorkflow`
+on the US-027 foundation with metrics/keyword/XYZ server guards + verbatim
+deterministic fallback; `draft_cvs` persistence helpers; `draft_cvs` router wired
+(`POST/GET /api/matches/{id}/draft-cv`, `GET /api/draft-cvs/{id}`). 21 new unit
+tests in `tests/test_draft_cv_workflow.py`; full API suite 283 passed; ruff clean.
+Migration `0018` **applied to the live Supabase DB** (2026-06-09): `draft_cvs`
+created with the unique `(match_id, version)` + both indexes + RLS, and the
+`ai_workflow_runs.workflow_type` CHECK now accepts `draft_cv` (verified by a
+constraint-accepted insert, rolled back). Remaining: browser E2E (suite-wide gap).
+
 ## Current Behavior
 
 ApplyWise generates match-scoped application materials as text: tailored

@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import (
     activities,
     dashboard,
+    draft_cvs,
     health,
     interview_prep,
     jobs,
@@ -45,3 +46,5 @@ app.include_router(
     prefix="/api/resume-suggestions",
     tags=["resume-suggestions"],
 )
+# Mounted at /api: owns both /api/matches/{id}/draft-cv and /api/draft-cvs/{id}.
+app.include_router(draft_cvs.router, prefix="/api", tags=["draft-cvs"])

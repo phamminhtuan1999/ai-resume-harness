@@ -14,6 +14,28 @@ post-MVP list (`docs/product/mvp-scope.md`), which US-032 explicitly deferred
 ("the Markdown Preview component must be designed to accept a future
 'Download PDF' button").
 
+## Status (2026-06-09)
+
+**All four stories implemented (backend + web), unit + integration proven.**
+API suite **283 passed**, web suite **130 passed**, tsc + ruff + eslint clean.
+Two deviations from the plan, both recorded in
+`docs/decisions/0013-draft-cv-export-architecture.md`:
+
+- **PDF renderer is fpdf2, not WeasyPrint** — WeasyPrint's native Pango/cairo
+  libraries are unavailable in this environment (the decision's pre-authorized
+  fallback). The shared render model is the durable contract, so preview, PDF,
+  and DOCX remain identical.
+- **Web export download is browser-native** (Clerk `getToken()` + `fetch` +
+  blob) rather than a Next route handler — no route-handler precedent exists in
+  this non-standard Next 16 build and CORS is already configured.
+
+Migration `0018` was **applied to the live Supabase DB** (2026-06-09 via `psql`
++ `SUPABASE_DB_URL`): `draft_cvs` created (unique `(match_id, version)`, both
+indexes, RLS) and the `ai_workflow_runs.workflow_type` CHECK widened to accept
+`draft_cv` (verified). Known remaining gaps (consistent with the rest of the
+suite): browser E2E and open-in-viewer/Word platform checks are pending (no
+browser in this run).
+
 ## Direction (accepted decisions)
 
 Set by `docs/decisions/0013-draft-cv-export-architecture.md` (which inherits

@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     supabase_url: str = Field(default="", alias="SUPABASE_URL")
     supabase_service_role_key: str = Field(default="", alias="SUPABASE_SERVICE_ROLE_KEY")
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
-    gemini_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_MODEL")
+    gemini_model: str = Field(default="gemini-3.5-flash", alias="GEMINI_MODEL")
     firecrawl_api_key: str = Field(default="", alias="FIRECRAWL_API_KEY")
     firecrawl_api_base: str = Field(
         default="https://api.firecrawl.dev", alias="FIRECRAWL_API_BASE"

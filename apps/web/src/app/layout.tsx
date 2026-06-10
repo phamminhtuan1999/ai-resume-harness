@@ -52,7 +52,14 @@ export default function RootLayout({
   const fontVars = `${geistSans.variable} ${geistMono.variable} ${sora.variable}`;
 
   const shell = (
-    <html lang="en" className={`${fontVars} h-full`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${fontVars} h-full`}
+      // globals.css sets `html { scroll-behavior: smooth }`; this tells Next to
+      // jump instantly on route transitions while keeping smooth in-page anchors.
+      data-scroll-behavior="smooth"
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>

@@ -353,6 +353,30 @@ profile, parsed resume sections, job keywords, and accepted suggestions —
 copying source text **verbatim** (verbatim ⇒ `safe_to_use` by construction),
 `confidence_score = 0.0`.
 
+### Rendering Recommendation & Page Policy (Period 10, US-043)
+
+Direction: `docs/decisions/0014-draft-cv-rendering-rework.md` §1/§6.
+
+- Before the prompt, the server computes a **deterministic page policy** from
+  `user_profiles.years_of_experience` (fallback: conservative span-parse of
+  profile work-history dates; else default band target 1 / max 2 +
+  `yoe_unknown` note). Bands: 0–2 y → 1/1; 3–7 y → 1, with 2 allowed at ≥ 5 y
+  or on the evidence-volume trigger; 8–12 y → 1–2, preferring 2 on
+  senior/staff signals; 12+ y → 2, with 3 allowed only behind the exceptional
+  gate (principal/staff/distinguished/research titles or publication/patent
+  markers — mechanical proxies, never the model's say-so). Job seniority is
+  optional enrichment.
+- The prompt states the policy and target so the model **words bullets to
+  fit** (wording-to-fit is generation-time only; export never rewrites text).
+- The model output gains `rendering_recommendation` (`recommended_page_count`,
+  `page_count_reason`, `font_profile`, `layout_density`,
+  `compression_strategy[]` rationale). The server **clamps** the page count
+  into the policy's allowed range (`policy_clamped` quality note on
+  disagreement); reason/density/strategy are display-only.
+- Stored in `draft_cvs.rendering_json` (clamped recommendation + policy
+  snapshot + pre-clamp model values). The fallback emits the policy target
+  with a templated reason and `modern_latex`.
+
 ## Draft CV Export Rules (Period 9)
 
 Export (US-041 PDF, US-042 DOCX) is **not an AI run** — no model call, no
@@ -377,6 +401,43 @@ Export (US-041 PDF, US-042 DOCX) is **not an AI run** — no model call, no
   mutate nothing.
 - Export logs carry draft id/format/latency only — never candidate or CV
   text.
+
+### Rendering Rework (Period 10, US-044/US-045)
+
+Direction: `docs/decisions/0014-draft-cv-rendering-rework.md` §2–§5.
+
+- **Font profiles** (`rendering_json.recommendation.font_profile`; default
+  `modern_latex`): PDF embeds vendored libre TTFs (subsetted) —
+  `modern_latex` → CMU Serif, `ats_clean` → Liberation Sans, `classic_latex`
+  → Liberation Serif. The embedded path is full Unicode (real `•`/`–`/`—`,
+  diacritics). DOCX names exactly one universal font per profile
+  (Times New Roman / Arial / Times New Roman) — OOXML has no fallback chain
+  and python-docx cannot embed. A missing/corrupt font asset falls back to
+  core fonts + ASCII transliteration with a visible note; a font problem
+  never fails an export.
+- **Page-aware layout**: a typed `RenderConfig` keyed by (page target,
+  density) — margins, pt sizes (name 18 / heading 12 / body 10 / metadata 9),
+  line factors, per-entry bullet caps, project limit, summary cap. The
+  240-char bullet cap stays.
+- **Compression is selection-only, ordered, deterministic**, inside the
+  shared render-model build: progressive levels (per-entry caps → older-entry
+  detail → project limit + skill dedupe → summary sentence-boundary
+  truncation). It can only remove renderable content — never rewrite or add.
+  A **protected floor** (bullets with impact metrics or prioritized-keyword
+  evidence) is never dropped; if the floor alone overflows the target, export
+  proceeds with a `page_overflow` note. Page count is enforced by a bounded
+  measure loop on the PDF (render → count → next level); DOCX receives the
+  identical compressed model (content parity guaranteed, page parity
+  best-effort).
+- Every compression run produces a **machine-readable report** (steps,
+  every dropped item, measured pages, overflow) returned by
+  `export-preview` — never silently shrink a user-approved CV.
+- **User override**: `?pages=N` on export/export-preview, validated against
+  the stored policy range (`invalid_page_override` otherwise); below the
+  recommendation the server computes warning copy. Overrides are render
+  parameters — never stored, never a new version. Legacy rows (null
+  `rendering_json`) render with Period 9 behavior and reject `pages` with
+  `no_rendering_recommendation`.
 
 ## Roadmap Generator
 

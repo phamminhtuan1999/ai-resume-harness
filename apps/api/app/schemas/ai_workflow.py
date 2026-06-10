@@ -20,6 +20,7 @@ WorkflowType = Literal[
     "assistant_insight",
     "dashboard_summary",
     "activity_description",
+    "draft_cv",
 ]
 WorkflowStatus = Literal["queued", "running", "completed", "needs_review", "failed"]
 SubjectType = Literal["match", "resume", "job", "dashboard"]

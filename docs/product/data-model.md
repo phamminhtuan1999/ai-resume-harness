@@ -339,13 +339,26 @@ Required fields:
   `keywords_prioritized`, `keywords_excluded [{keyword, reason:
   unsupported | weak_evidence | irrelevant}]`
 - `quality_notes_json jsonb` — server guard findings (`invented_metric`,
-  `metric_dropped`, `weak_action_verb`)
+  `metric_dropped`, `weak_action_verb`; Period 10 adds `policy_clamped`,
+  `yoe_unknown`)
 - `confidence_score numeric`
 - `provider text` — `gemini | deterministic`
 - `model_name text`
 - `last_exported_pdf_at timestamptz`, `last_exported_docx_at timestamptz` —
   exports are rendered on demand and streamed; **no export URLs and no binary
   storage** (decision 0013)
+- `rendering_json jsonb` (nullable; Period 10, migration `0019`, US-043) —
+  rendering metadata, kept out of the content-only `cv_json`:
+  `recommendation` (the **policy-clamped** `recommended_page_count`,
+  `page_count_reason`, `font_profile`
+  (`modern_latex | ats_clean | classic_latex`), `layout_density`
+  (`compact | standard | spacious`), display-only `compression_strategy[]`),
+  `page_policy` (server-computed snapshot: `target_pages`, `max_pages`,
+  `yoe`, `yoe_source`, `basis`, `seniority_signal`, `exceptional`,
+  `evidence_volume`), and `model_recommendation` (the model's pre-clamp
+  values, for audit). Null on pre-0019 rows → renderers use legacy defaults
+  and the UI offers regeneration. See
+  `docs/decisions/0014-draft-cv-rendering-rework.md`.
 - timestamps
 
 Indexes: `(user_id, job_id, created_at desc)` for "saved under the job
