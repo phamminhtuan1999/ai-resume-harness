@@ -20,6 +20,7 @@ the work is selected or when a product decision needs a durable place to land.
 | Period 8 AI Assistant Intelligence Overhaul | Replace deterministic analysis with real AI (Gemini + fallback); add cover letter, insight card, dashboard summary, AI activity feed, and workflow panel on a shared backend AI-workflow foundation. | sliced |
 | Period 9 AI Draft CV Export | Truth-guarded structured draft CV generation (enhancement-protocol prompt + server guards), review/approval flow, and on-demand ATS-safe PDF/DOCX export rendered in the backend. | implemented |
 | Period 10 Draft CV Rendering Rework | Deterministic page-count policy clamping the model's recommendation, vendored embedded Unicode font profiles, page-aware layout configs, selection-only deterministic compression with a protected floor + report, and a bounded user page override. | implemented |
+| Period 11 Decision-Based Job Analysis | Refactor the job analysis page from a module-output dashboard into a decision-based assistant: server-side decision engine + unified analysis package, recommendation-driven next actions and material guardrails, one Refresh Analysis, workflow panel behind Advanced Details, learning-target tracker status, decision history. | sliced |
 
 ## Period 8 Epics (AI Overhaul)
 
@@ -59,6 +60,28 @@ US-043 → US-044 → US-045 → US-046.
 | Font System | §3 §6: font profiles, embedded fonts, DOCX mapping, fallback | US-044 |
 | Page-Aware Export | §4 §5 §8: render configs, compression, measure loop, override | US-045 |
 | Rendering UI | §7: recommendation panel, override control, copy | US-046 |
+
+## Period 11 Epic (Decision-Based Job Analysis)
+
+Maps the Period 11 brief (`docs/stories/period-11/brief.md`, also at repo
+root `applywise_job_analysis_flow_refactor_user_stories.md`) to stories. See
+`docs/stories/period-11/README.md` (adversarial restatements #1–#18). The
+direction is recorded in `docs/decisions/0015-job-analysis-decision-engine.md`
+(accepted at slicing; amended 2026-06-10 after a four-persona requirements
+review). Sequencing: US-047 first, then US-048 →
+US-049 → US-050; US-051–US-054 ordered for review size (US-052 after
+US-049; US-054 after US-047 + US-051).
+
+| Epic | Brief area | Stories |
+| --- | --- | --- |
+| Decision Engine & Package | Epic 7, decision rules/labels, material readiness, confidence reasons, decision storage | US-047 |
+| Decision-First Overview | Epics 1, 5 (decision header, recommendation, evidence, confidence) | US-048 |
+| Next Actions & Guardrails | Epics 2, 8, 10 (action mapping, sidebar, material readiness, generate-anyway) | US-049 |
+| Refresh Consolidation | Epic 3 (one Refresh Analysis, cost control) | US-050 |
+| Tabs & Advanced Details | Epics 4, 6 (workflow relocation, six tabs, emphasis) | US-051 |
+| Learning Target Flow | Epic 9 (tracker status, counts, roadmap linkage) | US-052 |
+| Naming & States | Epics 11, 12 (Job Analysis naming, empty/error states, profile completeness) | US-053 |
+| Decision History | Epic 13 (snapshot history view) | US-054 |
 
 ## Sliced Stories
 
@@ -110,6 +133,14 @@ US-043 → US-044 → US-045 → US-046.
 | US-044 | Draft CV Font Profiles & Embedded Unicode Font Rendering | high-risk | implemented |
 | US-045 | Draft CV Page-Aware Layout & Deterministic Compression | high-risk | implemented |
 | US-046 | Draft CV UI: Rendering Recommendation & Page Override | normal | implemented |
+| US-047 | Job Analysis Decision Engine & Unified Analysis Package | high-risk | planned |
+| US-048 | Decision-First Overview UI (Header, Recommendation, Evidence) | normal | planned |
+| US-049 | Recommendation-Based Next Actions & Material Guardrails | normal | planned |
+| US-050 | Refresh Analysis Consolidation | normal | planned |
+| US-051 | Detail Tabs & Advanced Analysis Details | normal | planned |
+| US-052 | Learning Target Tracker Flow | high-risk | planned |
+| US-053 | Page Naming, Empty/Error States & Profile Completeness | normal | planned |
+| US-054 | Analysis Decision History View | normal | planned |
 
 All Period 8 stories now have full packets under `docs/stories/period-8/`
 (high-risk folders for US-027/US-028/US-031/US-033; flat files otherwise) plus

@@ -15,6 +15,7 @@ until the rendered page count fits the target or the protected floor wins.
 
 from __future__ import annotations
 
+import logging
 import unicodedata
 from dataclasses import dataclass
 from typing import Any
@@ -23,6 +24,14 @@ from app.services.export.compress import MAX_LEVEL, build_compressed_render_mode
 from app.services.export.fonts import resolve_font_profile, resolve_pdf_fonts
 from app.services.export.options import RenderOptions
 from app.services.export.render_config import RenderConfig, get_render_config
+
+# fpdf2 subsets embedded TTFs via fontTools, which warns "TeX NOT subset;
+# don't know how to subset; dropped" for the CMU Serif font's legacy `TeX `
+# table (TeX math metrics, irrelevant to PDF rendering — the glyph outlines
+# embed fine). The measure loop renders several times, so this repeats per
+# request; quiet it to keep export logs clean. Real subsetting errors still
+# surface at ERROR.
+logging.getLogger("fontTools.subset").setLevel(logging.ERROR)
 
 _PAGE_FORMAT = "Letter"
 

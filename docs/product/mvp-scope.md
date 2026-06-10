@@ -58,6 +58,7 @@ The MVP is complete when a user can:
 | Period 8 | AI assistant intelligence overhaul: replace deterministic analysis with real AI (Gemini + fallback) on a shared backend workflow foundation; add cover letter, insight card, dashboard summary, AI activity feed, and workflow panel. | US-027 through US-038 |
 | Period 9 | AI Draft CV export: truth-guarded structured CV generation with enhancement-protocol guards, review/approval flow, and ATS-safe PDF/DOCX export on the standard resume template. | US-039 through US-042 |
 | Period 10 | Draft CV rendering rework: deterministic page-count policy clamping the model's recommendation, embedded Unicode font profiles, page-aware layout with selection-only compression + report, and a bounded user page override. | US-043 through US-046 |
+| Period 11 | Decision-based job analysis experience: server-side decision engine + unified analysis package, decision-first overview, recommendation-driven next actions with material guardrails, one Refresh Analysis, workflow panel behind Advanced Details, learning-target tracker status, and decision history. | US-047 through US-054 |
 
 ## Period 1 Exit Criteria
 
