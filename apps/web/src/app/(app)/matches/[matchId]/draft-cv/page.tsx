@@ -105,7 +105,7 @@ export default async function DraftCvPage({ params }: DraftCvPageProps) {
               </>
             ) : (
               <span>
-                A tailored, truth-guarded CV you can review and export as PDF or DOCX.
+                A tailored, truth-guarded CV you can review and export as PDF, DOCX, or Markdown.
               </span>
             )}
           </CardContent>

@@ -2,7 +2,7 @@
 
 ## Status
 
-planned
+implemented (verified 2026-06-11)
 
 ## Lane
 
@@ -55,8 +55,8 @@ all three formats contain exactly the same truth-gated content.
 | Layer | Expected proof |
 | --- | --- |
 | Unit | Markdown serializer renders only renderable bullets; identical bullet set to the export render model fixtures. |
-| Integration | API: export?format=markdown returns the gated document; 404/ownership behavior matches PDF path. |
-| E2E | Old route redirects; Markdown export downloads; PDF and Markdown contain the same bullet texts for a seeded draft. |
+| Integration | API: the markdown export route returns the gated document; empty-cv/ownership behavior matches the PDF path. |
+| E2E | Old route redirects; Markdown export downloads with gated content (PDF↔Markdown bullet-set parity is proven at the API layer, where both documents are text-extractable). |
 | Platform | n/a |
 
 ## Harness Delta
@@ -66,4 +66,26 @@ Intake #47, decision 0019. Removes one workflow from the manifest docs
 
 ## Evidence
 
-Added after verification.
+Implemented 2026-06-11.
+
+- **Removed (API):** `ResumeDraftWorkflow`, `resume_draft_deterministic.py`,
+  `schemas/resume_draft.py`, the three `/matches/{id}/tailored-resume` routes,
+  the `resume_versions` data-client accessors, `test_resume_draft_workflow.py`,
+  and the resume-draft fakes. `workflow_type = "resume_draft"` stays in the
+  schema Literal so historic run rows keep validating.
+- **Removed (web):** resume-draft page + `ResumeDraftForm` +
+  `resume-draft-generator.mjs` (+ its test), `generateResumeDraftAction`,
+  `getResumeDraftDetail` + `ResumeVersion` type; `match-tabs.mjs` dropped the
+  `resume-draft` segment; suggestions-page copy/link now point at the Tailored
+  CV. The old route 308-redirects to `draft-cv` via `next.config.ts`.
+- **Added:** `app/services/export/markdown_renderer.py` over the shared render
+  model; `POST /api/draft-cvs/{id}/export/markdown` (no page/font params,
+  status-only stamp — no new column); `Export Markdown` button +
+  `exportFileName`/`exportUrl` markdown handling in `draft-cv-view.mjs`.
+- **Proof:** API pytest 403 passed (incl. markdown gating/structure/unicode,
+  bullet-set parity vs the render model and vs the PDF, router stream/stamp +
+  shared empty-cv guard). Web: 219 unit tests, eslint + tsc clean. Playwright
+  14/14 incl. new `period13.spec.ts` (old-route redirect; Markdown download
+  contains the safe bullet, never the `do_not_use_yet` bullet). Product docs
+  (overview, ai-workflows, data-model) updated; `resume_versions` documented
+  dormant.

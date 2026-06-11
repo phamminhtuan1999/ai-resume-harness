@@ -23,10 +23,11 @@ export const MATCH_TABS = [
 // of these still lights up the owning tab (spatial consistency). The roadmap
 // route maps to NO tab on purpose — it's reached through Learning Target
 // actions and Skill Gaps, not a seventh tab (US-051 AC).
+// "resume-draft" is gone on purpose: the route was retired by US-059 (decision
+// 0019) and old links redirect to draft-cv in next.config.ts.
 const SEGMENT_TO_TAB = {
   gaps: "gaps",
   "resume-suggestions": "resume",
-  "resume-draft": "resume",
   "draft-cv": "materials",
   "cover-letter": "materials",
   "interview-prep": "interview",

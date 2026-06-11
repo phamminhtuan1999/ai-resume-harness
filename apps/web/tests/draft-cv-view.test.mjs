@@ -8,6 +8,7 @@ import {
   compressionSummary,
   draftStatusLabel,
   draftStatusVariant,
+  exportFileName,
   exportUrl,
   fontOptions,
   isRenderable,
@@ -177,6 +178,19 @@ test("exportUrl appends font only when overriding the stored profile", () => {
     exportUrl(base, "d1", "docx", 2, 1, "classic_latex", "ats_clean"),
     "https://api.test/api/draft-cvs/d1/export/docx?pages=2&font=classic_latex"
   );
+});
+
+test("exportUrl never appends overrides for markdown (US-059)", () => {
+  assert.equal(
+    exportUrl("https://api.test", "d1", "markdown", 2, 1, "classic_latex", "ats_clean"),
+    "https://api.test/api/draft-cvs/d1/export/markdown"
+  );
+});
+
+test("exportFileName maps the markdown route to a .md file", () => {
+  assert.equal(exportFileName("dana-acme", "pdf"), "dana-acme.pdf");
+  assert.equal(exportFileName("dana-acme", "docx"), "dana-acme.docx");
+  assert.equal(exportFileName("dana-acme", "markdown"), "dana-acme.md");
 });
 
 test("fontOptions lists the three profiles with display labels", () => {

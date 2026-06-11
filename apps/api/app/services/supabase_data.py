@@ -600,57 +600,9 @@ class SupabaseDataClient:
         rows = response.json()
         return rows[0] if rows else None
 
-    # --- Tailored resume draft (US-032) ------------------------------------------
-
-    def insert_resume_version(
-        self,
-        *,
-        user_profile_id: str,
-        resume_id: str | None,
-        job_id: str | None,
-        match_id: str,
-        title: str,
-        content_markdown: str,
-    ) -> dict[str, Any]:
-        """Append a generated Markdown resume version for a match (history kept)."""
-        now = datetime.now(UTC).isoformat()
-        response = self._request(
-            "POST",
-            "/resume_versions",
-            params={"select": "id"},
-            json={
-                "user_id": user_profile_id,
-                "resume_id": resume_id,
-                "job_id": job_id,
-                "match_id": match_id,
-                "title": title,
-                "content_markdown": content_markdown,
-                "created_at": now,
-                "updated_at": now,
-            },
-            extra_headers={"Prefer": "return=representation"},
-        )
-        rows = response.json()
-        if not rows:
-            raise SupabaseDataError("Resume version insert returned no rows.")
-        return rows[0]
-
-    def get_latest_resume_version(
-        self, *, match_id: str, user_profile_id: str
-    ) -> dict[str, Any] | None:
-        response = self._request(
-            "GET",
-            "/resume_versions",
-            params={
-                "select": "id,match_id,title,content_markdown,created_at,updated_at",
-                "match_id": f"eq.{match_id}",
-                "user_id": f"eq.{user_profile_id}",
-                "order": "created_at.desc",
-                "limit": "1",
-            },
-        )
-        rows = response.json()
-        return rows[0] if rows else None
+    # US-032's resume_versions accessors were retired by US-059 / decision 0019.
+    # The table stays in the schema (dormant, no new writes) until a later
+    # cleanup migration.
 
     # --- Cover letter (US-033) ---------------------------------------------------
 

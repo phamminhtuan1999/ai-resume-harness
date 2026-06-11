@@ -166,7 +166,8 @@ export function overrideWarning(recommendedPages, selectedPages) {
 }
 
 /* Build the export URL with optional page/font overrides (only when they
-   differ from the stored recommendation, to keep the default path clean). */
+   differ from the stored recommendation, to keep the default path clean).
+   Markdown (US-059) has no pagination or typography, so overrides never apply. */
 export function exportUrl(
   apiBaseUrl,
   draftCvId,
@@ -177,6 +178,7 @@ export function exportUrl(
   recommendedFont
 ) {
   const base = `${apiBaseUrl}/api/draft-cvs/${draftCvId}/export/${format}`;
+  if (format === "markdown") return base;
   const params = [];
   if (selectedPages && selectedPages !== recommendedPages) {
     params.push(`pages=${selectedPages}`);
@@ -185,6 +187,13 @@ export function exportUrl(
     params.push(`font=${selectedFont}`);
   }
   return params.length ? `${base}?${params.join("&")}` : base;
+}
+
+/* Download filename for an export: the route format and the file extension
+   differ only for Markdown ("markdown" route → ".md" file). */
+export function exportFileName(fileSlug, format) {
+  const extension = format === "markdown" ? "md" : format;
+  return `${fileSlug}.${extension}`;
 }
 
 /* Human summary of a compression report (US-045) for the export area. */

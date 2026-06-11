@@ -18,6 +18,7 @@ export const SEED = {
   resumeId: "11111111-1111-4111-8111-111111111111",
   jobId: "22222222-2222-4222-8222-222222222222",
   matchId: "33333333-3333-4333-8333-333333333333",
+  draftCvId: "44444444-4444-4444-8444-444444444444",
 };
 
 // Resolve the test user's user_profiles.id from their Clerk user id. The app
@@ -226,12 +227,85 @@ export async function seedAnalyzedMatch(profileId: string): Promise<{ matchId: s
   return { matchId: SEED.matchId };
 }
 
+// Seed one exportable Draft CV version for the seeded match (US-059). One
+// renderable bullet plus one do_not_use_yet bullet prove the export gating in
+// the browser; rendering_json stays null so the page uses the legacy render
+// path (no page/font pickers — just the export buttons).
+export async function seedDraftCv(profileId: string): Promise<{ draftCvId: string }> {
+  const db = adminClient();
+  const { error } = await db.from("draft_cvs").upsert(
+    {
+      id: SEED.draftCvId,
+      user_id: profileId,
+      match_id: SEED.matchId,
+      job_id: SEED.jobId,
+      resume_id: SEED.resumeId,
+      version: 1,
+      title: "Draft CV — Northwind AI Applied AI Engineer v1",
+      status: "ready_to_export",
+      cv_json: {
+        candidate: { full_name: "Dana E2E Engineer", email: "dana.e2e@example.com" },
+        target_job: { company: "Northwind AI", title: "Applied AI Engineer" },
+        professional_summary: "Backend engineer moving into applied AI.",
+        skills: [{ category: "Backend", items: ["Python", "FastAPI"] }],
+        work_experience: [
+          {
+            company: "Acme",
+            title: "Engineer",
+            location: "Remote",
+            start_date: "2020",
+            end_date: "2024",
+            bullets: [
+              {
+                id: "b-safe",
+                text: "Engineered E2ESafeAlpha services in FastAPI.",
+                source_evidence: "resume",
+                truth_guard_status: "safe_to_use",
+                keywords_used: ["FastAPI"],
+                user_action: "pending",
+              },
+              {
+                id: "b-blocked",
+                text: "Improved E2EForbiddenBeta throughput.",
+                source_evidence: "",
+                truth_guard_status: "do_not_use_yet",
+                keywords_used: [],
+                user_action: "pending",
+              },
+            ],
+          },
+        ],
+        projects: [],
+        education: [],
+        certifications: [],
+      },
+      cv_strategy_json: {
+        summary: "Lead with FastAPI evidence.",
+        primary_positioning: "Backend engineer moving toward AI roles.",
+        keywords_prioritized: ["FastAPI"],
+        keywords_excluded: [],
+      },
+      quality_notes_json: [],
+      confidence_score: 0.9,
+      provider: "deterministic",
+      model_name: "deterministic",
+      rendering_json: null,
+      created_at: "2026-06-10T13:30:00Z",
+      updated_at: "2026-06-10T13:30:00Z",
+    },
+    { onConflict: "id" }
+  );
+  if (error) throw new Error(`Could not seed draft CV: ${error.message}`);
+  return { draftCvId: SEED.draftCvId };
+}
+
 // Remove everything the seed created for this profile (including any learning
 // target the test saved, and any resume/job deletion audit rows a US-055 test
 // wrote). Exact, so it never leaves residue in the live DB.
 export async function teardownAnalyzedMatch(profileId: string): Promise<void> {
   const db = adminClient();
   await db.from("applications").delete().eq("user_id", profileId);
+  await db.from("draft_cvs").delete().eq("id", SEED.draftCvId);
   await db.from("analysis_decisions").delete().eq("match_id", SEED.matchId);
   await db.from("matches").delete().eq("id", SEED.matchId);
   await db.from("jobs").delete().eq("id", SEED.jobId);
@@ -240,7 +314,7 @@ export async function teardownAnalyzedMatch(profileId: string): Promise<void> {
     .from("activity_feed")
     .delete()
     .eq("user_id", profileId)
-    .in("activity_type", ["resume.deleted", "job.deleted"]);
+    .in("activity_type", ["resume.deleted", "job.deleted", "draft_cv.exported"]);
 }
 
 // True if a row with the given id still exists in the table. Used by the

@@ -263,6 +263,49 @@ def test_export_docx_streams(
     assert any("last_exported_docx_at" in u for u in data.draft_cv_updates)
 
 
+def test_export_markdown_streams_and_stamps_status_only(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _authenticate()
+    data = FakeData()
+    cv_json = _seed_cv_json(
+        [
+            _bullet("Built Approvedalpha.", "safe_to_use"),
+            _bullet("Improved Forbiddenepsilon throughput.", "do_not_use_yet"),
+        ]
+    )
+    data.insert_draft_cv(
+        user_profile_id="profile_1",
+        match_id="match_1",
+        job_id="job_1",
+        resume_id="resume_1",
+        title="Draft CV — Acme Senior Engineer",
+        status="ready_to_export",
+        cv_json=cv_json,
+        cv_strategy_json={},
+        quality_notes_json=[],
+        confidence_score=0.8,
+        provider="gemini",
+        model_name="m",
+    )
+    _wire(monkeypatch, data)
+
+    response = client.post("/api/draft-cvs/draftcv_1/export/markdown")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/markdown")
+    assert response.headers["content-disposition"].endswith('.md"')
+    # Same gating boundary as PDF/DOCX: render-model output only.
+    assert "Built Approvedalpha." in response.text
+    assert "Forbiddenepsilon" not in response.text
+    # draft_cvs has no markdown timestamp column: status flip + activity only.
+    assert all(
+        "last_exported_pdf_at" not in u and "last_exported_docx_at" not in u
+        for u in data.draft_cv_updates
+    )
+    assert data.draft_cvs[-1]["status"] == "exported"
+    assert data.activities[-1]["activity_type"] == "draft_cv.exported"
+
+
 def test_export_empty_cv_is_422(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -291,6 +334,12 @@ def test_export_empty_cv_is_422(
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "empty_cv"
     # Nothing exported -> no stamp, no activity.
+    assert data.draft_cv_updates == []
+
+    # The markdown route shares the same guard.
+    response = client.post("/api/draft-cvs/draftcv_1/export/markdown")
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "empty_cv"
     assert data.draft_cv_updates == []
 
 

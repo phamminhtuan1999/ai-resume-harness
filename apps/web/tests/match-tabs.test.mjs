@@ -57,8 +57,9 @@ test("tabForPathname resolves the active tab, including secondary sub-routes", (
   assert.equal(tabForPathname("/matches/m1/", "m1"), "overview");
   assert.equal(tabForPathname("/matches/m1/gaps", "m1"), "gaps");
   assert.equal(tabForPathname("/matches/m1/resume-suggestions", "m1"), "resume");
-  // The older tailored-resume route still lights up Resume Strategy.
-  assert.equal(tabForPathname("/matches/m1/resume-draft", "m1"), "resume");
+  // resume-draft was retired by US-059; the route redirects in next.config.ts
+  // and no longer owns a tab.
+  assert.equal(tabForPathname("/matches/m1/resume-draft", "m1"), null);
   assert.equal(tabForPathname("/matches/m1/draft-cv", "m1"), "materials");
   // Cover letter shares the Application Materials tab.
   assert.equal(tabForPathname("/matches/m1/cover-letter", "m1"), "materials");

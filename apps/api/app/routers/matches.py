@@ -29,7 +29,6 @@ from app.services.ai.cover_letter_workflow import CoverLetterWorkflow
 from app.services.ai.errors import AIWorkflowError
 from app.services.ai.match_analysis_workflow import MatchAnalysisWorkflow
 from app.services.ai.missing_skills_workflow import MissingSkillsWorkflow
-from app.services.ai.resume_draft_workflow import ResumeDraftWorkflow
 from app.services.ai.resume_suggestions_workflow import ResumeSuggestionsWorkflow
 from app.services.ai.roadmap_workflow import RoadmapWorkflow
 from app.services.ai.run_full_orchestrator import (
@@ -332,39 +331,9 @@ def get_resume_suggestions(
     )
 
 
-# --- US-032 Tailored resume draft -----------------------------------------------
-
-
-@router.post("/{match_id}/tailored-resume")
-def tailored_resume(
-    match_id: str,
-    request: Request,
-    user: AuthenticatedUser = Depends(require_authenticated_user),
-) -> JSONResponse:
-    return _run_match_workflow(
-        ResumeDraftWorkflow, match_id=match_id, request=request, user=user, regenerate=False
-    )
-
-
-@router.post("/{match_id}/tailored-resume/regenerate")
-def regenerate_tailored_resume(
-    match_id: str,
-    request: Request,
-    user: AuthenticatedUser = Depends(require_authenticated_user),
-) -> JSONResponse:
-    return _run_match_workflow(
-        ResumeDraftWorkflow, match_id=match_id, request=request, user=user, regenerate=True
-    )
-
-
-@router.get("/{match_id}/tailored-resume")
-def get_tailored_resume(
-    match_id: str,
-    user: AuthenticatedUser = Depends(require_authenticated_user),
-) -> JSONResponse:
-    return _get_saved(
-        match_id, user, "get_latest_resume_version", "Resume draft not found."
-    )
+# US-032's /tailored-resume endpoints (Markdown resume draft) were retired by
+# US-059 / decision 0019: the structured Draft CV is the single tailored
+# artifact, and Markdown is one of its export formats.
 
 
 # --- US-033 Cover letter --------------------------------------------------------

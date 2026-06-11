@@ -106,7 +106,7 @@ export default async function ResumeSuggestionsPage({ params }: ResumeSuggestion
             <p className="text-sm leading-6 text-muted-foreground">
               Each suggestion carries a Truth Guard label so unsupported claims stay separate from
               wording already backed by resume evidence. Edit the text, then Accept or Reject — only
-              accepted, supported suggestions feed the tailored resume draft.
+              accepted, supported suggestions shape the Tailored CV.
             </p>
           </CardContent>
         </Card>
@@ -124,10 +124,10 @@ export default async function ResumeSuggestionsPage({ params }: ResumeSuggestion
             <div className="flex flex-col gap-3">
               <ResumeSuggestionsForm matchId={match.id} />
               <Link
-                href={`/matches/${match.id}/resume-draft`}
+                href={`/matches/${match.id}/draft-cv`}
                 className={buttonVariants({ variant: "outline" })}
               >
-                Open resume draft
+                Open Tailored CV
               </Link>
             </div>
           </CardContent>

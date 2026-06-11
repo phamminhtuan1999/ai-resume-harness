@@ -78,6 +78,8 @@ const STEP_LABELS = {
   match_analysis: "Match analysis",
   missing_skills: "Missing skills",
   resume_suggestions: "Resume suggestions",
+  // Generation retired by US-059 (decision 0019); the label stays so historic
+  // resume_draft activity rows still render a readable step name.
   resume_draft: "Resume draft",
   cover_letter: "Cover letter",
   roadmap: "Roadmap",

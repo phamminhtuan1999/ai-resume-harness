@@ -405,8 +405,10 @@ Truth Guard statuses:
 - `Needs confirmation`: may be true but requires user confirmation.
 - `Do not use yet`: adds experience not found in the resume.
 
-Suggestions marked `Do not use yet` must not be automatically included in a
-generated Markdown draft.
+Suggestions marked `Do not use yet` must not be automatically included in the
+generated Tailored CV. (The standalone Markdown resume draft workflow,
+US-032, was retired by US-059 / decision 0019 — Markdown is now an export
+format of the Draft CV below.)
 
 ## Draft CV Generator (Period 9)
 
@@ -477,14 +479,18 @@ Direction: `docs/decisions/0014-draft-cv-rendering-rework.md` §1/§6.
 
 ## Draft CV Export Rules (Period 9)
 
-Export (US-041 PDF, US-042 DOCX) is **not an AI run** — no model call, no
-`ai_workflow_runs` row; it writes a `draft_cv.exported` activity event.
+Export (US-041 PDF, US-042 DOCX, US-059 Markdown) is **not an AI run** — no
+model call, no `ai_workflow_runs` row; it writes a `draft_cv.exported`
+activity event.
 
 - One shared render-model serializer is the only path from `cv_json` to any
-  visible document (web preview, PDF, DOCX). A bullet renders iff
+  visible document (web preview, PDF, DOCX, Markdown). A bullet renders iff
   `safe_to_use` OR approved `needs_confirmation`. `do_not_use_yet` and
   pending/rejected items never render — server-side filtering is
   authoritative; the UI warning dialog is courtesy.
+- Markdown has no pagination: it always renders the full gated model (page
+  targeting and font profiles apply to PDF/DOCX only) and stamps no
+  per-format timestamp column.
 - Files render on demand from the stored version and stream as downloads;
   no rendered binary is persisted ("download again later" = deterministic
   re-render).

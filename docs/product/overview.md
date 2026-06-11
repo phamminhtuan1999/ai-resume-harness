@@ -18,7 +18,8 @@ The MVP helps a user:
 - See missing skills, weak positioning, strengths, and risks.
 - Generate evidence-based resume suggestions with Truth Guard.
 - Generate a job-tailored, truth-guarded draft CV, review and approve
-  uncertain claims, and export it as an ATS-safe PDF or DOCX (Period 9).
+  uncertain claims, and export it as an ATS-safe PDF, DOCX, or Markdown
+  (Period 9; Markdown added by US-059).
 - Generate a 4-week skill and project roadmap.
 - Generate interview preparation suggestions.
 - Save jobs, recruiter/contact details, and tracker status.
@@ -76,7 +77,7 @@ Refresh Analysis); technical detail stays in the Advanced tab.
 | Auth & Account | Clerk authentication, protected workspace access, account shell. |
 | Resume Workspace | Resume text storage, primary resume summary, parse status. |
 | Job Workspace | Manual job description storage, job URL intake, metadata, contact info, parse status. |
-| AI Analysis Engine | Resume parsing, JD parsing, scoring, gaps, suggestions, draft CV generation with PDF/DOCX export, roadmap, interview prep. |
+| AI Analysis Engine | Resume parsing, JD parsing, scoring, gaps, suggestions, draft CV generation with PDF/DOCX/Markdown export, roadmap, interview prep. |
 | Application Tracker | Application status, job link, match link, notes, contacts. Learning Targets (US-052) are tracked in their own segment and excluded from active-application counts. |
 | Billing Placeholder | Pricing and plan positioning only; no payment processing in MVP. |
 
@@ -103,8 +104,8 @@ Protected pages:
 - `/matches/:id`
 - `/matches/:id/gaps`
 - `/matches/:id/resume-suggestions`
-- `/matches/:id/resume-draft`
-- `/matches/:id/draft-cv`
+- `/matches/:id/draft-cv` (`/matches/:id/resume-draft` permanently redirects
+  here — the Markdown resume draft was retired by US-059 / decision 0019)
 - `/matches/:id/cover-letter`
 - `/matches/:id/roadmap`
 - `/matches/:id/interview-prep`

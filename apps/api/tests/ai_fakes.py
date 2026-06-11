@@ -452,24 +452,7 @@ def gemini_valid_activity_description(**overrides: Any) -> SimpleNamespace:
     return gemini_response(text=json.dumps(valid_activity_description(**overrides)))
 
 
-# --- US-032 resume draft + US-033 cover letter fixtures -------------------------
-
-
-def valid_resume_draft(**overrides: Any) -> dict:
-    base = {
-        "resume_markdown": "# Tailored Resume\n\nSenior Python engineer with FastAPI experience.",
-        "tailoring_summary": "Emphasized backend strengths; excluded unsupported RAG claims.",
-        "included_suggestions": ["Sharpen the FastAPI impact bullet."],
-        "excluded_suggestions": [{"suggestion": "Claim RAG experience", "reason": "unsupported"}],
-        "quality_notes": ["Markdown only; review before applying."],
-        "confidence_score": 0.8,
-    }
-    base.update(overrides)
-    return base
-
-
-def gemini_valid_resume_draft(**overrides: Any) -> SimpleNamespace:
-    return gemini_response(text=json.dumps(valid_resume_draft(**overrides)))
+# --- US-039 draft CV + US-033 cover letter fixtures ------------------------------
 
 
 def valid_draft_cv(**overrides: Any) -> dict:
@@ -727,7 +710,6 @@ class FakeData:
         self.upserted_suggestions: list[dict] | None = None
         self.upsert_calls = 0
         self.patched: dict | None = None
-        self.saved_resume_version: dict | None = None
         self.draft_cvs: list[dict] = []
         self.draft_cv_updates: list[dict] = []
         self.saved_cover_letter: dict | None = None
@@ -899,22 +881,6 @@ class FakeData:
                 self.activity_updates += 1
                 return row
         return None
-
-    # --- US-032 resume draft persistence ---
-    def insert_resume_version(
-        self, *, user_profile_id, resume_id, job_id, match_id, title, content_markdown
-    ):
-        self.saved_resume_version = {
-            "resume_id": resume_id,
-            "job_id": job_id,
-            "match_id": match_id,
-            "title": title,
-            "content_markdown": content_markdown,
-        }
-        return {"id": "version_1"}
-
-    def get_latest_resume_version(self, *, match_id, user_profile_id):
-        return self.saved_resume_version
 
     # --- US-039 draft CV persistence / reads ---
     def insert_draft_cv(

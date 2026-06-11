@@ -13,6 +13,8 @@ WorkflowType = Literal[
     "match_analysis",
     "missing_skills",
     "resume_suggestions",
+    # "resume_draft" generation was retired (US-059 / decision 0019); the value
+    # stays so historic ai_workflow_runs rows still validate in run listings.
     "resume_draft",
     "cover_letter",
     "roadmap",

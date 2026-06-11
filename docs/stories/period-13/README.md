@@ -42,13 +42,13 @@ Intake: #47 (change-request, normal lane). Decision:
 
 ## Stories
 
-| Story | Title | Phase |
-| --- | --- | --- |
-| US-059 | Retire the Markdown resume draft; Markdown export from the Tailored CV | 1 |
-| US-061 | Tier-1 feedback step: suggestions stepper + tone-true weave + traceability | 2 |
-| US-060 | Tier-2 final check: polish-and-confirm edits, re-verification, regenerate preservation | 3 |
-| US-062 | Live keyword-coverage panel with delta | 4 |
-| US-063 | Cover letter generated from the final Tailored CV | 4 |
+| Story | Title | Phase | Status |
+| --- | --- | --- | --- |
+| US-059 | Retire the Markdown resume draft; Markdown export from the Tailored CV | 1 | implemented (2026-06-11) |
+| US-061 | Tier-1 feedback step: suggestions stepper + tone-true weave + traceability | 2 | planned |
+| US-060 | Tier-2 final check: polish-and-confirm edits, re-verification, regenerate preservation | 3 | planned |
+| US-062 | Live keyword-coverage panel with delta | 4 | planned |
+| US-063 | Cover letter generated from the final Tailored CV | 4 | planned |
 
 Phases ship independently and in order (note: US-061 precedes US-060 — story
 ids keep their registered numbers; the phase column is the execution order).

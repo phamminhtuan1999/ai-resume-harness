@@ -212,7 +212,9 @@ Required fields:
 
 `draft_cv` is added by Period 9 (migration `0018`, US-039). The
 `workflow_type` CHECK constraint from migration `0010` is extended in place
-(per `docs/stories/period-8/flows/README.md`).
+(per `docs/stories/period-8/flows/README.md`). `resume_draft` generation was
+retired by US-059 / decision 0019; the value stays in the constraint and the
+API schema so historic run rows keep validating.
 - `subject_type text` — `match | resume | job | dashboard`
 - `subject_id uuid` (nullable for dashboard-scoped runs)
 - `status text default 'queued'` — `queued | running | completed | needs_review | failed`
@@ -401,7 +403,10 @@ Valid `truth_guard_status` values:
 
 ### `resume_versions`
 
-Stores generated Markdown resume drafts.
+Stores generated Markdown resume drafts. **Dormant since US-059 / decision
+0019** — the generator (`ResumeDraftWorkflow`, US-032) was retired, so the
+table gains no new rows; existing rows are untouched and a drop migration is
+deferred to a later cleanup.
 
 Required fields:
 

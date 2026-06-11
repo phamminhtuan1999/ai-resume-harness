@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { Download, FileText } from "lucide-react";
+import { Download, FileCode, FileText } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import {
   compressionSummary,
+  exportFileName,
   exportUrl,
   fontOptions,
   overrideWarning,
@@ -32,6 +33,7 @@ type DraftCvExportButtonsProps = {
 const FORMATS = [
   { format: "pdf", label: "Export PDF", icon: FileText },
   { format: "docx", label: "Export DOCX", icon: Download },
+  { format: "markdown", label: "Export Markdown", icon: FileCode },
 ] as const;
 
 type CompressionView = ReturnType<typeof compressionSummary>;
@@ -91,7 +93,7 @@ export function DraftCvExportButtons({
     };
   }, [apiBaseUrl, draftCvId, getToken, recommendedFont, rendering, selectedFont, selectedPages]);
 
-  async function handleExport(format: "pdf" | "docx") {
+  async function handleExport(format: "pdf" | "docx" | "markdown") {
     setError(null);
     if (!apiBaseUrl) {
       setError("The assistant API is not configured.");
@@ -130,7 +132,7 @@ export function DraftCvExportButtons({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${fileSlug}.${format}`;
+      link.download = exportFileName(fileSlug, format);
       document.body.appendChild(link);
       link.click();
       link.remove();

@@ -385,7 +385,7 @@ def _export(
     draft_cv_id: str,
     user: AuthenticatedUser,
     *,
-    fmt: Literal["pdf", "docx"],
+    fmt: Literal["pdf", "docx", "markdown"],
     pages: int | None = None,
     font: str | None = None,
 ) -> Response:
@@ -435,7 +435,7 @@ def _export(
                 from app.services.export.pdf_renderer import render_pdf
 
                 content = render_pdf(render_model, options)
-        else:
+        elif fmt == "docx":
             from app.services.export.docx_renderer import render_docx
 
             media_type = (
@@ -451,6 +451,14 @@ def _export(
                 content = render_docx(compressed_model, options)
             else:
                 content = render_docx(render_model, options)
+        else:
+            # Markdown (US-059): no pagination, so always the full gated model.
+            # No dedicated timestamp column — the stamp records status only.
+            from app.services.export.markdown_renderer import render_markdown
+
+            media_type = "text/markdown; charset=utf-8"
+            stamp_field = None
+            content = render_markdown(render_model).encode("utf-8")
     except RuntimeError:
         return JSONResponse(
             status_code=500,
@@ -465,10 +473,11 @@ def _export(
 
     _stamp_export(data_client, user_profile_id, draft_cv_id, row, stamp_field, cv_json)
 
+    extension = "md" if fmt == "markdown" else fmt
     return Response(
         content=content,
         media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="{slug}.{fmt}"'},
+        headers={"Content-Disposition": f'attachment; filename="{slug}.{extension}"'},
     )
 
 
@@ -477,18 +486,22 @@ def _stamp_export(
     user_profile_id: str,
     draft_cv_id: str,
     row: dict,
-    stamp_field: str,
+    stamp_field: str | None,
     cv_json: dict,
 ) -> None:
     """Record the export: timestamp + status 'exported' + a draft_cv.exported
-    activity event. Best-effort; a stamp failure must not fail the download."""
+    activity event. Best-effort; a stamp failure must not fail the download.
+    ``stamp_field`` is None for formats without a timestamp column (Markdown)."""
     from datetime import UTC, datetime
 
+    fields: dict = {"status": "exported"}
+    if stamp_field:
+        fields[stamp_field] = datetime.now(UTC).isoformat()
     try:
         data_client.update_draft_cv(
             draft_cv_id=draft_cv_id,
             user_profile_id=user_profile_id,
-            fields={stamp_field: datetime.now(UTC).isoformat(), "status": "exported"},
+            fields=fields,
         )
         data_client.insert_activity(
             user_profile_id=user_profile_id,
@@ -523,3 +536,13 @@ def export_docx(
     user: AuthenticatedUser = Depends(require_authenticated_user),
 ) -> Response:
     return _export(draft_cv_id, user, fmt="docx", pages=pages, font=font)
+
+
+@router.post("/draft-cvs/{draft_cv_id}/export/markdown")
+def export_markdown(
+    draft_cv_id: str,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> Response:
+    """Markdown export (US-059). Page/font overrides don't apply — Markdown has
+    no pagination or typography; it is the full gated render model as text."""
+    return _export(draft_cv_id, user, fmt="markdown")

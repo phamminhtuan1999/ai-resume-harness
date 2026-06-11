@@ -11,6 +11,7 @@ import io
 import re
 
 from app.services.export.docx_renderer import render_docx
+from app.services.export.markdown_renderer import render_markdown
 from app.services.export.pdf_renderer import render_pdf
 from app.services.export.render_model import (
     build_render_model,
@@ -202,6 +203,41 @@ def test_docx_preserves_unicode_name() -> None:
     assert any("Đặng Quốc Tuấn" in p.text for p in doc.paragraphs)
 
 
+# --- Markdown (US-059) ------------------------------------------------------------
+
+
+def test_markdown_gates_content_and_has_structure() -> None:
+    md = render_markdown(build_render_model(_cv_json()))
+    compact = _compact(md)
+    for token in _RENDERABLE:
+        assert token in compact
+    for token in _EXCLUDED:
+        assert token not in compact
+    assert md.startswith("# Dana Engineer")
+    assert "## Professional Summary" in md
+    assert "- **Backend:** FastAPI" in md
+    assert "Empty" not in md  # empty skill group dropped by the render model
+    assert "### Engineer — Acme (2020 – 2024)" in md
+
+
+def test_markdown_preserves_unicode_name() -> None:
+    cv = _cv_json()
+    cv["candidate"]["full_name"] = "Đặng Quốc Tuấn"
+    md = render_markdown(build_render_model(cv))
+    assert "# Đặng Quốc Tuấn" in md
+
+
+def test_markdown_emits_every_render_model_bullet_verbatim() -> None:
+    rm = build_render_model(_cv_json())
+    md = render_markdown(rm)
+    model_bullets = [
+        b for e in rm["work_experience"] + rm["projects"] for b in e["bullets"]
+    ]
+    assert model_bullets  # fixture sanity: the parity claim isn't vacuous
+    for text in model_bullets:
+        assert f"- {text}" in md
+
+
 # --- parity ---------------------------------------------------------------------
 
 
@@ -214,3 +250,13 @@ def test_pdf_and_docx_render_the_same_gated_content() -> None:
         assert token in pdf_compact and token in docx_compact
     for token in _EXCLUDED:
         assert token not in pdf_compact and token not in docx_compact
+
+
+def test_markdown_and_pdf_render_the_same_gated_content() -> None:
+    rm = build_render_model(_cv_json())
+    md_compact = _compact(render_markdown(rm))
+    pdf_compact = _compact(_pdf_text(render_pdf(rm)))
+    for token in _RENDERABLE:
+        assert token in md_compact and token in pdf_compact
+    for token in _EXCLUDED:
+        assert token not in md_compact and token not in pdf_compact
