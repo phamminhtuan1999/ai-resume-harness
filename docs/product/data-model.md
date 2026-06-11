@@ -21,7 +21,10 @@ Required fields:
 - `current_role text`
 - `years_of_experience numeric`
 - `target_role text`
-- `location_preference text`
+- `location_city text`
+- `location_country text` — ISO 3166 alpha-2 code
+- `location_preference text` — derived "City, Country" display string
+- `contact_email text`, `phone text` — user-edited CV contact overrides
 - `technical_background text`
 - `candidate_profile_json jsonb`
 - `candidate_profile_confidence_json jsonb`
@@ -34,6 +37,14 @@ resume-based profile import. Summary columns such as `current_role`,
 `years_of_experience`, `target_role`, `location_preference`, and
 `technical_background` remain the lightweight fields used by existing MVP
 screens.
+
+Location is captured structurally (US-057, decision 0017): `location_country`
+(ISO alpha-2, chosen from a list) and a free-text `location_city`.
+`location_preference` is derived from them as "City, Country" on save and stays
+the column the generated CV and profile display read. `phone` is validated
+against `location_country` and stored normalized to E.164; `contact_email` and
+`phone` override the resume-imported contact on generated CVs. Cleared fields
+persist `NULL`.
 
 Valid `profile_source` values:
 
@@ -501,3 +512,28 @@ Indexed `(user_id, match_id, decided_at desc)`. Cascade delete via user/match
 is the privacy/GDPR deletion path — snapshot evidence text is resume-derived
 PII. Retention policy: most recent 50 snapshots per match (enforcement may be
 deferred; the policy may not).
+
+## Deletion and Retention (Period 12, US-055/US-056, decision 0016)
+
+Deletion is an immediate, permanent hard delete; the FK cascade graph above
+is the mechanism and no `deleted_at` flags exist. Ownership is enforced in
+the mutation: server actions run on the service-role client (RLS is
+bypassed), so every delete statement is scoped by `id` **and** the caller's
+`user_id`/`clerk_user_id` and verifies a row was removed before reporting
+success.
+
+- **Resume deletion** removes the row; its matches cascade, taking every
+  match-scoped analysis with them. `draft_cvs.resume_id` and
+  `user_profiles.profile_source_resume_id` null out.
+- **Job deletion** removes the row; its matches cascade as above, and tracker
+  `applications` rows die with the job. Feed references null out.
+- **Account deletion** removes the `user_profiles` row (cascading every
+  workspace table), then deletes the Clerk user, in that order — a Clerk
+  failure after the purge is retriable; the reverse would strand orphaned
+  PII. Requires typed `DELETE` confirmation.
+
+Audit: resume/job deletion writes an `activity_feed` row (`resume.deleted` /
+`job.deleted`, importance `high`) naming the record and its cascade counts,
+inserted **before** the delete so an unaudited deletion cannot happen. Audit
+rows are retained for the life of the account and purged with it — after
+account deletion zero workspace rows remain.

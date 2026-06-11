@@ -3,7 +3,10 @@ import { BriefcaseBusiness } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { FlashToast } from "@/components/forms/flash-toast";
+import { RecordActionsMenu } from "@/components/forms/record-actions-menu";
 import { formatShortDate, getContactLabel, getWorkspaceData } from "@/lib/data/server";
+import { jobDeletionSummaryGeneric } from "@/lib/deletion-view.mjs";
 import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -22,7 +25,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-export default async function JobsPage() {
+type JobsPageProps = {
+  searchParams: Promise<{ flash?: string }>;
+};
+
+export default async function JobsPage({ searchParams }: JobsPageProps) {
+  const { flash } = await searchParams;
   const { jobs, matches } = await getWorkspaceData();
 
   const bestScoreByJob = new Map<string, number>();
@@ -36,6 +44,7 @@ export default async function JobsPage() {
   return (
     
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+        <FlashToast code={flash} />
         <PageHeader
           actions={
           <Link href="/jobs/new" className={buttonVariants({ size: "lg" })}>
@@ -65,6 +74,9 @@ export default async function JobsPage() {
                     <TableHead>Status</TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead className="text-right">Saved</TableHead>
+                    <TableHead className="w-0">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -82,6 +94,16 @@ export default async function JobsPage() {
                       </TableCell>
                       <TableCell>{getContactLabel(job)}</TableCell>
                       <TableCell className="text-right">{formatShortDate(job.created_at)}</TableCell>
+                      <TableCell className="text-right">
+                        <RecordActionsMenu
+                          kind="job"
+                          recordId={job.id}
+                          viewHref={`/jobs/${job.id}`}
+                          title={job.title}
+                          company={job.company}
+                          deleteSummary={jobDeletionSummaryGeneric()}
+                        />
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

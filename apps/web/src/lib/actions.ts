@@ -1,12 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { clerkClient } from "@clerk/nextjs/server";
 
 import type { ActionState } from "@/lib/action-state";
 import {
   getValidationFieldErrors,
   readForm,
   validateJobInput,
+  validateJobRenameInput,
   validateJobUrlInput,
   validateMatchIdInput,
   validateMatchInput,
@@ -17,6 +20,16 @@ import {
   validateUpdateApplicationStatusInput,
 } from "@/lib/action-validation.mjs";
 import { getCurrentAppUser, getCurrentSessionToken } from "@/lib/auth/server";
+import {
+  getJobDeletionImpact,
+  getResumeDeletionImpact,
+} from "@/lib/data/server";
+import {
+  isDeletionConfirmed,
+  jobDeletionAudit,
+  resumeDeletionAudit,
+} from "@/lib/deletion-view.mjs";
+import { validateProfileContact } from "@/lib/contact-info.mjs";
 import { hasSupabaseEnv, serverEnv } from "@/lib/env";
 import {
   buildImportedResumeInsert,
@@ -123,10 +136,33 @@ export async function saveProfileAction(
     );
   }
 
+  // Cross-field location + phone validation (US-057): checks the country,
+  // validates the phone against it, and returns the normalized values to
+  // persist — phone as E.164, location_preference composed as "City, Country".
+  const contact = validateProfileContact(parsed.data);
+  if (!contact.ok) {
+    return failure("Profile fields are incomplete or invalid.", contact.fieldErrors);
+  }
+
+  // Cleared optional fields persist as null (the contact helper already returns
+  // null for empties), keeping the draft-CV "profile value or resume value"
+  // fallback honest.
+  const clean = parsed.data;
   const supabase = getSupabaseServiceClient();
   const { error } = await supabase
     .from("user_profiles")
-    .update({ ...parsed.data, updated_at: new Date().toISOString() })
+    .update({
+      current_role: clean.current_role,
+      years_of_experience: clean.years_of_experience,
+      target_role: clean.target_role,
+      location_city: contact.data.location_city,
+      location_country: contact.data.location_country,
+      location_preference: contact.data.location_preference,
+      contact_email: clean.contact_email || null,
+      phone: contact.data.phone,
+      technical_background: clean.technical_background || null,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", context.userProfileId);
 
   if (error) {
@@ -1367,4 +1403,269 @@ export async function generateInterviewPrepAction(
     failureMessage: "Interview prep generation failed.",
     extraPaths: (matchId) => [`/matches/${matchId}/interview-prep`],
   });
+}
+
+// --- Deletion (Period 12, US-055/US-056, decision 0016) ---
+//
+// Hard delete via the FK cascade graph. Every statement is scoped by both the
+// record id and the owner's user_id; a non-owned or already-deleted id removes
+// nothing. The audit row is written before the delete so an unaudited
+// destructive write cannot happen.
+
+export async function deleteResumeAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const resumeId = String(formData.get("resume_id") || "");
+  if (!resumeId) {
+    return failure("Resume is required for deletion.");
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data: resume } = await supabase
+    .from("resumes")
+    .select("id, title")
+    .eq("id", resumeId)
+    .eq("user_id", context.userProfileId)
+    .maybeSingle();
+
+  if (!resume) {
+    return failure("Resume not found.");
+  }
+
+  const impact = await getResumeDeletionImpact(resumeId, context.userProfileId);
+  const audit = resumeDeletionAudit(resume.title || "Untitled resume", impact);
+
+  const { error: auditError } = await supabase.from("activity_feed").insert({
+    user_id: context.userProfileId,
+    activity_type: "resume.deleted",
+    title: audit.title,
+    assistant_description: audit.description,
+    importance: "high",
+  });
+  if (auditError) {
+    return failure("Delete failed.");
+  }
+
+  const { error } = await supabase
+    .from("resumes")
+    .delete()
+    .eq("id", resumeId)
+    .eq("user_id", context.userProfileId);
+
+  if (error) {
+    return failure("Delete failed.");
+  }
+
+  revalidatePath("/resumes");
+  revalidatePath("/dashboard");
+  // Server-side redirect, not a client toast: revalidation would re-render this
+  // now-deleted resume's page into a 404 before any delayed client redirect
+  // could fire. redirect() resolves the navigation as part of the action. The
+  // flash code drives a brief toast on the list (US-058); it carries no PII.
+  redirect("/resumes?flash=resume-deleted");
+}
+
+export async function deleteJobAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const jobId = String(formData.get("job_id") || "");
+  if (!jobId) {
+    return failure("Job is required for deletion.");
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data: job } = await supabase
+    .from("jobs")
+    .select("id, title, company")
+    .eq("id", jobId)
+    .eq("user_id", context.userProfileId)
+    .maybeSingle();
+
+  if (!job) {
+    return failure("Job not found.");
+  }
+
+  const impact = await getJobDeletionImpact(jobId, context.userProfileId);
+  const audit = jobDeletionAudit(job.title || "Untitled job", job.company || "", impact);
+
+  const { error: auditError } = await supabase.from("activity_feed").insert({
+    user_id: context.userProfileId,
+    activity_type: "job.deleted",
+    title: audit.title,
+    assistant_description: audit.description,
+    importance: "high",
+  });
+  if (auditError) {
+    return failure("Delete failed.");
+  }
+
+  const { error } = await supabase
+    .from("jobs")
+    .delete()
+    .eq("id", jobId)
+    .eq("user_id", context.userProfileId);
+
+  if (error) {
+    return failure("Delete failed.");
+  }
+
+  revalidatePath("/jobs");
+  revalidatePath("/dashboard");
+  // See deleteResumeAction: redirect server-side to avoid the deleted page
+  // re-rendering into a 404 before a client redirect could run. The flash code
+  // drives a brief toast on the list (US-058); it carries no PII.
+  redirect("/jobs?flash=job-deleted");
+}
+
+// --- Rename (Period 12, US-058) ---
+//
+// Lightweight edit for the safe display fields, owner-scoped. The update is
+// filtered by both id and user_id, so a non-owned id changes nothing; the
+// returned row (or its absence) tells us whether the caller owns the record.
+// Canonical parsed content is never written here.
+
+export async function updateJobAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const jobId = String(formData.get("job_id") || "");
+  if (!jobId) {
+    return failure("Job is required.");
+  }
+
+  const parsed = validateJobRenameInput(readForm(formData));
+  if (!parsed.success) {
+    return failure("Check the highlighted fields.", getValidationFieldErrors(parsed.error));
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data: job, error } = await supabase
+    .from("jobs")
+    .update({
+      title: parsed.data.title,
+      company: parsed.data.company,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", jobId)
+    .eq("user_id", context.userProfileId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    return failure("Update failed.");
+  }
+  if (!job) {
+    return failure("Job not found.");
+  }
+
+  revalidatePath("/jobs");
+  revalidatePath(`/jobs/${jobId}`);
+  revalidatePath("/dashboard");
+  redirect("/jobs?flash=job-updated");
+}
+
+export async function updateResumeAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const resumeId = String(formData.get("resume_id") || "");
+  if (!resumeId) {
+    return failure("Resume is required.");
+  }
+
+  const parsed = validateResumeTitleInput(readForm(formData));
+  if (!parsed.success) {
+    return failure("Check the highlighted fields.", getValidationFieldErrors(parsed.error));
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data: resume, error } = await supabase
+    .from("resumes")
+    .update({ title: parsed.data.title, updated_at: new Date().toISOString() })
+    .eq("id", resumeId)
+    .eq("user_id", context.userProfileId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    return failure("Update failed.");
+  }
+  if (!resume) {
+    return failure("Resume not found.");
+  }
+
+  revalidatePath("/resumes");
+  revalidatePath(`/resumes/${resumeId}`);
+  revalidatePath("/dashboard");
+  redirect("/resumes?flash=resume-updated");
+}
+
+// Account deletion is the GDPR-style full erasure (decision 0016): purge the
+// user_profiles row (cascading every workspace table) FIRST, then delete the
+// Clerk sign-in. Ordering data-first means a Clerk failure is retriable
+// without stranding orphaned PII. No surviving audit row — the feed is owned
+// by the deleted user.
+export async function deleteAccountAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const appUser = await getCurrentAppUser();
+  if (!appUser) {
+    return failure("No signed-in user is available.");
+  }
+  if (!hasSupabaseEnv()) {
+    return failure("Supabase is not configured.");
+  }
+
+  const confirmText = String(formData.get("confirm_text") || "");
+  if (!isDeletionConfirmed(confirmText)) {
+    return failure("Type DELETE to confirm account deletion.", {
+      confirm_text: "Type DELETE exactly to confirm.",
+    });
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase
+    .from("user_profiles")
+    .delete()
+    .eq("clerk_user_id", appUser.clerkUserId);
+
+  if (error) {
+    return failure("Account deletion failed; no data was removed.");
+  }
+
+  try {
+    const clerk = await clerkClient();
+    await clerk.users.deleteUser(appUser.clerkUserId);
+  } catch {
+    return failure(
+      "Your data was removed, but deleting the sign-in account failed. Reload and try again to finish."
+    );
+  }
+
+  // The Clerk session is now gone; land the signed-out visitor on the public
+  // landing page. Server redirect (outside the try) so it isn't swallowed.
+  redirect("/");
 }

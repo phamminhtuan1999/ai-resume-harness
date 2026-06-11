@@ -149,6 +149,56 @@ def test_contact_and_target_job_overridden_server_side() -> None:
     assert cv["target_job"]["title"] == "Senior AI Engineer"
 
 
+def test_profile_location_preference_wins_over_resume_location() -> None:
+    """The career profile's location is user-edited after import, so it must
+    override the location extracted from the resume text."""
+    profile = profile_with_cv()
+    profile["location_preference"] = "Ho Chi Minh City, Vietnam"
+    data = _data(profile=profile)
+    client = FakeGeminiClient([gemini_valid_draft_cv()])
+    _wf(data, key="key", client=client).run(subject_id="match_1", user_profile_id="profile_1")
+
+    cv = data.draft_cvs[-1]["cv_json"]
+    assert cv["candidate"]["location"] == "Ho Chi Minh City, Vietnam"
+
+
+def test_resume_location_is_the_fallback_without_profile_preference() -> None:
+    profile = profile_with_cv()
+    profile["location_preference"] = None
+    data = _data(profile=profile)
+    client = FakeGeminiClient([gemini_valid_draft_cv()])
+    _wf(data, key="key", client=client).run(subject_id="match_1", user_profile_id="profile_1")
+
+    cv = data.draft_cvs[-1]["cv_json"]
+    assert cv["candidate"]["location"] == "Remote US"  # from the imported resume
+
+
+def test_profile_contact_email_and_phone_win_over_resume_values() -> None:
+    """Like location, the profile's editable contact fields override what was
+    extracted from the resume text."""
+    profile = profile_with_cv()
+    profile["contact_email"] = "dana.applies@example.com"
+    profile["phone"] = "+1 619 555 0199"
+    data = _data(profile=profile)
+    client = FakeGeminiClient([gemini_valid_draft_cv()])
+    _wf(data, key="key", client=client).run(subject_id="match_1", user_profile_id="profile_1")
+
+    cv = data.draft_cvs[-1]["cv_json"]
+    assert cv["candidate"]["email"] == "dana.applies@example.com"
+    assert cv["candidate"]["phone"] == "+1 619 555 0199"
+
+
+def test_resume_contact_is_the_fallback_without_profile_overrides() -> None:
+    # profile_with_cv has no phone/contact_email set on the profile row.
+    data = _data(profile=profile_with_cv())
+    client = FakeGeminiClient([gemini_valid_draft_cv()])
+    _wf(data, key="key", client=client).run(subject_id="match_1", user_profile_id="profile_1")
+
+    cv = data.draft_cvs[-1]["cv_json"]
+    assert cv["candidate"]["email"] == "dana@example.com"  # from the imported resume
+    assert cv["candidate"]["phone"] == "555-0100"
+
+
 def test_invented_metric_is_demoted() -> None:
     data = _data()
     poisoned = valid_draft_cv()

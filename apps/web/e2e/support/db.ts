@@ -39,12 +39,17 @@ export type ProfileEditFields = {
   current_role: string | null;
   years_of_experience: number | null;
   target_role: string | null;
+  location_city: string | null;
+  location_country: string | null;
   location_preference: string | null;
+  contact_email: string | null;
+  phone: string | null;
   technical_background: string | null;
 };
 
 const PROFILE_EDIT_COLUMNS =
-  "current_role,years_of_experience,target_role,location_preference,technical_background";
+  "current_role,years_of_experience,target_role,location_city,location_country," +
+  "location_preference,contact_email,phone,technical_background";
 
 // Read the editable profile fields. Used to capture the original row before a
 // profile-editing test mutates it, so teardown can restore it exactly.
@@ -222,7 +227,8 @@ export async function seedAnalyzedMatch(profileId: string): Promise<{ matchId: s
 }
 
 // Remove everything the seed created for this profile (including any learning
-// target the test saved). Exact, so it never leaves residue in the live DB.
+// target the test saved, and any resume/job deletion audit rows a US-055 test
+// wrote). Exact, so it never leaves residue in the live DB.
 export async function teardownAnalyzedMatch(profileId: string): Promise<void> {
   const db = adminClient();
   await db.from("applications").delete().eq("user_id", profileId);
@@ -230,4 +236,36 @@ export async function teardownAnalyzedMatch(profileId: string): Promise<void> {
   await db.from("matches").delete().eq("id", SEED.matchId);
   await db.from("jobs").delete().eq("id", SEED.jobId);
   await db.from("resumes").delete().eq("id", SEED.resumeId);
+  await db
+    .from("activity_feed")
+    .delete()
+    .eq("user_id", profileId)
+    .in("activity_type", ["resume.deleted", "job.deleted"]);
+}
+
+// True if a row with the given id still exists in the table. Used by the
+// US-055 deletion specs to prove a hard delete (and its cascade) actually
+// reached the database, not just the UI.
+export async function rowExists(table: string, id: string): Promise<boolean> {
+  const { count } = await adminClient()
+    .from(table)
+    .select("id", { count: "exact", head: true })
+    .eq("id", id);
+  return (count ?? 0) > 0;
+}
+
+// The most recent deletion audit row of a given type for the profile, or null.
+export async function findDeletionAudit(
+  profileId: string,
+  activityType: "resume.deleted" | "job.deleted"
+): Promise<{ title: string; assistant_description: string } | null> {
+  const { data } = await adminClient()
+    .from("activity_feed")
+    .select("title, assistant_description")
+    .eq("user_id", profileId)
+    .eq("activity_type", activityType)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data as { title: string; assistant_description: string } | null) ?? null;
 }

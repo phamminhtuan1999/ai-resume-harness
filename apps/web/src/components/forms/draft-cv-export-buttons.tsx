@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import {
   compressionSummary,
   exportUrl,
+  fontOptions,
   overrideWarning,
   pageOptions,
 } from "@/lib/draft-cv-view.mjs";
@@ -16,6 +17,7 @@ import {
 type RenderingView = {
   recommendedPages: number;
   maxPages: number;
+  fontProfile: string;
   fontProfileLabel: string;
 };
 
@@ -47,9 +49,13 @@ export function DraftCvExportButtons({
   const [selectedPages, setSelectedPages] = useState<number>(
     rendering?.recommendedPages ?? 1
   );
+  const [selectedFont, setSelectedFont] = useState<string>(
+    rendering?.fontProfile ?? "modern_latex"
+  );
   const [compression, setCompression] = useState<CompressionView>(null);
 
   const recommendedPages = rendering?.recommendedPages ?? null;
+  const recommendedFont = rendering?.fontProfile ?? null;
   const warning = recommendedPages
     ? overrideWarning(recommendedPages, selectedPages)
     : null;
@@ -64,8 +70,12 @@ export function DraftCvExportButtons({
     (async () => {
       try {
         const token = await getToken();
+        // Font affects measurement, so the compression preview must render with
+        // the same font the export will use.
+        const fontParam =
+          selectedFont && selectedFont !== recommendedFont ? `&font=${selectedFont}` : "";
         const response = await fetch(
-          `${apiBaseUrl}/api/draft-cvs/${draftCvId}/export-preview?pages=${selectedPages}`,
+          `${apiBaseUrl}/api/draft-cvs/${draftCvId}/export-preview?pages=${selectedPages}${fontParam}`,
           { headers: { Authorization: `Bearer ${token ?? ""}` } }
         );
         const body = response.ok ? await response.json() : null;
@@ -79,7 +89,7 @@ export function DraftCvExportButtons({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, draftCvId, getToken, rendering, selectedPages]);
+  }, [apiBaseUrl, draftCvId, getToken, recommendedFont, rendering, selectedFont, selectedPages]);
 
   async function handleExport(format: "pdf" | "docx") {
     setError(null);
@@ -100,7 +110,15 @@ export function DraftCvExportButtons({
     try {
       const token = await getToken();
       const response = await fetch(
-        exportUrl(apiBaseUrl, draftCvId, format, selectedPages, recommendedPages),
+        exportUrl(
+          apiBaseUrl,
+          draftCvId,
+          format,
+          selectedPages,
+          recommendedPages,
+          selectedFont,
+          recommendedFont
+        ),
         { method: "POST", headers: { Authorization: `Bearer ${token ?? ""}` } }
       );
       if (!response.ok) {
@@ -140,6 +158,24 @@ export function DraftCvExportButtons({
               <option key={count} value={count}>
                 {count} page{count === 1 ? "" : "s"}
                 {count === recommendedPages ? " (recommended)" : ""}
+              </option>
+            ))}
+          </Select>
+        </label>
+      ) : null}
+
+      {rendering ? (
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          Font
+          <Select
+            value={selectedFont}
+            onChange={(event) => setSelectedFont(event.target.value)}
+            disabled={busy !== null}
+          >
+            {fontOptions().map(({ key, label }: { key: string; label: string }) => (
+              <option key={key} value={key}>
+                {label}
+                {key === recommendedFont ? " (recommended)" : ""}
               </option>
             ))}
           </Select>

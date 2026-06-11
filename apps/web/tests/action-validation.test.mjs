@@ -8,6 +8,7 @@ import {
   RESUME_IMPORT_MAX_BYTES,
   validateImportedResumePayload,
   validateJobInput,
+  validateJobRenameInput,
   validateMatchIdInput,
   validateMatchInput,
   validateProfileInput,
@@ -28,6 +29,43 @@ test("profile validation accepts supported AI target roles and coerces experienc
 
   assert.equal(result.success, true);
   assert.equal(result.data.years_of_experience, 6);
+});
+
+test("profile validation accepts optional CV contact fields, empty or filled", () => {
+  const filled = validateProfileInput({
+    current_role: "Senior Software Engineer",
+    years_of_experience: "6",
+    target_role: "AI Engineer",
+    contact_email: "tuan.applies@example.com",
+    phone: "+1 619 555 0199",
+  });
+  assert.equal(filled.success, true);
+  assert.equal(filled.data.contact_email, "tuan.applies@example.com");
+  assert.equal(filled.data.phone, "+1 619 555 0199");
+
+  // Clearing both fields is valid — generation falls back to the resume values.
+  const cleared = validateProfileInput({
+    current_role: "Senior Software Engineer",
+    years_of_experience: "6",
+    target_role: "AI Engineer",
+    contact_email: "",
+    phone: "",
+  });
+  assert.equal(cleared.success, true);
+});
+
+test("profile validation rejects a malformed contact email", () => {
+  const result = validateProfileInput({
+    current_role: "Senior Software Engineer",
+    years_of_experience: "6",
+    target_role: "AI Engineer",
+    contact_email: "not an email",
+  });
+
+  assert.equal(result.success, false);
+  assert.deepEqual(getValidationFieldErrors(result.error), {
+    contact_email: "Enter a valid contact email.",
+  });
 });
 
 test("profile validation rejects missing current role and unsupported target role", () => {
@@ -64,6 +102,22 @@ test("resume text validation requires title and canonical text", () => {
 test("resume title validation supports file imports without pasted text", () => {
   assert.equal(validateResumeTitleInput({ title: "Imported resume" }).success, true);
   assert.equal(validateResumeTitleInput({ title: "" }).success, false);
+});
+
+test("job rename validation requires both a title and a company", () => {
+  const ok = validateJobRenameInput({ title: "  Staff Engineer  ", company: " Acme " });
+  assert.equal(ok.success, true);
+  // Trims into the persisted values.
+  assert.equal(ok.data.title, "Staff Engineer");
+  assert.equal(ok.data.company, "Acme");
+
+  const missingTitle = validateJobRenameInput({ title: "", company: "Acme" });
+  assert.equal(missingTitle.success, false);
+  assert.equal(getValidationFieldErrors(missingTitle.error).title, "Job title is required.");
+
+  const missingCompany = validateJobRenameInput({ title: "Staff Engineer", company: "  " });
+  assert.equal(missingCompany.success, false);
+  assert.equal(getValidationFieldErrors(missingCompany.error).company, "Company is required.");
 });
 
 test("imported resume payload validation accepts Docling-supported source metadata", () => {

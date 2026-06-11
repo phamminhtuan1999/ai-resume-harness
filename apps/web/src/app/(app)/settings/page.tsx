@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { CheckCircle2, Database, ShieldCheck, UserRound } from "lucide-react";
+import { CheckCircle2, Database, UserRound } from "lucide-react";
 
+import { DangerZoneCard } from "@/components/settings/danger-zone-card";
 import { PageHeader } from "@/components/page-header";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -27,6 +27,8 @@ export default async function SettingsPage() {
     ["Matches", matches.length],
     ["Applications", applications.length],
   ] as const;
+
+  const totalRecords = dataRows.reduce((sum, [, value]) => sum + value, 0);
 
   return (
     
@@ -92,15 +94,7 @@ export default async function SettingsPage() {
           </Card>
         </section>
 
-        <Alert>
-          <ShieldCheck />
-          <AlertTitle>Deletion is intentionally unavailable in this MVP</AlertTitle>
-          <AlertDescription>
-            Resume, job, and account deletion need confirmation dialogs, audit-safe ownership checks,
-            and retention rules. Those flows remain post-MVP instead of exposing inactive destructive
-            buttons.
-          </AlertDescription>
-        </Alert>
+        <DangerZoneCard recordCount={totalRecords} />
 
         <Card>
           <CardHeader>

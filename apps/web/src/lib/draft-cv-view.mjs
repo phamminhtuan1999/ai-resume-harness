@@ -151,6 +151,12 @@ export function pageOptions(view) {
   return Array.from({ length: view.maxPages }, (_, i) => i + 1);
 }
 
+/* The font choices offered by the override control. Mirrors the backend
+   registry (app/services/export/fonts.py) — keys must stay in sync. */
+export function fontOptions() {
+  return Object.entries(FONT_PROFILE_LABELS).map(([key, label]) => ({ key, label }));
+}
+
 /* Warning copy when the user picks fewer pages than recommended (brief §8). */
 export function overrideWarning(recommendedPages, selectedPages) {
   if (!recommendedPages || !selectedPages) return null;
@@ -159,14 +165,26 @@ export function overrideWarning(recommendedPages, selectedPages) {
   return `You chose ${pages}; ApplyWise recommends ${recommendedPages}. Some lower-priority detail may be compressed to fit.`;
 }
 
-/* Build the export URL with an optional page override (only when it differs
-   from the recommendation, to keep the default path clean). */
-export function exportUrl(apiBaseUrl, draftCvId, format, selectedPages, recommendedPages) {
+/* Build the export URL with optional page/font overrides (only when they
+   differ from the stored recommendation, to keep the default path clean). */
+export function exportUrl(
+  apiBaseUrl,
+  draftCvId,
+  format,
+  selectedPages,
+  recommendedPages,
+  selectedFont,
+  recommendedFont
+) {
   const base = `${apiBaseUrl}/api/draft-cvs/${draftCvId}/export/${format}`;
+  const params = [];
   if (selectedPages && selectedPages !== recommendedPages) {
-    return `${base}?pages=${selectedPages}`;
+    params.push(`pages=${selectedPages}`);
   }
-  return base;
+  if (selectedFont && selectedFont !== recommendedFont) {
+    params.push(`font=${selectedFont}`);
+  }
+  return params.length ? `${base}?${params.join("&")}` : base;
 }
 
 /* Human summary of a compression report (US-045) for the export area. */

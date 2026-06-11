@@ -35,7 +35,19 @@ const profileSchema = z.object({
     ["AI Engineer", "Applied AI Engineer", "LLM Engineer", "GenAI Engineer", "ML Engineer"],
     { error: "Choose a supported target role." }
   ),
-  location_preference: z.string().trim().optional(),
+  // Location is captured structurally (US-057): a country code chosen from a
+  // list plus free-text city. Cross-field rules (valid country, phone region,
+  // E.164 normalization, composed location_preference) live in
+  // validateProfileContact (contact-info.mjs); this schema only checks shape.
+  location_country: z.string().trim().optional(),
+  location_city: z.string().trim().optional(),
+  contact_email: z
+    .string()
+    .trim()
+    .email("Enter a valid contact email.")
+    .or(z.literal(""))
+    .optional(),
+  phone: z.string().trim().max(40, "Phone must be 40 characters or less.").optional(),
   technical_background: z.string().trim().optional(),
 });
 
@@ -47,6 +59,14 @@ const resumeSchema = z.object({
 
 const resumeTitleSchema = z.object({
   title: z.string().trim().min(1, "Resume title is required."),
+});
+
+// US-058 lightweight rename: only the safe display fields a user can fix after
+// import. Canonical parsed content (raw_text, structured extraction) is never
+// touched by this path.
+const jobRenameSchema = z.object({
+  title: z.string().trim().min(1, "Job title is required."),
+  company: z.string().trim().min(1, "Company is required."),
 });
 
 const importedResumeSchema = z.object({
@@ -156,6 +176,10 @@ export function validateResumeTextInput(input) {
 
 export function validateResumeTitleInput(input) {
   return resumeTitleSchema.safeParse(input);
+}
+
+export function validateJobRenameInput(input) {
+  return jobRenameSchema.safeParse(input);
 }
 
 export function validateImportedResumePayload(input) {

@@ -3,8 +3,15 @@ import { ArrowLeft, BriefcaseBusiness, ExternalLink, FileText } from "lucide-rea
 
 import { JobPostBody, type JobPostViewModel } from "@/components/job-structured-view";
 import { SaveApplicationForm } from "@/components/forms/save-application-form";
-import { formatShortDate, getContactLabel, getJobDetail } from "@/lib/data/server";
+import { DeleteRecordButton } from "@/components/forms/delete-record-button";
+import {
+  formatShortDate,
+  getContactLabel,
+  getJobDeletionImpact,
+  getJobDetail,
+} from "@/lib/data/server";
 import { buildJobPostView } from "@/lib/job-structured-view.mjs";
+import { jobDeletionSummary } from "@/lib/deletion-view.mjs";
 import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -22,7 +29,8 @@ type JobDetailPageProps = {
 
 export default async function JobDetailPage({ params }: JobDetailPageProps) {
   const { jobId } = await params;
-  const { job } = await getJobDetail(jobId);
+  const { job, profile } = await getJobDetail(jobId);
+  const deletionImpact = await getJobDeletionImpact(job.id, profile.id);
   const jobRow = job as unknown as Record<string, unknown>;
   const hasStructured = Boolean(jobRow.extraction_json || jobRow.structured_json);
   const view = buildJobPostView({
@@ -46,11 +54,18 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
               {job.company} · Saved {formatShortDate(job.created_at)}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary">Saved</Badge>
-            <Badge variant={job.parse_status === "parsed" ? "success" : "outline"}>
-              {job.parse_status === "parsed" ? "Parsed" : job.parse_status}
-            </Badge>
+          <div className="flex flex-col items-start gap-3 md:items-end">
+            <DeleteRecordButton
+              kind="job"
+              recordId={job.id}
+              summary={jobDeletionSummary(deletionImpact)}
+            />
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary">Saved</Badge>
+              <Badge variant={job.parse_status === "parsed" ? "success" : "outline"}>
+                {job.parse_status === "parsed" ? "Parsed" : job.parse_status}
+              </Badge>
+            </div>
           </div>
         </div>
       </div>

@@ -9,6 +9,7 @@ import {
   draftStatusLabel,
   draftStatusVariant,
   exportUrl,
+  fontOptions,
   isRenderable,
   overrideWarning,
   pageOptions,
@@ -159,6 +160,31 @@ test("exportUrl appends pages only when overriding the recommendation", () => {
     exportUrl(base, "d1", "pdf", 2, 1),
     "https://api.test/api/draft-cvs/d1/export/pdf?pages=2"
   );
+});
+
+test("exportUrl appends font only when overriding the stored profile", () => {
+  const base = "https://api.test";
+  assert.equal(
+    exportUrl(base, "d1", "pdf", 1, 1, "ats_clean", "ats_clean"),
+    "https://api.test/api/draft-cvs/d1/export/pdf"
+  );
+  assert.equal(
+    exportUrl(base, "d1", "pdf", 1, 1, "modern_latex", "ats_clean"),
+    "https://api.test/api/draft-cvs/d1/export/pdf?font=modern_latex"
+  );
+  // Both overrides combine into one query string.
+  assert.equal(
+    exportUrl(base, "d1", "docx", 2, 1, "classic_latex", "ats_clean"),
+    "https://api.test/api/draft-cvs/d1/export/docx?pages=2&font=classic_latex"
+  );
+});
+
+test("fontOptions lists the three profiles with display labels", () => {
+  assert.deepEqual(fontOptions(), [
+    { key: "modern_latex", label: "Modern LaTeX" },
+    { key: "ats_clean", label: "ATS Clean" },
+    { key: "classic_latex", label: "Classic LaTeX" },
+  ]);
 });
 
 test("compressionSummary summarizes an applied report", () => {

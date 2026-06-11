@@ -28,13 +28,14 @@ test("pricing page is a placeholder and does not start checkout", () => {
   assert.doesNotMatch(source, /href=\{?["'].*checkout/i);
 });
 
-test("settings page uses live account data and avoids fake destructive controls", () => {
+test("settings page uses live account data and exposes real account deletion", () => {
   const source = readAppFile("(app)/settings/page.tsx");
 
   assert.match(source, /getWorkspaceData/);
   assert.match(source, /getTrackerData/);
-  assert.match(source, /Deletion is intentionally unavailable/);
+  // Period 12 (US-056, decision 0016) replaced the "intentionally unavailable"
+  // notice with a real typed-confirmation account deletion control.
+  assert.doesNotMatch(source, /Deletion is intentionally unavailable/);
+  assert.match(source, /DangerZoneCard/);
   assert.doesNotMatch(source, /matthew@example\.com/);
-  assert.doesNotMatch(source, /Delete resume/);
-  assert.doesNotMatch(source, /Delete job/);
 });

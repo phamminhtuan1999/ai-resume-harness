@@ -148,6 +148,9 @@ def build_draft_cv(
     )
 
     return {
+        # These resume-derived contact values are placeholders only: the
+        # workflow's postprocess() overwrites output.candidate with data.contact,
+        # which already prefers the user-edited profile email/phone/location.
         "candidate": {
             "full_name": basic.get("full_name") or "",
             "email": basic.get("email"),

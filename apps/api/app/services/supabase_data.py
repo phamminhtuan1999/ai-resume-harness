@@ -237,8 +237,8 @@ class SupabaseDataClient:
             params={
                 "select": (
                     "id,current_role,years_of_experience,target_role,"
-                    "location_preference,technical_background,candidate_profile_json,"
-                    "updated_at"
+                    "location_preference,technical_background,phone,contact_email,"
+                    "candidate_profile_json,updated_at"
                 ),
                 "id": f"eq.{user_profile_id}",
                 "limit": "1",

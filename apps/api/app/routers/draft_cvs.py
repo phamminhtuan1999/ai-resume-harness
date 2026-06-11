@@ -22,6 +22,7 @@ from app.services.ai.draft_cv_workflow import DraftCvWorkflow
 from app.services.ai.errors import AIWorkflowError
 from app.services.export.fonts import (
     DEFAULT_FONT_PROFILE,
+    FONT_PROFILES,
     resolve_font_profile,
     resolve_pdf_fonts,
 )
@@ -221,12 +222,13 @@ def patch_draft_cv_bullet(
 def export_preview(
     draft_cv_id: str,
     pages: int | None = None,
+    font: str | None = None,
     user: AuthenticatedUser = Depends(require_authenticated_user),
 ) -> JSONResponse:
     """Render-model summary + server-computed export_notes + pending count +
     rendering/compression info, with no file produced. Powers the
     warn-before-export dialog, the recommendation panel, and the override
-    control. ``pages`` previews a specific page-count override."""
+    controls. ``pages`` / ``font`` preview specific overrides."""
     data_client = _data_client()
     try:
         _user_profile_id, row = _owned_draft(data_client, user, draft_cv_id)
@@ -238,7 +240,7 @@ def export_preview(
     if not row:
         raise HTTPException(status_code=404, detail="Draft CV not found.")
 
-    resolved, error = _resolve_render(row, pages)
+    resolved, error = _resolve_render(row, pages, font)
     if error is not None:
         return JSONResponse(status_code=422, content={"error": error})
     assert resolved is not None
@@ -270,11 +272,21 @@ class _Resolved:
     has_recommendation: bool
 
 
-def _resolve_render(row: dict, pages: int | None) -> tuple[_Resolved | None, dict | None]:
-    """Build render options from the stored rendering metadata + an optional
-    ``pages`` override (US-045). Returns (resolved, None) or (None, error
-    envelope) for an invalid override. Legacy rows (no rendering_json) keep
-    Period 9 behavior and reject ``pages``."""
+def _resolve_render(
+    row: dict, pages: int | None, font: str | None = None
+) -> tuple[_Resolved | None, dict | None]:
+    """Build render options from the stored rendering metadata + optional
+    ``pages`` (US-045) and ``font`` overrides. Overrides are ephemeral render
+    parameters (decision 0014 §5) — never persisted. Returns (resolved, None)
+    or (None, error envelope) for an invalid override. Legacy rows (no
+    rendering_json) keep Period 9 behavior and reject ``pages``."""
+    if font is not None and font not in FONT_PROFILES:
+        return None, {
+            "code": "invalid_font_override",
+            "message": "Choose one of: " + ", ".join(sorted(FONT_PROFILES)) + ".",
+            "retryable": False,
+        }
+
     rendering = row.get("rendering_json") or {}
     if not rendering:
         if pages is not None:
@@ -283,8 +295,18 @@ def _resolve_render(row: dict, pages: int | None) -> tuple[_Resolved | None, dic
                 "message": "Regenerate this draft to choose a page count.",
                 "retryable": False,
             }
-        # Legacy: default font, no page targeting, no compression.
-        return _Resolved(RenderOptions(), None, None, None, False), None
+        # Legacy: default font (unless overridden), no page targeting, no
+        # compression.
+        return (
+            _Resolved(
+                RenderOptions(font_profile=font or DEFAULT_FONT_PROFILE),
+                None,
+                None,
+                None,
+                False,
+            ),
+            None,
+        )
 
     recommendation = rendering.get("recommendation") or {}
     policy = policy_from_dict(rendering.get("page_policy"))
@@ -311,7 +333,7 @@ def _resolve_render(row: dict, pages: int | None) -> tuple[_Resolved | None, dic
             )
 
     options = RenderOptions(
-        font_profile=recommendation.get("font_profile") or DEFAULT_FONT_PROFILE,
+        font_profile=font or recommendation.get("font_profile") or DEFAULT_FONT_PROFILE,
         page_target=target,
         density=recommendation.get("layout_density") or "standard",
         prioritized_keywords=prioritized,
@@ -331,6 +353,10 @@ def _rendering_block(row: dict, resolved: _Resolved) -> dict:
         "font_display_name": profile.display_name,
         "font_embedded": fonts.embedded,
         "docx_font": profile.docx_font,
+        "font_options": [
+            {"key": spec.key, "label": spec.display_name}
+            for spec in FONT_PROFILES.values()
+        ],
         "has_recommendation": resolved.has_recommendation,
         "recommended_pages": resolved.recommended_pages,
         "max_pages": resolved.max_pages,
@@ -361,6 +387,7 @@ def _export(
     *,
     fmt: Literal["pdf", "docx"],
     pages: int | None = None,
+    font: str | None = None,
 ) -> Response:
     data_client = _data_client()
     try:
@@ -373,7 +400,7 @@ def _export(
     if not row:
         raise HTTPException(status_code=404, detail="Draft CV not found.")
 
-    resolved, error = _resolve_render(row, pages)
+    resolved, error = _resolve_render(row, pages, font)
     if error is not None:
         return JSONResponse(status_code=422, content={"error": error})
     assert resolved is not None
@@ -482,15 +509,17 @@ def _stamp_export(
 def export_pdf(
     draft_cv_id: str,
     pages: int | None = None,
+    font: str | None = None,
     user: AuthenticatedUser = Depends(require_authenticated_user),
 ) -> Response:
-    return _export(draft_cv_id, user, fmt="pdf", pages=pages)
+    return _export(draft_cv_id, user, fmt="pdf", pages=pages, font=font)
 
 
 @router.post("/draft-cvs/{draft_cv_id}/export/docx")
 def export_docx(
     draft_cv_id: str,
     pages: int | None = None,
+    font: str | None = None,
     user: AuthenticatedUser = Depends(require_authenticated_user),
 ) -> Response:
-    return _export(draft_cv_id, user, fmt="docx", pages=pages)
+    return _export(draft_cv_id, user, fmt="docx", pages=pages, font=font)

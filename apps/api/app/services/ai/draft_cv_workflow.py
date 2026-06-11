@@ -126,9 +126,13 @@ class DraftCvWorkflow(BaseAIWorkflow):
             candidate_profile=candidate_profile,
             contact={
                 "full_name": basic.get("full_name") or "",
-                "email": basic.get("email"),
-                "phone": basic.get("phone"),
-                "location": basic.get("location"),
+                # Contact fields the user edits on the career profile win over
+                # the values extracted from the resume text at import time.
+                "email": (profile_row or {}).get("contact_email")
+                or basic.get("email"),
+                "phone": (profile_row or {}).get("phone") or basic.get("phone"),
+                "location": (profile_row or {}).get("location_preference")
+                or basic.get("location"),
                 "linkedin_url": basic.get("linkedin_url"),
                 "github_url": basic.get("github_url"),
                 "portfolio_url": basic.get("portfolio_url"),

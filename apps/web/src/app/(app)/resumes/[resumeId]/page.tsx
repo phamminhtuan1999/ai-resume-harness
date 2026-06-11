@@ -2,7 +2,13 @@ import Link from "next/link";
 import { ArrowLeft, FileText, UserRound, UserRoundSearch } from "lucide-react";
 
 import { CandidateProfileView } from "@/components/candidate-profile-view";
-import { formatShortDate, getResumeDetail } from "@/lib/data/server";
+import { DeleteRecordButton } from "@/components/forms/delete-record-button";
+import {
+  formatShortDate,
+  getResumeDeletionImpact,
+  getResumeDetail,
+} from "@/lib/data/server";
+import { resumeDeletionSummary } from "@/lib/deletion-view.mjs";
 import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -20,8 +26,9 @@ type ResumeDetailPageProps = {
 
 export default async function ResumeDetailPage({ params }: ResumeDetailPageProps) {
   const { resumeId } = await params;
-  const { resume, candidateProfile } = await getResumeDetail(resumeId);
+  const { resume, candidateProfile, profile } = await getResumeDetail(resumeId);
   const hasProfile = Boolean(candidateProfile && typeof candidateProfile === "object");
+  const deletionImpact = await getResumeDeletionImpact(resume.id, profile.id);
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
@@ -38,16 +45,25 @@ export default async function ResumeDetailPage({ params }: ResumeDetailPageProps
               {formatShortDate(resume.updated_at)}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/profile/import-from-resume/${resume.id}`}
-              className={buttonVariants({ variant: "outline" })}
-            >
-              <UserRoundSearch data-icon="inline-start" />
-              {hasProfile ? "Re-import profile" : "Import profile"}
-            </Link>
-            <Badge variant="secondary">{resume.source_type}</Badge>
-            <Badge variant="outline">{resume.import_status}</Badge>
+          <div className="flex flex-col items-start gap-3 md:items-end">
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={`/profile/import-from-resume/${resume.id}`}
+                className={buttonVariants({ variant: "outline" })}
+              >
+                <UserRoundSearch data-icon="inline-start" />
+                {hasProfile ? "Re-import profile" : "Import profile"}
+              </Link>
+              <DeleteRecordButton
+                kind="resume"
+                recordId={resume.id}
+                summary={resumeDeletionSummary(deletionImpact)}
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary">{resume.source_type}</Badge>
+              <Badge variant="outline">{resume.import_status}</Badge>
+            </div>
           </div>
         </div>
       </div>

@@ -17,7 +17,11 @@ export type WorkspaceProfile = {
   current_role: string | null;
   years_of_experience: number | null;
   target_role: string | null;
+  location_city: string | null;
+  location_country: string | null;
   location_preference: string | null;
+  contact_email: string | null;
+  phone: string | null;
   technical_background: string | null;
 };
 
@@ -285,7 +289,11 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
         "current_role",
         "years_of_experience",
         "target_role",
+        "location_city",
+        "location_country",
         "location_preference",
+        "contact_email",
+        "phone",
         "technical_background",
       ].join(",")
     )
@@ -405,7 +413,11 @@ export async function getWorkspaceProfile() {
         "current_role",
         "years_of_experience",
         "target_role",
+        "location_city",
+        "location_country",
         "location_preference",
+        "contact_email",
+        "phone",
         "technical_background",
       ].join(",")
     )
@@ -419,6 +431,34 @@ export async function getWorkspaceProfile() {
   return {
     appUser,
     profile: profileRow as unknown as WorkspaceProfile,
+  };
+}
+
+// The career profile page: workspace data (which also ensures the profile row
+// exists) + the imported candidate profile (US-019) + linked counts.
+export async function getProfilePageData() {
+  const workspace = await getWorkspaceData();
+
+  let candidateProfile: unknown = null;
+  if (workspace.profile?.id && hasSupabaseEnv()) {
+    const supabase = getSupabaseServiceClient();
+    const { data } = await supabase
+      .from("user_profiles")
+      .select("candidate_profile_json")
+      .eq("id", workspace.profile.id)
+      .maybeSingle();
+    candidateProfile =
+      (data as { candidate_profile_json?: unknown } | null)?.candidate_profile_json ?? null;
+  }
+
+  return {
+    ...workspace,
+    candidateProfile,
+    counts: {
+      resumes: workspace.resumes.length,
+      jobs: workspace.jobs.length,
+      matches: workspace.matches.length,
+    },
   };
 }
 
@@ -526,6 +566,37 @@ export async function getJobDetail(jobId: string) {
       raw_description: string;
     },
   };
+}
+
+// Owner-scoped cascade counts for the deletion confirm copy (US-055). The
+// matches FK cascades to every match-scoped analysis, so the match count is
+// the honest proxy for "and all their analyses"; applications cascade from a
+// job directly.
+export async function getResumeDeletionImpact(resumeId: string, userProfileId: string) {
+  const supabase = getSupabaseServiceClient();
+  const { count } = await supabase
+    .from("matches")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userProfileId)
+    .eq("resume_id", resumeId);
+  return { matches: count ?? 0 };
+}
+
+export async function getJobDeletionImpact(jobId: string, userProfileId: string) {
+  const supabase = getSupabaseServiceClient();
+  const [matches, applications] = await Promise.all([
+    supabase
+      .from("matches")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userProfileId)
+      .eq("job_id", jobId),
+    supabase
+      .from("applications")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userProfileId)
+      .eq("job_id", jobId),
+  ]);
+  return { matches: matches.count ?? 0, applications: applications.count ?? 0 };
 }
 
 export async function getMatchWorkspaceData() {

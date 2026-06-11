@@ -5,6 +5,12 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { idleActionState, type ActionState } from "@/lib/action-state";
 import { saveProfileAction } from "@/lib/actions";
 import { profileFields } from "@/lib/app-data";
+import {
+  COUNTRY_OPTIONS,
+  callingCode,
+  composeLocation,
+  countryName,
+} from "@/lib/contact-info.mjs";
 import { valuesDiffer } from "@/lib/form-dirty.mjs";
 import { FormField } from "@/components/forms/form-field";
 import { FormStatusMessage } from "@/components/forms/form-status-message";
@@ -18,7 +24,13 @@ type ProfileFormProfile = {
   current_role: string | null;
   years_of_experience: number | null;
   target_role: string | null;
+  location_city: string | null;
+  location_country: string | null;
+  // Derived "City, Country" string; kept for displaying legacy rows that
+  // predate the structured city/country columns.
   location_preference: string | null;
+  contact_email: string | null;
+  phone: string | null;
   technical_background: string | null;
 };
 
@@ -30,7 +42,10 @@ type ProfileValues = {
   current_role: string;
   years_of_experience: string;
   target_role: string;
-  location_preference: string;
+  location_country: string;
+  location_city: string;
+  contact_email: string;
+  phone: string;
   technical_background: string;
 };
 
@@ -49,7 +64,10 @@ function toFormValues(profile?: ProfileFormProfile | null): ProfileValues {
     current_role: profile?.current_role || profileFields[0].value,
     years_of_experience: String(profile?.years_of_experience ?? 4),
     target_role: profile?.target_role || profileFields[2].value,
-    location_preference: profile?.location_preference || profileFields[3].value,
+    location_country: profile?.location_country || "",
+    location_city: profile?.location_city || "",
+    contact_email: profile?.contact_email || "",
+    phone: profile?.phone || "",
     technical_background: profile?.technical_background || DEFAULT_TECHNICAL_BACKGROUND,
   };
 }
@@ -101,7 +119,16 @@ export function ProfileForm({ profile }: ProfileFormProps) {
           <DetailItem label="Current role" value={values.current_role} />
           <DetailItem label="Years of experience" value={`${values.years_of_experience} years`} />
           <DetailItem label="Target role" value={values.target_role} />
-          <DetailItem label="Location preference" value={values.location_preference} />
+          <DetailItem
+            label="Location"
+            value={
+              composeLocation(values.location_city, values.location_country) ||
+              profile?.location_preference ||
+              ""
+            }
+          />
+          <DetailItem label="Contact email" value={values.contact_email} />
+          <DetailItem label="Phone" value={values.phone} />
           <DetailItem
             className="md:col-span-2"
             label="Technical background"
@@ -176,15 +203,69 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         </Select>
       </FormField>
       <FormField
-        error={state.fieldErrors?.location_preference}
-        helpText="Optional location or remote preference."
-        label="Location preference"
+        error={state.fieldErrors?.location_country}
+        helpText="Sets the phone format and the country shown on generated CVs."
+        label="Country"
+      >
+        <Select
+          aria-invalid={Boolean(state.fieldErrors?.location_country)}
+          name="location_country"
+          autoComplete="country"
+          value={values.location_country}
+          onChange={(event) => updateField("location_country", event.target.value)}
+        >
+          <option value="">Select a country</option>
+          {COUNTRY_OPTIONS.map((country) => (
+            <option key={country.code} value={country.code}>
+              {country.name}
+              {country.callingCode ? ` (${country.callingCode})` : ""}
+            </option>
+          ))}
+        </Select>
+      </FormField>
+      <FormField
+        error={state.fieldErrors?.location_city}
+        helpText="Optional. Combined with the country as 'City, Country' on CVs."
+        label="City"
       >
         <Input
-          aria-invalid={Boolean(state.fieldErrors?.location_preference)}
-          name="location_preference"
-          value={values.location_preference}
-          onChange={(event) => updateField("location_preference", event.target.value)}
+          aria-invalid={Boolean(state.fieldErrors?.location_city)}
+          name="location_city"
+          autoComplete="address-level2"
+          value={values.location_city}
+          onChange={(event) => updateField("location_city", event.target.value)}
+        />
+      </FormField>
+      <FormField
+        error={state.fieldErrors?.contact_email}
+        helpText="Optional. Shown on generated CVs instead of the resume-imported email."
+        label="Contact email"
+      >
+        <Input
+          aria-invalid={Boolean(state.fieldErrors?.contact_email)}
+          name="contact_email"
+          type="email"
+          autoComplete="email"
+          value={values.contact_email}
+          onChange={(event) => updateField("contact_email", event.target.value)}
+        />
+      </FormField>
+      <FormField
+        error={state.fieldErrors?.phone}
+        helpText={
+          values.location_country
+            ? `Validated for ${countryName(values.location_country)} (${callingCode(values.location_country)}); saved in international format.`
+            : "Optional. Select a country, or start with + and a country code."
+        }
+        label="Phone"
+      >
+        <Input
+          aria-invalid={Boolean(state.fieldErrors?.phone)}
+          name="phone"
+          type="tel"
+          autoComplete="tel"
+          value={values.phone}
+          onChange={(event) => updateField("phone", event.target.value)}
         />
       </FormField>
       <FormField

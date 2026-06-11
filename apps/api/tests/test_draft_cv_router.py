@@ -408,6 +408,77 @@ def test_export_with_valid_override_streams(
     assert data.draft_cvs[-1]["status"] == "exported"
 
 
+def test_font_override_changes_effective_font_and_lists_options(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The AI recommended ats_clean; ?font=modern_latex must win for this render
+    (ephemeral, never persisted) and the preview must list the selectable fonts."""
+    _authenticate()
+    data = FakeData()
+    _seed_draft(
+        data,
+        status="ready_to_export",
+        bullets=[_bullet("Built Approvedalpha services.", "safe_to_use")],
+        rendering_json=_rendering_json(font="ats_clean"),
+    )
+    _wire(monkeypatch, data)
+
+    rendering = client.get(
+        "/api/draft-cvs/draftcv_1/export-preview?font=modern_latex"
+    ).json()["rendering"]
+    assert rendering["font_profile"] == "modern_latex"
+    assert rendering["effective"]["font_profile"] == "modern_latex"
+    assert rendering["font_display_name"] == "Modern LaTeX"
+    assert {o["key"] for o in rendering["font_options"]} == {
+        "modern_latex",
+        "ats_clean",
+        "classic_latex",
+    }
+    # Without the override the stored recommendation still governs.
+    untouched = client.get("/api/draft-cvs/draftcv_1/export-preview").json()["rendering"]
+    assert untouched["font_profile"] == "ats_clean"
+
+
+def test_invalid_font_override_is_422(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _authenticate()
+    data = FakeData()
+    _seed_draft(
+        data,
+        status="ready_to_export",
+        bullets=[_bullet("Built Approvedalpha.", "safe_to_use")],
+        rendering_json=_rendering_json(),
+    )
+    _wire(monkeypatch, data)
+
+    response = client.post("/api/draft-cvs/draftcv_1/export/pdf?font=comic_sans")
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "invalid_font_override"
+    assert data.draft_cv_updates == []  # nothing exported
+
+
+def test_font_override_works_on_legacy_rows_and_exports(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Legacy rows reject ``pages`` (no recommendation to bound it) but accept
+    ``font`` — the font registry alone validates it."""
+    _authenticate()
+    data = FakeData()
+    _seed_draft(data, status="ready_to_export",
+                bullets=[_bullet("Built X.", "safe_to_use")])  # no rendering_json
+    _wire(monkeypatch, data)
+
+    rendering = client.get(
+        "/api/draft-cvs/draftcv_1/export-preview?font=classic_latex"
+    ).json()["rendering"]
+    assert rendering["font_profile"] == "classic_latex"
+
+    response = client.post("/api/draft-cvs/draftcv_1/export/pdf?font=classic_latex")
+    assert response.status_code == 200
+    assert response.content[:5] == b"%PDF-"
+
+
 def test_unauthenticated_is_401(client: TestClient) -> None:
     app.dependency_overrides.clear()
     assert client.get("/api/draft-cvs/draftcv_1").status_code in (401, 403)

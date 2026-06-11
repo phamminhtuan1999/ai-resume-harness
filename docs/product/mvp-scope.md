@@ -59,6 +59,7 @@ The MVP is complete when a user can:
 | Period 9 | AI Draft CV export: truth-guarded structured CV generation with enhancement-protocol guards, review/approval flow, and ATS-safe PDF/DOCX export on the standard resume template. | US-039 through US-042 |
 | Period 10 | Draft CV rendering rework: deterministic page-count policy clamping the model's recommendation, embedded Unicode font profiles, page-aware layout with selection-only compression + report, and a bounded user page override. | US-043 through US-046 |
 | Period 11 | Decision-based job analysis experience: server-side decision engine + unified analysis package, decision-first overview, recommendation-driven next actions with material guardrails, one Refresh Analysis, workflow panel behind Advanced Details, learning-target tracker status, and decision history. | US-047 through US-054 |
+| Period 12 | Deletion and data controls: resume, job, and full account deletion with blast-radius confirmation dialogs, audit-safe ownership checks, and retention rules (decision 0016); replaces the settings-page "deletion unavailable" notice. | US-055 through US-056 |
 
 ## Period 1 Exit Criteria
 
