@@ -8,21 +8,9 @@
       "port": 3000
     },
     {
-      "name": "web-noauth",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:web:noauth"],
-      "port": 3000
-    },
-    {
       "name": "api",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:api"],
-      "port": 8000
-    },
-    {
-      "name": "api-noauth",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:api:noauth"],
       "port": 8000
     }
   ]

@@ -6,12 +6,7 @@ import { notFound } from "next/navigation";
 
 import { fetchAnalysisHistory, fetchAnalysisPackage } from "@/lib/ai-workflow-client.mjs";
 import { summarizeApplicationStatuses } from "@/lib/application-tracker.mjs";
-import {
-  getCurrentAppUser,
-  getCurrentSessionToken,
-  isPreviewAuth,
-  type AppUser,
-} from "@/lib/auth/server";
+import { getCurrentAppUser, getCurrentSessionToken, type AppUser } from "@/lib/auth/server";
 import { hasSupabaseEnv, serverEnv } from "@/lib/env";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 
@@ -851,7 +846,6 @@ export const getAnalysisPackage = cache(
       apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
       matchId,
       sessionToken,
-      preview: isPreviewAuth(),
     });
     if (!result.ok) {
       return { ok: false, message: result.message ?? "Unable to load the analysis." };
@@ -899,7 +893,6 @@ export async function getAnalysisHistory(matchId: string): Promise<AnalysisHisto
     apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
     matchId,
     sessionToken,
-    preview: isPreviewAuth(),
   });
   if (!result.ok) {
     return { ok: false, message: result.message ?? "Unable to load the history." };
