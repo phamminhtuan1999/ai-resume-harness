@@ -2,7 +2,11 @@
 
 ## Status
 
-planned
+implemented (additive `learning_target` CHECK migration applied to the live DB;
+shared status helper with groups/transition guard/save-plan; Save-as-Learning-
+Target server action with confirm-before-demote; tracker Learning Targets
+segment + count exclusion; decision-engine relevance signal now active; API +
+web unit/integration green; browser E2E deferred — suite-wide gap)
 
 ## Lane
 

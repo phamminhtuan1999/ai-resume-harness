@@ -2,7 +2,9 @@
 
 ## Status
 
-planned
+implemented (Recommended Next Actions panel renders the package's `next_actions`
+placement/state; Generate-Anyway material guardrail names missing skills + single
+confirm; unit tests + tsc + eslint green; browser E2E deferred — suite-wide gap)
 
 ## Lane
 
@@ -154,4 +156,40 @@ hardcoding, and note it in the trace.
 
 ## Evidence
 
-Not started — packet created 2026-06-10.
+Implemented 2026-06-10.
+
+- **Pure helpers**: `apps/web/src/lib/next-actions-view.mjs` — `groupActions`
+  (buckets by the engine's placement, sorts by priority, demotes unknown
+  type/placement to Advanced), `actionHref` (match/app/self/external scopes),
+  `needsConfirm` (material guardrail), `materialWarning` (names actual missing
+  skills), `trackerStatusFor` (`save_reference` → `archived`), helper copy. The
+  UI never re-derives placement — it renders the US-047 engine output.
+- **Components** (`apps/web/src/components/matches/`): `next-actions-panel.tsx`
+  (server) renders Primary / "Also useful" / Advanced (`<details>`) groups,
+  locked-in-place (disabled + inline reason), `done` view-actions, external
+  apply link, and routes unknown types inertly under Advanced;
+  `generate-anyway-action.tsx` (client) shows the skill-named warning + single
+  confirm before routing to the unchanged generation surface;
+  `next-action-tracker-form.tsx` (client) posts Save to Tracker / Keep for
+  reference to existing server actions.
+- **Server action**: `saveReferenceAction` in `apps/web/src/lib/actions.ts` —
+  "Keep for reference" archives the job (`applications.status = 'archived'` +
+  note) reusing the existing validator/table; no new tracker status, no new API
+  endpoint.
+- **Page**: `apps/web/src/app/(app)/matches/[matchId]/page.tsx` — the static
+  equal-weight sidebar is replaced by `NextActionsPanel`; mobile order keeps
+  primary actions beside the recommendation (actions `order-1`, evidence
+  `order-2`; swapped at `lg`); a `#analysis-details` anchor backs the View
+  Analysis Details action; the numeric-confidence "Analysis basis" card is gone
+  from the main surface (restatement #16).
+- **Tests**: `apps/web/tests/next-actions.test.mjs` (11 cases — grouping +
+  priority sort, unknown type/placement → Advanced, no Refresh action, href
+  per scope, apply-link only with a URL, `needsConfirm` per readiness, warning
+  names missing skills, Keep-for-reference → archived, Draft CV
+  locked-in-primary fixture, `done` view-action). Full web suite: **159
+  passed**; `tsc --noEmit` and `eslint` clean.
+- **Deferred**: browser E2E (sidebar contents per label, confirm→generation
+  fires once, mobile adjacency) — the suite-wide gap.
+
+Durable proof:
+`scripts/bin/harness-cli story update --id US-049 --status implemented --unit 1 --integration 0 --e2e 0 --platform 0`.

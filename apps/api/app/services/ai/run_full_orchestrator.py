@@ -51,6 +51,21 @@ STEP_WORKFLOWS: dict[str, type[BaseAIWorkflow]] = {
     workflow_type: cls for workflow_type, cls, _deps in STEP_MANIFEST
 }
 
+# The Refresh Analysis core chain (US-050, decision 0015 §6): re-run only the
+# steps that feed the decision, never the four downstream artifacts. The
+# included/excluded lists are explicit and tested so a future step can't silently
+# leak into refresh and trip the cost-control NFR.
+CORE_STEP_TYPES: tuple[str, ...] = ("match_analysis", "missing_skills", "assistant_insight")
+EXCLUDED_FROM_CORE: tuple[str, ...] = (
+    "resume_suggestions",
+    "cover_letter",
+    "roadmap",
+    "interview_prep",
+)
+CORE_MANIFEST: tuple[tuple[str, type[BaseAIWorkflow], tuple[str, ...]], ...] = tuple(
+    entry for entry in STEP_MANIFEST if entry[0] in CORE_STEP_TYPES
+)
+
 
 class RunFullOrchestrator:
     def __init__(
@@ -60,11 +75,15 @@ class RunFullOrchestrator:
         settings: Any,
         manifest: tuple[tuple[str, type[BaseAIWorkflow], tuple[str, ...]], ...] = STEP_MANIFEST,
         gemini_client: Any | None = None,
+        flip_prepared: bool = True,
     ) -> None:
         self.data = data_client
         self.settings = settings
         self.manifest = manifest
         self._gemini_client = gemini_client
+        # The full run marks the application "prepared" when every step lands;
+        # the core-chain refresh must not (no materials were generated).
+        self.flip_prepared = flip_prepared
 
     def run(
         self,
@@ -131,7 +150,7 @@ class RunFullOrchestrator:
         steps_blocked = sum(1 for status in outcomes.values() if status == "blocked")
 
         application_status: str | None = None
-        if steps_failed == 0 and steps_blocked == 0:
+        if self.flip_prepared and steps_failed == 0 and steps_blocked == 0:
             if self.data.flip_application_status_prepared(
                 match_id=match_id, user_profile_id=user_profile_id
             ):

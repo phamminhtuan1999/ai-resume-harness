@@ -1,10 +1,18 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { notFound } from "next/navigation";
 
+import { fetchAnalysisHistory, fetchAnalysisPackage } from "@/lib/ai-workflow-client.mjs";
 import { summarizeApplicationStatuses } from "@/lib/application-tracker.mjs";
-import { getCurrentAppUser, type AppUser } from "@/lib/auth/server";
-import { hasSupabaseEnv } from "@/lib/env";
+import {
+  getCurrentAppUser,
+  getCurrentSessionToken,
+  isPreviewAuth,
+  type AppUser,
+} from "@/lib/auth/server";
+import { hasSupabaseEnv, serverEnv } from "@/lib/env";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 
 export type WorkspaceProfile = {
@@ -76,6 +84,10 @@ export type WorkspaceMatch = {
   // Derived: true when the resume or job changed after analyzed_at. Set by the
   // data readers, not a DB column.
   is_stale?: boolean;
+  // US-053: the latest decision snapshot for this match (newest analysis_decisions
+  // row), so the list badge speaks the same vocabulary as the detail page. Null
+  // for never-recomputed matches (caller falls back to the legacy badge).
+  decision?: { label: DecisionLabel; match_score: number | null } | null;
   created_at: string;
   updated_at: string;
   resumes: {
@@ -568,9 +580,43 @@ export async function getMatchesList() {
     console.warn("[ApplyWise data skipped] Unable to load matches list.");
   }
 
-  const matches = ((data ?? []) as unknown as WorkspaceMatch[]).map((match) => ({
+  const rows = (data ?? []) as unknown as WorkspaceMatch[];
+
+  // Batch-read the latest decision snapshot per match (US-053) so each list row
+  // shows the decision badge + match % in the detail page's vocabulary. One
+  // query ordered newest-first; the first row seen per match_id is the latest.
+  const latestDecisionByMatch = new Map<string, { label: DecisionLabel; match_score: number | null }>();
+  const matchIds = rows.map((match) => match.id);
+  if (matchIds.length > 0) {
+    const { data: snapshots, error: snapshotError } = await supabase
+      .from("analysis_decisions")
+      .select("match_id,label,match_score,decided_at")
+      .eq("user_id", profile.id)
+      .in("match_id", matchIds)
+      .order("decided_at", { ascending: false });
+
+    if (snapshotError) {
+      console.warn("[ApplyWise data skipped] Unable to load decision snapshots for the list.");
+    }
+
+    for (const snapshot of (snapshots ?? []) as unknown as Array<{
+      match_id: string;
+      label: DecisionLabel;
+      match_score: number | null;
+    }>) {
+      if (!latestDecisionByMatch.has(snapshot.match_id)) {
+        latestDecisionByMatch.set(snapshot.match_id, {
+          label: snapshot.label,
+          match_score: snapshot.match_score,
+        });
+      }
+    }
+  }
+
+  const matches = rows.map((match) => ({
     ...match,
     is_stale: isMatchStale(match),
+    decision: latestDecisionByMatch.get(match.id) ?? null,
   }));
 
   return { appUser, profile, matches };
@@ -707,6 +753,158 @@ export async function getMatchDetail(matchId: string) {
     match: { ...match, is_stale: isMatchStale(match) },
     insight: (insightRow ?? null) as AssistantInsight | null,
   };
+}
+
+export type DecisionLabel =
+  | "strong_apply"
+  | "apply_with_improvements"
+  | "learning_target"
+  | "not_recommended";
+
+export type AnalysisPackageDecision = {
+  label: DecisionLabel;
+  display_label: string;
+  match_score: number;
+  risk_level: "low" | "medium" | "high";
+  summary: string;
+  confidence: { score: number | null; qualitative: string; reasons: string[] };
+  previous: { label: DecisionLabel; decided_at: string | null } | null;
+};
+
+export type AnalysisPackage = {
+  version: string;
+  rules_version: string;
+  analysis_state: "not_analyzed" | "partial" | "complete" | "stale";
+  stale: boolean;
+  analyzed_at: string | null;
+  job: {
+    id: string | null;
+    title: string;
+    company: string;
+    location: string | null;
+    work_type: string | null;
+    job_url: string | null;
+  };
+  resume: { id: string | null; title: string | null };
+  application: { status: string | null; applied_date: string | null } | null;
+  decision: AnalysisPackageDecision | null;
+  scores: {
+    overall: number;
+    skill: number;
+    experience: number;
+    ai_readiness: number;
+    ats_keywords: number;
+    seniority: number;
+  };
+  evidence: {
+    matched: { label: string; detail: string }[];
+    missing: string[];
+    risks: string[];
+  };
+  skill_gaps: {
+    skill: string;
+    importance: string;
+    gap_type: string;
+    evidence_status: string;
+    why_it_matters: string;
+    how_to_fix: string;
+    interview_risk: string;
+  }[];
+  next_actions: {
+    type: string;
+    label: string;
+    priority: number;
+    reason: string;
+    placement: string;
+    state: string;
+  }[];
+  material_readiness: { draft_cv: string; cover_letter: string; reason: string } | null;
+  analysis_details: {
+    model_provider: string | null;
+    model_name: string | null;
+    last_run_at: string | null;
+    steps: {
+      workflow_type: string;
+      status: string;
+      model_provider: string | null;
+      model_name: string | null;
+      completed_at: string | null;
+    }[];
+  };
+};
+
+export type AnalysisPackageResult =
+  | { ok: true; package: AnalysisPackage }
+  | { ok: false; message: string };
+
+// The decision-first overview (US-048) consumes the one US-047 composition
+// endpoint rather than re-stitching module rows. This is a server-side GET to
+// the FastAPI backend (pattern: fetchActivityFeed), not a direct Supabase read,
+// because the decision label + presentation are computed server-side only.
+// Wrapped in React `cache` so the match layout (tab shell + emphasis) and the
+// page that renders inside it dedupe to a single backend fetch per request
+// (US-051 — the layout reads the decision label for tab emphasis).
+export const getAnalysisPackage = cache(
+  async (matchId: string): Promise<AnalysisPackageResult> => {
+    const sessionToken = await getCurrentSessionToken();
+    const result = await fetchAnalysisPackage({
+      apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
+      matchId,
+      sessionToken,
+      preview: isPreviewAuth(),
+    });
+    if (!result.ok) {
+      return { ok: false, message: result.message ?? "Unable to load the analysis." };
+    }
+    return { ok: true, package: result.package as AnalysisPackage };
+  }
+);
+
+// US-054 decision history (read-only). Snapshots newest-first, capped, with the
+// dropped count surfaced. Rendered only inside the Advanced tab.
+export type DecisionHistoryEntry = {
+  id: string | null;
+  label: DecisionLabel;
+  display_label: string;
+  match_score: number | null;
+  risk_level: "low" | "medium" | "high" | null;
+  confidence: number | null;
+  summary: string;
+  previous_label: DecisionLabel | null;
+  rules_version: string;
+  decided_at: string | null;
+  inputs: {
+    resume_updated_at: string | null;
+    job_updated_at: string | null;
+    profile_updated_at: string | null;
+  };
+};
+
+export type AnalysisDecisionHistory = {
+  version: string;
+  match_id: string;
+  returned: number;
+  total: number;
+  dropped: number;
+  entries: DecisionHistoryEntry[];
+};
+
+export type AnalysisHistoryResult =
+  | { ok: true; history: AnalysisDecisionHistory }
+  | { ok: false; message: string };
+
+export async function getAnalysisHistory(matchId: string): Promise<AnalysisHistoryResult> {
+  const sessionToken = await getCurrentSessionToken();
+  const result = await fetchAnalysisHistory({
+    apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
+    matchId,
+    sessionToken,
+    preview: isPreviewAuth(),
+  });
+  if (!result.ok) {
+    return { ok: false, message: result.message ?? "Unable to load the history." };
+  }
+  return { ok: true, history: result.history as AnalysisDecisionHistory };
 }
 
 export async function getMissingSkillsDetail(matchId: string) {

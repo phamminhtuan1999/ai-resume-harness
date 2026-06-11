@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     resume_import_timeout_seconds: int = Field(default=45, alias="RESUME_IMPORT_TIMEOUT_SECONDS")
     clerk_secret_key: str = Field(default="", alias="CLERK_SECRET_KEY")
     clerk_jwks_url: str = Field(default="", alias="CLERK_JWKS_URL")
+    # No-auth preview identity: in preview mode (APPLYWISE_API_ENV=preview) only,
+    # token-less requests resolve to this Clerk user id — the Playwright test
+    # profile — so the preview backend serves real, seeded data. Requests that
+    # carry a token are always verified normally, so real browsers and the E2E
+    # suite are unaffected; development/production never trigger it.
+    preview_clerk_user_id: str = Field(
+        default="", alias="APPLYWISE_PREVIEW_CLERK_USER_ID"
+    )
     supabase_url: str = Field(default="", alias="SUPABASE_URL")
     supabase_service_role_key: str = Field(default="", alias="SUPABASE_SERVICE_ROLE_KEY")
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")

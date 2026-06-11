@@ -691,6 +691,8 @@ class FakeData:
         activity_rows: list[dict] | None = None,
         run_snapshot: dict | None = None,
         has_application: bool = True,
+        application: dict | None = None,
+        latest_snapshot: dict | None = None,
     ) -> None:
         self._match = match if match is not None else {"id": "match_1"}
         self._resume = resume if resume is not None else default_resume()
@@ -710,6 +712,10 @@ class FakeData:
         self._run_snapshot = run_snapshot
         self.activity_updates = 0
         self._has_application = has_application
+        self._application = application
+        self._latest_snapshot = latest_snapshot
+        self.decision_snapshots: list[dict] = []
+        self.job_extraction_updates: list[dict] = []
         self.prepared_flips: list[str] = []
 
         self.runs: list[dict] = []
@@ -971,6 +977,35 @@ class FakeData:
                 self.draft_cv_updates.append({"id": draft_cv_id, **fields})
                 return row
         return None
+
+    # --- US-047 analysis package: application + decision snapshots ---
+    def get_application_for_match(self, *, match_id, user_profile_id):
+        return self._application
+
+    def get_latest_decision_snapshot(self, *, match_id, user_profile_id):
+        return self._latest_snapshot
+
+    def insert_decision_snapshot(self, *, user_profile_id, match_id, snapshot):
+        self._counter += 1
+        row = {
+            "id": f"decision_{self._counter}",
+            "user_id": user_profile_id,
+            "match_id": match_id,
+            "decided_at": f"2026-06-10T00:00:{self._counter:02d}Z",
+            **snapshot,
+        }
+        self.decision_snapshots.append(row)
+        # A subsequent recompute reads this as the latest (dedupe / previous).
+        self._latest_snapshot = row
+        return row
+
+    def get_decision_history(self, *, match_id, user_profile_id, limit=20):
+        rows = [r for r in self.decision_snapshots if r.get("match_id") == match_id]
+        newest_first = list(reversed(rows))
+        return newest_first[:limit], len(newest_first)
+
+    def update_job_extraction(self, *, job_id, user_profile_id, fields):
+        self.job_extraction_updates.append({"job_id": job_id, **fields})
 
     # --- US-033 cover letter persistence ---
     def save_cover_letter(self, *, match_id, user_profile_id, cover_letter):

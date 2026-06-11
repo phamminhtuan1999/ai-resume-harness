@@ -446,14 +446,58 @@ Required fields:
 - `notes text`
 - timestamps
 
-Valid `status` storage values:
+Valid `status` storage values (decision 0009):
 
 - `saved`
+- `prepared` — US-038 (migration `0017`): set when run-full completes all AI steps.
 - `applied`
 - `interviewing`
 - `offer`
 - `rejected`
 - `archived`
+- `learning_target` — US-052 (migration `0021`): a role the user is building
+  skills toward.
 
-The browser UI displays these values as `Saved`, `Applied`, `Interviewing`,
-`Offer`, `Rejected`, and `Archived`.
+The browser UI displays these as `Saved`, `Prepared`, `Applied`,
+`Interviewing`, `Offer`, `Rejected`, `Archived`, and `Learning Target`.
+
+Status groups (US-052): **pipeline** (`saved`, `prepared`, `applied`,
+`interviewing`, `offer`) are the *active applications*; **closed** (`rejected`,
+`archived`); **learning** (`learning_target`) is tracked but never counted as an
+active application and renders in its own tracker segment. A `learning_target`
+may only transition to `saved`, `applied`, or `archived`.
+
+### `analysis_decisions` (Period 11, US-047)
+
+Append-only decision snapshots: one row per recompute, never updated or deleted.
+Written **only** by the server-side `recompute_decision`; the
+`GET /api/matches/{match_id}/analysis-package` read path never writes (decision
+0015 §7). Each row records the server-computed verdict and the inputs that
+produced it, so history (US-054) can show how a decision evolved and whether a
+change was caused by the user or by rule tuning.
+
+Required fields:
+
+- `id uuid primary key`
+- `user_id uuid references user_profiles(id) on delete cascade`
+- `match_id uuid references matches(id) on delete cascade`
+- `label text not null` — `strong_apply | apply_with_improvements |
+  learning_target | not_recommended`
+- `display_label text not null`
+- `match_score numeric`
+- `scores_json jsonb` — the sub-score breakdown at decision time
+- `risk_level text` — `low | medium | high`
+- `confidence numeric`, `confidence_reasons_json jsonb`
+- `summary text`, `evidence_json jsonb`
+- `inputs_snapshot_json jsonb` — module row ids + timestamps used
+- `inputs_hash text not null` — module row ids + their `updated_at` +
+  `rules_version`; the compare-before-insert identity that dedupes snapshots
+- `rules_version text not null` — band constants are tunable; history
+  distinguishes "the rules changed" from "you changed"
+- `previous_label text`
+- `decided_at timestamptz`, timestamps
+
+Indexed `(user_id, match_id, decided_at desc)`. Cascade delete via user/match
+is the privacy/GDPR deletion path — snapshot evidence text is resume-derived
+PII. Retention policy: most recent 50 snapshots per match (enforcement may be
+deferred; the policy may not).

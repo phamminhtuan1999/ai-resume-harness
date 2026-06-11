@@ -46,4 +46,29 @@ psql "$SUPABASE_DB_URL" -f apps/web/supabase/migrations/<NNNN>_period11_analysis
 
 ## Acceptance Evidence
 
-Add results after verification. Not started — packet created 2026-06-10.
+Implemented 2026-06-10.
+
+- **Engine + adapters** (`apps/api/app/services/decision_engine.py`,
+  `decision_adapters.py`): pure functions; band constants 80/60/35 and
+  `RULES_VERSION = "p11.r1"` frozen in code.
+- **Schemas** (`apps/api/app/schemas/analysis_package.py`); **composition +
+  recompute** (`apps/api/app/services/analysis_package.py`); **endpoint**
+  `GET /api/matches/{match_id}/analysis-package` + the exactly-one-recompute
+  hook in `apps/api/app/routers/matches.py`.
+- **Migration** `apps/web/supabase/migrations/0020_period11_analysis_decisions.sql`
+  applied to the live DB via `psql "$SUPABASE_DB_URL"` (CREATE TABLE / INDEX /
+  ALTER TABLE); all 19 columns present; PostgREST `GET /analysis_decisions`
+  returns HTTP 200 (table exposed, RLS permits the service role).
+- **Tests**: `tests/test_decision_engine.py` (57 cases — rules matrix with
+  boundary + reachability + absent-input dimensions, the normative role-family
+  affinity matrix, placement table, all nine confidence codes, determinism,
+  adapters) and `tests/test_analysis_package_router.py` (17 cases — composed
+  GET, pure-read-no-write, ETag/304, partial + stale-by-profile-edit + 
+  not_analyzed states, ownership 404, recompute identity/dedupe/previous +
+  activity-on-change, exactly-one-recompute on regenerate and run-full, ≤10
+  round-trip bound). Full API suite: **377 passed**; `ruff check` clean.
+- **Deferred**: browser E2E (suite-wide gap, picked up by US-048 which renders
+  the package).
+
+Durable proof recorded via
+`scripts/bin/harness-cli story update --id US-047 --status implemented --unit 1 --integration 1 --e2e 0 --platform 0`.

@@ -17,7 +17,7 @@ export const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Resumes", href: "/resumes", icon: FileText },
   { label: "Jobs", href: "/jobs", icon: BriefcaseBusiness },
-  { label: "Matches", href: "/matches", icon: ListChecks },
+  { label: "Analyzed Jobs", href: "/matches", icon: ListChecks },
   { label: "Tracker", href: "/tracker", icon: ClipboardList },
   { label: "Activity", href: "/activity", icon: Activity },
   { label: "Pricing", href: "/pricing", icon: BadgeDollarSign },

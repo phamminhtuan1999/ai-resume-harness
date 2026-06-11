@@ -22,8 +22,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  APPLICATION_STATUSES,
+  TRACKED_STATUSES,
   getApplicationStatusLabel,
+  partitionApplications,
 } from "@/lib/application-tracker.mjs";
 import {
   formatShortDate,
@@ -44,11 +45,18 @@ function statusVariant(status: string) {
     return "info" as const;
   }
 
+  if (status === "learning_target") {
+    return "warning" as const;
+  }
+
   return "secondary" as const;
 }
 
 export default async function TrackerPage() {
   const { applications, statusSummary } = await getTrackerData();
+  // Learning targets are not active applications — they live in their own
+  // segment and never appear in the pipeline summary cards (US-052).
+  const { tracked, learningTargets } = partitionApplications(applications);
 
   return (
     
@@ -64,7 +72,7 @@ export default async function TrackerPage() {
         />
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-          {APPLICATION_STATUSES.map((status) => (
+          {TRACKED_STATUSES.map((status) => (
             <Card key={status}>
               <CardHeader className="gap-1">
                 <CardDescription>{getApplicationStatusLabel(status)}</CardDescription>
@@ -74,7 +82,7 @@ export default async function TrackerPage() {
           ))}
         </section>
 
-        {applications.length > 0 ? (
+        {tracked.length > 0 ? (
           <Card>
             <CardHeader>
               <CardTitle>Tracked applications</CardTitle>
@@ -95,7 +103,7 @@ export default async function TrackerPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {applications.map((application) => (
+                  {tracked.map((application) => (
                     <TableRow key={application.id}>
                       <TableCell className="min-w-[220px] whitespace-normal">
                         <Link
@@ -154,7 +162,83 @@ export default async function TrackerPage() {
               </Table>
             </CardContent>
           </Card>
-        ) : (
+        ) : null}
+
+        {learningTargets.length > 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Learning Targets</CardTitle>
+              <CardDescription>
+                Roles you&apos;re building skills toward — not active applications. They don&apos;t
+                count toward your pipeline.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Job</TableHead>
+                    <TableHead>Match</TableHead>
+                    <TableHead>Roadmap</TableHead>
+                    <TableHead>Updated</TableHead>
+                    <TableHead className="text-right">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {learningTargets.map((application) => (
+                    <TableRow key={application.id}>
+                      <TableCell className="min-w-[220px] whitespace-normal">
+                        <Link
+                          href={`/jobs/${application.job_id}`}
+                          className="font-medium hover:underline"
+                        >
+                          {application.jobs?.company || "Unknown company"}
+                        </Link>
+                        <p className="mt-1 text-muted-foreground">
+                          {application.jobs?.title || "Unknown role"}
+                        </p>
+                      </TableCell>
+                      <TableCell>
+                        {application.match_id ? (
+                          <Link
+                            className="hover:underline"
+                            href={`/matches/${application.match_id}`}
+                          >
+                            {application.matches?.overall_score ?? "View"}/100
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground">No match</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {application.match_id ? (
+                          <Link
+                            className="text-sm font-medium underline underline-offset-4"
+                            href={`/matches/${application.match_id}/roadmap`}
+                          >
+                            4-Week Roadmap
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>{formatShortDate(application.updated_at)}</TableCell>
+                      <TableCell className="whitespace-normal text-right">
+                        <ApplicationStatusForm
+                          applicationId={application.id}
+                          key={`${application.id}-${application.status}`}
+                          status={application.status}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {applications.length === 0 ? (
           <EmptyState
             variant="create"
             icon={ClipboardList}
@@ -171,7 +255,7 @@ export default async function TrackerPage() {
               </>
             }
           />
-        )}
+        ) : null}
       </div>
   );
 }

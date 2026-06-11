@@ -133,14 +133,14 @@ US-049; US-054 after US-047 + US-051).
 | US-044 | Draft CV Font Profiles & Embedded Unicode Font Rendering | high-risk | implemented |
 | US-045 | Draft CV Page-Aware Layout & Deterministic Compression | high-risk | implemented |
 | US-046 | Draft CV UI: Rendering Recommendation & Page Override | normal | implemented |
-| US-047 | Job Analysis Decision Engine & Unified Analysis Package | high-risk | planned |
-| US-048 | Decision-First Overview UI (Header, Recommendation, Evidence) | normal | planned |
-| US-049 | Recommendation-Based Next Actions & Material Guardrails | normal | planned |
-| US-050 | Refresh Analysis Consolidation | normal | planned |
-| US-051 | Detail Tabs & Advanced Analysis Details | normal | planned |
-| US-052 | Learning Target Tracker Flow | high-risk | planned |
-| US-053 | Page Naming, Empty/Error States & Profile Completeness | normal | planned |
-| US-054 | Analysis Decision History View | normal | planned |
+| US-047 | Job Analysis Decision Engine & Unified Analysis Package | high-risk | implemented |
+| US-048 | Decision-First Overview UI (Header, Recommendation, Evidence) | normal | implemented |
+| US-049 | Recommendation-Based Next Actions & Material Guardrails | normal | implemented |
+| US-050 | Refresh Analysis Consolidation | normal | implemented |
+| US-051 | Detail Tabs & Advanced Analysis Details | normal | implemented |
+| US-052 | Learning Target Tracker Flow | high-risk | implemented |
+| US-053 | Page Naming, Empty/Error States & Profile Completeness | normal | implemented |
+| US-054 | Analysis Decision History View | normal | implemented |
 
 All Period 8 stories now have full packets under `docs/stories/period-8/`
 (high-risk folders for US-027/US-028/US-031/US-033; flat files otherwise) plus

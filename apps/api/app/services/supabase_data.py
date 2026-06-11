@@ -116,6 +116,21 @@ class SupabaseDataClient:
             raise SupabaseDataError("Job insert returned no rows.")
         return rows[0]
 
+    def update_job_extraction(
+        self, *, job_id: str, user_profile_id: str, fields: dict[str, Any]
+    ) -> None:
+        """Write refreshed job-requirement extraction onto an owned job (US-050).
+
+        Deliberately does NOT bump ``updated_at``: extraction is enrichment of an
+        unchanged job, not a job edit, so it must not re-trip decision staleness.
+        """
+        self._request(
+            "PATCH",
+            "/jobs",
+            params={"id": f"eq.{job_id}", "user_id": f"eq.{user_profile_id}"},
+            json=fields,
+        )
+
     def save_candidate_profile(
         self,
         *,
@@ -159,9 +174,15 @@ class SupabaseDataClient:
             "GET",
             "/matches",
             params={
+                # Extra columns past the original (scores, timestamps, evidence
+                # blobs) feed the US-047 analysis package; workflows that only
+                # need id/resume_id/job_id simply ignore them.
                 "select": (
-                    "id,resume_id,job_id,overall_score,analyzer_provider,"
-                    "apply_recommendation"
+                    "id,resume_id,job_id,overall_score,skill_score,experience_score,"
+                    "ai_readiness_score,ats_keyword_score,seniority_score,"
+                    "analyzer_provider,apply_recommendation,confidence_score,"
+                    "analyzed_at,updated_at,assistant_summary,fit_reasoning,"
+                    "top_strengths_json,top_gaps_json,risks_json"
                 ),
                 "id": f"eq.{match_id}",
                 "user_id": f"eq.{user_profile_id}",
@@ -175,7 +196,7 @@ class SupabaseDataClient:
 
         resume = self._get_owned_row(
             table="resumes",
-            select="id,title,raw_text,structured_json",
+            select="id,title,raw_text,structured_json,updated_at",
             row_id=match.get("resume_id"),
             user_profile_id=user_profile_id,
         )
@@ -183,7 +204,8 @@ class SupabaseDataClient:
             table="jobs",
             select=(
                 "id,company,title,location,work_type,raw_description,"
-                "structured_json,parse_status,job_url"
+                "structured_json,parse_status,job_url,updated_at,"
+                "extraction_status,extraction_json"
             ),
             row_id=match.get("job_id"),
             user_profile_id=user_profile_id,
@@ -215,7 +237,8 @@ class SupabaseDataClient:
             params={
                 "select": (
                     "id,current_role,years_of_experience,target_role,"
-                    "location_preference,technical_background,candidate_profile_json"
+                    "location_preference,technical_background,candidate_profile_json,"
+                    "updated_at"
                 ),
                 "id": f"eq.{user_profile_id}",
                 "limit": "1",
@@ -1212,6 +1235,98 @@ class SupabaseDataClient:
         if not rows:
             raise SupabaseDataError(f"{table} save returned no rows.")
         return rows[0]
+
+    # --- Analysis package: applications + decision snapshots (US-047) ----------
+
+    def get_application_for_match(
+        self, *, match_id: str, user_profile_id: str
+    ) -> dict[str, Any] | None:
+        """The tracker row for a match (status drives placement overrides, §4)."""
+        response = self._request(
+            "GET",
+            "/applications",
+            params={
+                "select": "status,applied_date",
+                "match_id": f"eq.{match_id}",
+                "user_id": f"eq.{user_profile_id}",
+                "limit": "1",
+            },
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
+    def get_latest_decision_snapshot(
+        self, *, match_id: str, user_profile_id: str
+    ) -> dict[str, Any] | None:
+        """Most recent decision snapshot for a match (the served verdict, §7)."""
+        response = self._request(
+            "GET",
+            "/analysis_decisions",
+            params={
+                "select": (
+                    "id,label,display_label,match_score,scores_json,risk_level,"
+                    "confidence,confidence_reasons_json,summary,evidence_json,"
+                    "inputs_snapshot_json,inputs_hash,rules_version,previous_label,"
+                    "decided_at"
+                ),
+                "match_id": f"eq.{match_id}",
+                "user_id": f"eq.{user_profile_id}",
+                "order": "decided_at.desc",
+                "limit": "1",
+            },
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
+    def insert_decision_snapshot(
+        self, *, user_profile_id: str, match_id: str, snapshot: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Append one decision snapshot (the only writer of ``analysis_decisions``)."""
+        response = self._request(
+            "POST",
+            "/analysis_decisions",
+            params={"select": "id,label,previous_label,decided_at,inputs_hash"},
+            json={**snapshot, "user_id": user_profile_id, "match_id": match_id},
+            extra_headers={"Prefer": "return=representation"},
+        )
+        rows = response.json()
+        if not rows:
+            raise SupabaseDataError("Decision snapshot insert returned no rows.")
+        return rows[0]
+
+    def get_decision_history(
+        self, *, match_id: str, user_profile_id: str, limit: int = 20
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Decision snapshots newest-first plus the exact total (US-054).
+
+        The total lets the history view show how many older runs were dropped
+        beyond ``limit`` — a capped list never reads as the whole story.
+        """
+        response = self._request(
+            "GET",
+            "/analysis_decisions",
+            params={
+                "select": (
+                    "id,label,display_label,match_score,scores_json,risk_level,"
+                    "confidence,confidence_reasons_json,summary,inputs_snapshot_json,"
+                    "rules_version,previous_label,decided_at"
+                ),
+                "match_id": f"eq.{match_id}",
+                "user_id": f"eq.{user_profile_id}",
+                "order": "decided_at.desc",
+                "limit": str(limit),
+            },
+            extra_headers={"Prefer": "count=exact"},
+        )
+        rows = response.json()
+        content_range = response.headers.get("content-range") or ""
+        total = len(rows)
+        if "/" in content_range:
+            try:
+                total = int(content_range.split("/")[-1])
+            except ValueError:
+                pass
+        return rows, total
 
 
 def _raise_for_supabase(response: httpx.Response) -> None:

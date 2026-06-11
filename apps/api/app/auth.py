@@ -16,6 +16,9 @@ class AuthenticatedUser:
 async def require_authenticated_user(request: Request) -> AuthenticatedUser:
     token = _get_session_token(request)
     if token is None:
+        preview_user = _preview_user()
+        if preview_user is not None:
+            return preview_user
         raise _unauthorized()
 
     try:
@@ -38,6 +41,25 @@ async def require_authenticated_user(request: Request) -> AuthenticatedUser:
         raise _unauthorized()
 
     return AuthenticatedUser(clerk_user_id=subject)
+
+
+def _preview_user() -> AuthenticatedUser | None:
+    """No-auth preview identity for token-less requests.
+
+    Active only in the dedicated preview mode (``APPLYWISE_API_ENV=preview``) and
+    only when ``APPLYWISE_PREVIEW_CLERK_USER_ID`` is set, so the ``web-noauth``
+    preview (which sends no token) resolves to the Playwright test profile and the
+    backend serves real, seeded data. Any request that carries a token is verified
+    normally, leaving real browsers and the E2E suite untouched; normal dev and the
+    test suite run as ``development`` and production as ``production``, so neither
+    triggers the bypass.
+    """
+    settings = get_settings()
+    if settings.api_env != "preview":
+        return None
+    if not settings.preview_clerk_user_id:
+        return None
+    return AuthenticatedUser(clerk_user_id=settings.preview_clerk_user_id)
 
 
 def _get_session_token(request: Request) -> str | None:

@@ -2,14 +2,24 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ACTIVE_APPLICATION_STATUSES,
   APPLICATION_STATUSES,
+  APPLICATION_STATUS_GROUPS,
+  TRACKED_STATUSES,
+  applicationStatusGroup,
+  canChangeApplicationStatus,
+  countActiveApplications,
   getApplicationStatusLabel,
   isApplicationStatus,
+  isActiveApplicationStatus,
+  isLearningTarget,
+  learningTargetSavePlan,
+  partitionApplications,
   summarizeApplicationStatuses,
 } from "../src/lib/application-tracker.mjs";
 
 test("application tracker exposes the MVP status workflow", () => {
-  // "prepared" added by US-038: run-full completion marks an application Prepared.
+  // "prepared" added by US-038; "learning_target" added by US-052.
   assert.deepEqual(APPLICATION_STATUSES, [
     "saved",
     "prepared",
@@ -18,8 +28,84 @@ test("application tracker exposes the MVP status workflow", () => {
     "offer",
     "rejected",
     "archived",
+    "learning_target",
   ]);
   assert.equal(getApplicationStatusLabel("prepared"), "Prepared");
+  assert.equal(getApplicationStatusLabel("learning_target"), "Learning Target");
+});
+
+test("status groups: learning targets are tracked but not active applications", () => {
+  assert.deepEqual(APPLICATION_STATUS_GROUPS.learning, ["learning_target"]);
+  assert.equal(applicationStatusGroup("offer"), "pipeline");
+  assert.equal(applicationStatusGroup("archived"), "closed");
+  assert.equal(applicationStatusGroup("learning_target"), "learning");
+  assert.equal(applicationStatusGroup("not-real"), null);
+
+  // Learning targets are excluded from the active-application set and counts.
+  assert.equal(isActiveApplicationStatus("applied"), true);
+  assert.equal(isActiveApplicationStatus("learning_target"), false);
+  assert.equal(isActiveApplicationStatus("archived"), false);
+  assert.ok(!ACTIVE_APPLICATION_STATUSES.includes("learning_target"));
+  assert.ok(!TRACKED_STATUSES.includes("learning_target"));
+  assert.equal(isLearningTarget("learning_target"), true);
+  assert.equal(isLearningTarget("saved"), false);
+
+  const count = countActiveApplications([
+    { status: "saved" },
+    { status: "interviewing" },
+    { status: "learning_target" },
+    { status: "archived" },
+  ]);
+  assert.equal(count, 2); // saved + interviewing; learning_target and archived excluded
+});
+
+test("partitionApplications splits learning targets from the pipeline/closed rows", () => {
+  const { tracked, learningTargets } = partitionApplications([
+    { id: "1", status: "saved" },
+    { id: "2", status: "learning_target" },
+    { id: "3", status: "archived" },
+    { id: "4", status: "learning_target" },
+  ]);
+  assert.deepEqual(
+    tracked.map((a) => a.id),
+    ["1", "3"]
+  );
+  assert.deepEqual(
+    learningTargets.map((a) => a.id),
+    ["2", "4"]
+  );
+});
+
+test("transition guard only constrains moves out of learning_target", () => {
+  // Non-learning moves keep the existing free-transition behavior.
+  assert.equal(canChangeApplicationStatus("saved", "interviewing"), true);
+  assert.equal(canChangeApplicationStatus("applied", "offer"), true);
+  // Any status may become a learning target (always an explicit choice).
+  assert.equal(canChangeApplicationStatus("interviewing", "learning_target"), true);
+  // A learning target may only leave for saved / applied / archived.
+  assert.equal(canChangeApplicationStatus("learning_target", "saved"), true);
+  assert.equal(canChangeApplicationStatus("learning_target", "applied"), true);
+  assert.equal(canChangeApplicationStatus("learning_target", "archived"), true);
+  assert.equal(canChangeApplicationStatus("learning_target", "interviewing"), false);
+  assert.equal(canChangeApplicationStatus("learning_target", "offer"), false);
+  // Unknown targets are always rejected.
+  assert.equal(canChangeApplicationStatus("saved", "not-real"), false);
+});
+
+test("learningTargetSavePlan demotes silently only from non-pipeline rows", () => {
+  // No existing row → insert.
+  assert.equal(learningTargetSavePlan(undefined, false), "insert");
+  assert.equal(learningTargetSavePlan(null, false), "insert");
+  // Already a learning target → idempotent update, no confirm.
+  assert.equal(learningTargetSavePlan("learning_target", false), "update");
+  // Closed rows re-activate without a prompt (not a demotion).
+  assert.equal(learningTargetSavePlan("archived", false), "update");
+  assert.equal(learningTargetSavePlan("rejected", false), "update");
+  // Pipeline rows require explicit confirm — no silent demotion.
+  assert.equal(learningTargetSavePlan("saved", false), "needs_confirm");
+  assert.equal(learningTargetSavePlan("interviewing", false), "needs_confirm");
+  assert.equal(learningTargetSavePlan("offer", false), "needs_confirm");
+  assert.equal(learningTargetSavePlan("interviewing", true), "update");
 });
 
 test("application tracker labels machine statuses for the UI", () => {

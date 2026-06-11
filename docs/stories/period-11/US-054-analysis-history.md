@@ -2,7 +2,10 @@
 
 ## Status
 
-planned
+implemented (read-only history endpoint — newest-first, 20-cap with surfaced
+dropped count, ownership 404; Advanced-tab history table with label transitions,
+input-freshness summaries, and rules-version markers; API + web unit/integration
+green; browser E2E deferred — suite-wide gap)
 
 ## Lane
 
@@ -87,4 +90,39 @@ None expected beyond story bookkeeping.
 
 ## Evidence
 
-Not started — packet created 2026-06-10.
+Implemented 2026-06-10.
+
+- **Endpoint** `GET /api/matches/{id}/analysis-package/history`
+  (`apps/api/app/routers/matches.py`): read-only; 404 when the match isn't owned;
+  an owned match with no recompute yet returns an empty list. Backed by
+  `build_decision_history` (`app/services/analysis_package.py`) which reuses the
+  ownership gate, maps each `analysis_decisions` row to a `DecisionHistoryEntry`,
+  and reports `returned` / `total` / `dropped`.
+- **Cap + count** (`get_decision_history` in `supabase_data.py`): now returns
+  `(rows, total)` via `Prefer: count=exact` (mirrors `list_activity_feed`), so the
+  20-entry cap surfaces a dropped count — no silent truncation.
+- **Schema** (`schemas/analysis_package.py`): `AnalysisDecisionHistory`,
+  `DecisionHistoryEntry`, `DecisionHistoryInputs` (human freshness summaries from
+  `inputs_snapshot_json` timestamps — raw row ids are never rendered).
+- **Web** (`apps/web`): `fetchAnalysisHistory` (`ai-workflow-client.mjs`) +
+  `getAnalysisHistory` and `AnalysisDecisionHistory`/`DecisionHistoryEntry` types
+  (`data/server.ts`); pure helpers in `history-view.mjs`
+  (`historyTransition` — changed/unchanged, never a false transition;
+  `rulesVersionChanged` — the "decision rules updated" marker;
+  `inputFreshnessParts`; `droppedRunsLine`); `AnalysisHistory` component (a
+  newest-first **table list**, with the rules-version marker rendered between
+  mixed-version rows and the dropped-count line below) mounted on the **Advanced**
+  tab (`/advanced` — US-051), the only surface that shows history.
+- **Tests**: `apps/api/tests/test_analysis_history_router.py` (404 ownership,
+  empty/never-recomputed, newest-first + transition fields, 20-cap + dropped
+  count, input-freshness summary, rules-version change between runs) +
+  `apps/web/tests/history-view.test.mjs` (transition copy, rules-version marker,
+  freshness parts, dropped-runs line). **API 397 passed + ruff clean; web 190
+  tests, tsc + eslint clean.**
+- **Scope notes**: history is read-only (no rollback — decision 0015 §7); the
+  rules-version marker and transition phrasing live in one web helper. Browser E2E
+  (refresh twice with a profile change → history shows the transition) remains the
+  suite-wide gap.
+
+Durable proof:
+`scripts/bin/harness-cli story update --id US-054 --status implemented --unit 1 --integration 1 --e2e 0 --platform 0`.

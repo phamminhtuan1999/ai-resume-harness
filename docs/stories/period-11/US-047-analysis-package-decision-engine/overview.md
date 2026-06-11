@@ -2,7 +2,8 @@
 
 ## Status
 
-planned
+implemented (backend + migration applied to live DB + unit/integration tests;
+browser E2E deferred to US-048)
 
 ## Lane
 

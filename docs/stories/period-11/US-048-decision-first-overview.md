@@ -2,7 +2,9 @@
 
 ## Status
 
-planned
+implemented (decision header + recommendation + evidence consume the US-047
+package; insight card retired; unit tests + tsc + eslint green; browser E2E
+deferred — suite-wide gap)
 
 ## Lane
 
@@ -135,4 +137,38 @@ review comments before freezing, and record friction.
 
 ## Evidence
 
-Not started — packet created 2026-06-10.
+Implemented 2026-06-10.
+
+- **Data access**: `getAnalysisPackage(matchId)` in
+  `apps/web/src/lib/data/server.ts` — a server-side GET to the FastAPI
+  `/api/matches/{matchId}/analysis-package` (Clerk bearer token, pattern of
+  `fetchActivityFeed`), backed by `fetchAnalysisPackage` in
+  `apps/web/src/lib/ai-workflow-client.mjs`. The overview consumes the one
+  US-047 package — it does not re-stitch module rows.
+- **Pure view helpers**: `apps/web/src/lib/analysis-package-view.mjs`
+  (label→display/badge meta, one-percentage verdict line, change delta,
+  applied-banner kind, confidence→profile-prompt mapping, evidence-status
+  labels, `not_recommended` path-forward, debug-vocab list).
+- **Components** (`apps/web/src/components/matches/`): `decision-header.tsx`
+  (one label + match%·risk, qualitative confidence via evidence section,
+  job-facts, resume title, last-analyzed + Refresh slot, change delta, applied
+  banner, Out-of-date affordance), `decision-recommendation.tsx` (summary +
+  named path forward for `not_recommended`), `decision-evidence.tsx` (matched /
+  missing-with-status / risks + add-to-profile links, confidence explanation +
+  target-role prompt, repositioned score breakdown).
+- **Page**: `apps/web/src/app/(app)/matches/[matchId]/page.tsx` reworked to
+  lead with the decision-first overview; the US-030 insight card block is
+  **retired** (its data still feeds the engine); `not_analyzed` shows the
+  generate entry point; the package-unavailable path degrades gracefully; the
+  **sidebar action block is untouched** (US-049 owns it); the AI workflow panel
+  is unchanged (US-051 relocates it).
+- **Tests**: `apps/web/tests/decision-overview.test.mjs` (11 cases — label/
+  badge mapping, single-percentage verdict line, delta render/suppress, live
+  application kinds, confidence→profile prompts incl. all nine codes,
+  evidence-status labels, `not_recommended` path, debug-vocab lint). Full web
+  suite: **148 passed**. `tsc --noEmit` and `eslint` clean.
+- **Deferred**: browser E2E (page-level render order, mobile above-the-fold,
+  add-to-profile deep links) — the suite-wide gap.
+
+Durable proof:
+`scripts/bin/harness-cli story update --id US-048 --status implemented --unit 1 --integration 0 --e2e 0 --platform 0`.

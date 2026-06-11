@@ -290,6 +290,104 @@ Gap types:
 - Proof Gap: the resume claims the skill but lacks strong project or work
   evidence.
 
+## Decision Engine & Analysis Package (Period 11, US-047)
+
+A deterministic, server-side decision engine converts the saved module outputs
+into one user-facing verdict per match. It is pure code — AI text is *input*,
+never the verdict (decision 0015 §1). The engine and its rule constants live in
+one place (`apps/api/app/services/decision_engine.py`) so they are testable as a
+unit (maintainability NFR).
+
+**Labels:** `strong_apply | apply_with_improvements | learning_target |
+not_recommended` (display: "Strong Apply Target", "Apply With Improvements",
+"Learning Target", "Not Recommended Yet").
+
+**Ordered rules, first match wins** (band constants 80/60/35):
+
+1. Unsafe-to-claim guard → Not Recommended: resume tailoring is known-unsafe, or
+   a critical required skill has no evidence at high application risk. (Beats
+   score.)
+2. Score < 35 → Not Recommended.
+3. Score 35–59 → Learning Target if the role is directionally relevant, else Not
+   Recommended (a critical gap is named but does not change the band's label).
+4. Score ≥ 60 with a critical gap → Apply With Improvements: the missing skill is
+   named and material generation is capped at "allowed with a warning" (score
+   wins at 60+ — name the gap and warn, do not gatekeep).
+5. Score ≥ 80, no critical or important gaps, risk low/medium, tailoring not
+   unsafe → Strong Apply.
+6. Otherwise (≥ 60) → Apply With Improvements; a gap-free high-risk firing
+   carries a risk-based reason, never gap copy.
+
+**Absent inputs are the common case** (a fresh analysis has no resume-suggestions
+or insight row) and are part of the contract: tailoring is tri-state
+(`safe | unsafe | unknown`; only known-unsafe blocks a label), risk defaults to
+`medium`, and decision confidence is the mean of the available core-module
+confidences.
+
+**Confidence** is shown qualitatively in the header (the numeric percentage
+lives only in the Advanced surface). Reason codes: incomplete profile, no target
+role, short/unextracted job description, ambiguous requirements,
+deterministic-fallback provider, failed/partial/missing modules.
+
+**Directional relevance** (gates Learning Target vs Not Recommended for weak
+scores) is decided by an explicit role-family heuristic: a user's explicit
+learning-target save always counts as relevant; otherwise role-family overlap
+between the job title and the profile's target role (falling back to current
+role); a learnable-gap lean is the last signal. No target role set → not
+relevant, surfaced as the "set your target role" prompt.
+
+**Analysis package.** `GET /api/matches/{match_id}/analysis-package` composes the
+saved module rows (no AI calls) into one read model: job summary, the served
+decision (label, match score, risk, qualitative confidence, summary, previous
+decision), the score sub-breakdown, evidence, skill gaps, prioritized next
+actions with material-readiness guardrails, and the analysis details. It serves
+the latest decision snapshot and a staleness flag; it never writes. Staleness
+trips when any input is newer than the snapshot — resume/job `updated_at` **and
+`user_profiles.updated_at`**.
+
+**Snapshots & recompute.** Snapshots are append-only and written **only** by
+`recompute_decision`. Every flow that mutates a decision input ends with exactly
+one recompute (analyze/regenerate, a per-step regenerate, an orchestrated run
+once at the end), deduped by `inputs_hash`. An activity-feed entry is written
+only on a genuine label transition. Module tables and endpoints remain the
+source of record and the advanced/debug surface.
+
+**Decision history (Period 11, US-054).**
+`GET /api/matches/{id}/analysis-package/history` returns the append-only
+snapshots newest-first, capped at 20 with the dropped count surfaced (no silent
+cap). Each entry carries the label, score, risk, confidence, the previous label
+(for a transition like "Not Recommended → Apply With Improvements"), the
+`rules_version`, and a human summary of which input versions were used. The
+history renders read-only inside the **Advanced** tab, with a "decision rules
+updated" marker between adjacent snapshots whose `rules_version` differs — a
+rule-tuning label change must never read as the user's fit changing.
+
+**Refresh Analysis (Period 11, US-050).** The job analysis page exposes exactly
+one re-run control. `POST /api/matches/{id}/analysis-package/refresh` re-runs
+only the decision **core chain** — match analysis → missing skills → assistant
+insight → decision recompute — never the four downstream artifacts (resume
+draft, draft CV, cover letter, roadmap, interview prep), which regenerate only by
+their own explicit actions (cost-control NFR). It is achieved by running the
+orchestrator over a **core step-profile** rather than the full manifest. Job
+requirement extraction is re-run conditionally before the chain (only when the
+job isn't already extracted). Refresh is **asynchronous**: the endpoint returns
+`202` and the client follows the existing run-status polling, refetching the
+package on completion. A second refresh while one is in flight is rejected
+**server-side with `409`** (checked against the running core-chain run). On any
+core-step failure, **no decision snapshot is written** — the prior package
+stands and the failure surfaces as a `module_failed` reason; history never
+records a decision from mixed-generation inputs.
+
+**Workflow panel visibility (Period 11, US-051).** The AI workflow panel (step
+name, status, last run, provider, model, numeric confidence %, error detail,
+per-step regenerate, stale markers) no longer renders on the main job-analysis
+surface. It lives behind the **Advanced** tab
+(`/matches/{id}/advanced`) — the renamed Analysis Details surface — collapsed
+from the decision-first overview but keeping all its debugging value. Per-step
+regenerate stays available there, and each regenerate is followed by exactly
+one decision recompute so the visible label never diverges from the regenerated
+module outputs. The decision history (US-054) renders in the same tab.
+
 ## Resume Suggestion Generator
 
 Each suggestion includes:

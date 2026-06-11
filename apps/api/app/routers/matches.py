@@ -9,7 +9,7 @@ mapped HTTP status. The run row + an activity event are written even on failure
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
 from app.auth import AuthenticatedUser, require_authenticated_user
@@ -17,6 +17,12 @@ from app.schemas.ai_workflow import (
     MatchWorkflowRunsResponse,
     WorkflowRunSummary,
 )
+from app.services.analysis_package import (
+    build_decision_history,
+    get_analysis_package,
+    recompute_decision,
+)
+from app.services.refresh_analysis import core_chain_running, run_refresh
 from app.services.ai.assistant_insight_workflow import AssistantInsightWorkflow
 from app.services.ai.base_workflow import BaseAIWorkflow
 from app.services.ai.cover_letter_workflow import CoverLetterWorkflow
@@ -54,6 +60,22 @@ def _data_client() -> SupabaseDataClient:
         raise HTTPException(status_code=500, detail="Match data source is misconfigured.") from exc
 
 
+def _recompute_decision_safe(
+    data_client: SupabaseDataClient, *, user_profile_id: str, match_id: str
+) -> None:
+    """Recompute the decision snapshot after a decision-input mutation.
+
+    Best-effort: the primary workflow already succeeded and persisted, so a
+    transient data error here must not turn a successful generation into a
+    failure. ``recompute_decision`` is a no-op when the match isn't analyzed yet
+    and dedupes when inputs are unchanged (0015 §7).
+    """
+    try:
+        recompute_decision(data_client, user_profile_id=user_profile_id, match_id=match_id)
+    except SupabaseDataError:
+        pass
+
+
 def _run_match_workflow(
     workflow_cls: type[BaseAIWorkflow],
     *,
@@ -61,9 +83,14 @@ def _run_match_workflow(
     request: Request,
     user: AuthenticatedUser,
     regenerate: bool,
+    recompute: bool = False,
 ) -> JSONResponse:
     """Run any match-scoped AI workflow on the US-027 foundation and translate the
-    standard envelope / typed errors into an HTTP response."""
+    standard envelope / typed errors into an HTTP response.
+
+    When ``recompute`` is set, a successful run is followed by exactly one
+    decision recompute (0015 §7 exactly-one-recompute). A failed run recomputes
+    nothing — no snapshot is written on partial failure (0015 §6)."""
     settings = get_settings()
     data_client = _data_client()
 
@@ -88,6 +115,9 @@ def _run_match_workflow(
         raise HTTPException(status_code=500, detail="Match data source is misconfigured.") from exc
     except SupabaseDataError as exc:
         raise HTTPException(status_code=503, detail="Match data is unavailable.") from exc
+
+    if recompute:
+        _recompute_decision_safe(data_client, user_profile_id=user_profile_id, match_id=match_id)
 
     return JSONResponse(status_code=200, content=result)
 
@@ -115,7 +145,12 @@ def analyze_match(
     user: AuthenticatedUser = Depends(require_authenticated_user),
 ) -> JSONResponse:
     return _run_match_workflow(
-        MatchAnalysisWorkflow, match_id=match_id, request=request, user=user, regenerate=False
+        MatchAnalysisWorkflow,
+        match_id=match_id,
+        request=request,
+        user=user,
+        regenerate=False,
+        recompute=True,
     )
 
 
@@ -126,7 +161,12 @@ def regenerate_match(
     user: AuthenticatedUser = Depends(require_authenticated_user),
 ) -> JSONResponse:
     return _run_match_workflow(
-        MatchAnalysisWorkflow, match_id=match_id, request=request, user=user, regenerate=True
+        MatchAnalysisWorkflow,
+        match_id=match_id,
+        request=request,
+        user=user,
+        regenerate=True,
+        recompute=True,
     )
 
 
@@ -140,7 +180,12 @@ def missing_skills(
     user: AuthenticatedUser = Depends(require_authenticated_user),
 ) -> JSONResponse:
     return _run_match_workflow(
-        MissingSkillsWorkflow, match_id=match_id, request=request, user=user, regenerate=False
+        MissingSkillsWorkflow,
+        match_id=match_id,
+        request=request,
+        user=user,
+        regenerate=False,
+        recompute=True,
     )
 
 
@@ -151,7 +196,12 @@ def regenerate_missing_skills(
     user: AuthenticatedUser = Depends(require_authenticated_user),
 ) -> JSONResponse:
     return _run_match_workflow(
-        MissingSkillsWorkflow, match_id=match_id, request=request, user=user, regenerate=True
+        MissingSkillsWorkflow,
+        match_id=match_id,
+        request=request,
+        user=user,
+        regenerate=True,
+        recompute=True,
     )
 
 
@@ -175,7 +225,12 @@ def assistant_insight(
     user: AuthenticatedUser = Depends(require_authenticated_user),
 ) -> JSONResponse:
     return _run_match_workflow(
-        AssistantInsightWorkflow, match_id=match_id, request=request, user=user, regenerate=False
+        AssistantInsightWorkflow,
+        match_id=match_id,
+        request=request,
+        user=user,
+        regenerate=False,
+        recompute=True,
     )
 
 
@@ -186,7 +241,12 @@ def regenerate_assistant_insight(
     user: AuthenticatedUser = Depends(require_authenticated_user),
 ) -> JSONResponse:
     return _run_match_workflow(
-        AssistantInsightWorkflow, match_id=match_id, request=request, user=user, regenerate=True
+        AssistantInsightWorkflow,
+        match_id=match_id,
+        request=request,
+        user=user,
+        regenerate=True,
+        recompute=True,
     )
 
 
@@ -210,7 +270,12 @@ def resume_suggestions(
     user: AuthenticatedUser = Depends(require_authenticated_user),
 ) -> JSONResponse:
     return _run_match_workflow(
-        ResumeSuggestionsWorkflow, match_id=match_id, request=request, user=user, regenerate=False
+        ResumeSuggestionsWorkflow,
+        match_id=match_id,
+        request=request,
+        user=user,
+        regenerate=False,
+        recompute=True,
     )
 
 
@@ -221,7 +286,12 @@ def regenerate_resume_suggestions(
     user: AuthenticatedUser = Depends(require_authenticated_user),
 ) -> JSONResponse:
     return _run_match_workflow(
-        ResumeSuggestionsWorkflow, match_id=match_id, request=request, user=user, regenerate=True
+        ResumeSuggestionsWorkflow,
+        match_id=match_id,
+        request=request,
+        user=user,
+        regenerate=True,
+        recompute=True,
     )
 
 
@@ -418,6 +488,149 @@ def get_match_analysis(
     return JSONResponse(status_code=200, content={"match_id": match_id, "result": row})
 
 
+# --- US-047 Unified analysis package --------------------------------------------
+
+
+@router.get("/{match_id}/analysis-package")
+def get_match_analysis_package(
+    match_id: str,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> Response:
+    """Composed, decision-first analysis package for a match (US-047).
+
+    A pure read: it serves the latest decision snapshot plus composed module
+    data and never writes (0015 §7). 200 with ``analysis_state: not_analyzed``
+    and a null decision when no analysis has run; 404 when the match isn't owned.
+    ETaggable via the snapshot's ``inputs_hash``.
+    """
+    data_client = _data_client()
+    try:
+        user_profile_id = _resolve_profile(data_client, user)
+        composed = get_analysis_package(
+            data_client, user_profile_id=user_profile_id, match_id=match_id
+        )
+    except SupabaseConfigurationError as exc:
+        raise HTTPException(status_code=500, detail="Match data source is misconfigured.") from exc
+    except SupabaseDataError as exc:
+        raise HTTPException(status_code=503, detail="Match data is unavailable.") from exc
+
+    if composed is None:
+        raise HTTPException(status_code=404, detail="Match not found.")
+
+    package, etag = composed
+    if etag and request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers={"ETag": etag})
+
+    headers = {"ETag": etag} if etag else None
+    return JSONResponse(
+        status_code=200, content=package.model_dump(mode="json"), headers=headers
+    )
+
+
+@router.get("/{match_id}/analysis-package/history")
+def get_match_analysis_history(
+    match_id: str,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> JSONResponse:
+    """Read-only decision history for a match (US-054, route frozen 0015 §5).
+
+    Snapshots newest-first, capped at 20 with the dropped count surfaced. 404
+    when the match isn't owned; an owned match with no recompute yet returns an
+    empty list (the UI explains history starts with the first analysis).
+    """
+    data_client = _data_client()
+    try:
+        user_profile_id = _resolve_profile(data_client, user)
+        history = build_decision_history(
+            data_client, user_profile_id=user_profile_id, match_id=match_id
+        )
+    except SupabaseConfigurationError as exc:
+        raise HTTPException(status_code=500, detail="Match data source is misconfigured.") from exc
+    except SupabaseDataError as exc:
+        raise HTTPException(status_code=503, detail="Match data is unavailable.") from exc
+
+    if history is None:
+        raise HTTPException(status_code=404, detail="Match not found.")
+
+    return JSONResponse(status_code=200, content=history.model_dump(mode="json"))
+
+
+def _refresh_error(status_code: int, code: str, message: str, *, retryable: bool) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": {"code": code, "message": message, "retryable": retryable}},
+    )
+
+
+@router.post("/{match_id}/analysis-package/refresh")
+def refresh_analysis_package(
+    match_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> JSONResponse:
+    """Refresh Analysis (US-050): re-run the decision core chain only.
+
+    Asynchronous — returns 202 and runs match_analysis → missing_skills →
+    assistant_insight → decision recompute in the background; the client follows
+    the existing run-status polling and refetches the package on completion. A
+    second refresh while one is in flight is rejected server-side with 409.
+    Downstream artifacts are never regenerated (decision 0015 §6).
+    """
+    data_client = _data_client()
+    settings = get_settings()
+    try:
+        user_profile_id = _resolve_profile(data_client, user)
+        bundle = data_client.get_match_with_resume_and_job(
+            match_id=match_id, user_profile_id=user_profile_id
+        )
+    except SupabaseConfigurationError as exc:
+        raise HTTPException(status_code=500, detail="Match data source is misconfigured.") from exc
+    except SupabaseDataError as exc:
+        raise HTTPException(status_code=503, detail="Match data is unavailable.") from exc
+
+    if not bundle or not bundle.get("match"):
+        raise HTTPException(status_code=404, detail="Match not found.")
+
+    job = bundle.get("job") or {}
+    if not str(job.get("raw_description") or "").strip():
+        return _refresh_error(
+            422,
+            "job_description_missing",
+            "Add or import the job description before refreshing the analysis.",
+            retryable=False,
+        )
+
+    if core_chain_running(data_client, match_id=match_id, user_profile_id=user_profile_id):
+        return _refresh_error(
+            409,
+            "refresh_in_progress",
+            "A refresh is already running for this job.",
+            retryable=True,
+        )
+
+    # An in-flight marker run closes the double-submit race before the background
+    # chain creates its own run rows; run_refresh finalizes it.
+    marker = data_client.insert_workflow_run(
+        user_profile_id=user_profile_id,
+        workflow_type="match_analysis",
+        subject_type="match",
+        subject_id=match_id,
+    )
+
+    background_tasks.add_task(
+        run_refresh,
+        data_client,
+        settings,
+        user_profile_id=user_profile_id,
+        match_id=match_id,
+        request_id=request.headers.get("x-request-id"),
+        marker_run_id=str(marker["id"]),
+    )
+    return JSONResponse(status_code=202, content={"status": "refreshing", "match_id": match_id})
+
+
 @router.get("/{match_id}/ai-workflow", response_model=MatchWorkflowRunsResponse)
 def get_match_ai_workflow(
     match_id: str,
@@ -487,6 +700,8 @@ def run_full_ai_workflow(
     except SupabaseDataError as exc:
         raise HTTPException(status_code=503, detail="Match data is unavailable.") from exc
 
+    # An orchestrated run snapshots once, at the end (0015 §7).
+    _recompute_decision_safe(data_client, user_profile_id=user_profile_id, match_id=match_id)
     return JSONResponse(status_code=200, content=result)
 
 
@@ -510,6 +725,13 @@ def regenerate_ai_workflow_step(
                 }
             },
         )
+    # A per-step regenerate ends with exactly one recompute; it dedupes when the
+    # regenerated step isn't a decision input (0015 §7).
     return _run_match_workflow(
-        workflow_cls, match_id=match_id, request=request, user=user, regenerate=True
+        workflow_cls,
+        match_id=match_id,
+        request=request,
+        user=user,
+        regenerate=True,
+        recompute=True,
     )

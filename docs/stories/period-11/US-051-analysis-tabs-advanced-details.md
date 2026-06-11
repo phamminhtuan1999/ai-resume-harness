@@ -2,7 +2,10 @@
 
 ## Status
 
-planned
+implemented (six-tab route-layout shell over the existing sub-routes; AI
+workflow panel relocated to an Advanced route with the numeric confidence %;
+roadmap entry card on Overview; non-color-only per-label tab emphasis; web
+unit tests + tsc + eslint green; browser E2E deferred — suite-wide gap)
 
 ## Lane
 
@@ -126,4 +129,47 @@ trace if it materially shapes the surface.
 
 ## Evidence
 
-Not started — packet created 2026-06-10.
+Implemented 2026-06-10.
+
+- **Tab shell as a route layout** (`apps/web/src/app/(app)/matches/[matchId]/layout.tsx`):
+  renders a shared back affordance + the fixed six-tab nav across every match
+  sub-route. The decision label is read once here (React-`cache`d
+  `getAnalysisPackage`, deduped with the page's own fetch) and drives tab
+  emphasis. **Decision: tabs-as-routes**, not in-page tab state — each tab is a
+  real, shareable URL and the active tab is derived from the path, so deep links
+  (e.g. the `view_analysis_details` action) land on the right tab.
+- **Pure tab logic** (`apps/web/src/lib/match-tabs.mjs`): `MATCH_TABS` (fixed
+  order; debug tab displayed as **"Advanced"**), `tabForPathname` (maps
+  `/cover-letter`+`/draft-cv` → Application Materials, `/resume-suggestions`+
+  `/resume-draft` → Resume Strategy, `/roadmap` → no tab), `emphasisForLabel` /
+  `isTabEmphasized` (per-label emphasis as a subset of the fixed keys — never
+  reorders, never hides).
+- **Tab nav component** (`apps/web/src/components/matches/match-tabs-nav.tsx`):
+  `usePathname`-driven active state; emphasis rendered as a **shape marker that
+  appears or not** plus an `sr-only` "(suggested for this result)" label — not
+  color-only.
+- **Advanced route** (`apps/web/src/app/(app)/matches/[matchId]/advanced/page.tsx`):
+  the relocated `AiWorkflowPanel` (per-step regenerate intact — each regenerate
+  already triggers exactly one decision recompute via US-047's
+  `_recompute_decision_safe`) plus an **Analysis confidence** card showing the
+  numeric % (which the header deliberately omits — restatement #16). US-054
+  history mounts here.
+- **Overview** (`.../[matchId]/page.tsx`): the workflow panel and its
+  `#analysis-details` anchor are gone from the main surface; a persistent
+  **roadmap entry card** (`roadmap-entry-card.tsx`,
+  `roadmapEntryFromRuns` in `analysis-package-view.mjs`) appears when a roadmap
+  exists. The `view_analysis_details` action now routes to `/advanced`.
+- **Tests**: `apps/web/tests/match-tabs.test.mjs` (fixed order, "Advanced"
+  display name, sub-route → tab resolution incl. roadmap→none and
+  cross-match/other-surface rejection, per-label emphasis, roadmap entry card).
+  Updated `next-actions.test.mjs` for the `/advanced` target. **Web: 173 tests
+  pass; tsc + eslint clean.**
+- **Scope boundaries**: sub-page internals (`/gaps`, `/resume-suggestions`,
+  `/draft-cv`, `/cover-letter`, `/interview-prep`, `/roadmap`) are untouched
+  beyond the shared shell (restatement #9). Per-sub-page back links are left for
+  US-053's breadcrumb to absorb. Component-render assertions (panel absent from
+  the main surface, friendly failure copy) and browser E2E (navigate every tab,
+  regenerate-one-step) remain the suite-wide gap.
+
+Durable proof:
+`scripts/bin/harness-cli story update --id US-051 --status implemented --unit 1 --integration 0 --e2e 0 --platform 0`.

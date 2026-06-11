@@ -167,8 +167,17 @@ dependency — US-052 can start any time after US-049; US-054 needs both US-047
 - **US-052:** migration applied to the live Supabase DB via `psql` +
   `SUPABASE_DB_URL` (per the established flow), CHECK constraint verified,
   tracker counts exclude learning targets, REST-reachable.
-- Browser E2E remains the tracked suite-wide gap, consistent with Periods
-  8–10.
+- Browser E2E: **closed for Period 11** (2026-06-10). A Playwright suite
+  (`apps/web/e2e/period11.spec.ts`, run `npm run test:e2e` from `apps/web`)
+  drives a real Chromium browser against the running app — Clerk dev test-user
+  sign-in (`@clerk/testing`) + a service-role DB seed/teardown fixture — and
+  asserts US-048/049/051/052/053/054 surfaces (list decision badge, decision
+  overview + fixed tabs + breadcrumb, Advanced numeric confidence + workflow
+  panel + history transition/rules-version marker, and the learning-target save
+  → tracker segment with active counts unchanged). 5 tests green. US-047 is
+  exercised indirectly; US-050's Refresh is not clicked (avoids real Gemini
+  spend), so those two keep `e2e=0`. Setup is documented in `apps/web/e2e/README.md`.
+  Periods 8–10 browser E2E remains the prior gap.
 
 ## Out of Scope (this period)
 

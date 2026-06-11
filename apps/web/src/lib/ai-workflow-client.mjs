@@ -13,6 +13,12 @@
   A `fetchImpl` seam keeps it unit-testable without network.
 */
 
+// Bearer header when a session token is present; no auth header otherwise (the
+// no-auth preview sends no token and relies on the API's preview identity).
+function authHeaders(sessionToken) {
+  return sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
+}
+
 export class AIWorkflowError extends Error {
   constructor(message, { code = "internal_error", retryable = false } = {}) {
     super(message || "Something went wrong. Please try again.");
@@ -338,6 +344,122 @@ export async function fetchActivityFeed({
     activities: Array.isArray(payload?.activities) ? payload.activities : [],
     total: Number(payload?.total) || 0,
   };
+}
+
+export async function fetchAnalysisPackage({
+  apiBaseUrl,
+  matchId,
+  sessionToken,
+  preview = false,
+  fetchImpl = fetch,
+}) {
+  if (!apiBaseUrl) {
+    return { ok: false, message: "The assistant API is not configured." };
+  }
+  // In no-auth preview mode there is no session token; the request goes out
+  // unauthenticated and the API's preview mode supplies the identity.
+  if (!sessionToken && !preview) {
+    return { ok: false, message: "Unable to authenticate the request." };
+  }
+  if (!matchId) {
+    return { ok: false, message: "A match is required." };
+  }
+
+  let response;
+  try {
+    response = await fetchImpl(
+      `${apiBaseUrl}/api/matches/${matchId}/analysis-package`,
+      { headers: authHeaders(sessionToken) }
+    );
+  } catch {
+    return { ok: false, message: "We could not reach the assistant. Please try again." };
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = toAIWorkflowError(payload, response.status);
+    return { ok: false, message: error.message, retryable: error.retryable };
+  }
+
+  return { ok: true, package: payload };
+}
+
+export async function fetchAnalysisHistory({
+  apiBaseUrl,
+  matchId,
+  sessionToken,
+  preview = false,
+  fetchImpl = fetch,
+}) {
+  if (!apiBaseUrl) {
+    return { ok: false, message: "The assistant API is not configured." };
+  }
+  // In no-auth preview mode there is no session token; the request goes out
+  // unauthenticated and the API's preview mode supplies the identity.
+  if (!sessionToken && !preview) {
+    return { ok: false, message: "Unable to authenticate the request." };
+  }
+  if (!matchId) {
+    return { ok: false, message: "A match is required." };
+  }
+
+  let response;
+  try {
+    response = await fetchImpl(
+      `${apiBaseUrl}/api/matches/${matchId}/analysis-package/history`,
+      { headers: authHeaders(sessionToken) }
+    );
+  } catch {
+    return { ok: false, message: "We could not reach the assistant. Please try again." };
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = toAIWorkflowError(payload, response.status);
+    return { ok: false, message: error.message, retryable: error.retryable };
+  }
+
+  return { ok: true, history: payload };
+}
+
+export async function refreshAnalysisPackage({
+  apiBaseUrl,
+  matchId,
+  sessionToken,
+  fetchImpl = fetch,
+}) {
+  if (!apiBaseUrl) {
+    return { ok: false, message: "The assistant API is not configured." };
+  }
+  if (!sessionToken) {
+    return { ok: false, message: "Unable to authenticate the request." };
+  }
+  if (!matchId) {
+    return { ok: false, message: "A match is required." };
+  }
+
+  let response;
+  try {
+    response = await fetchImpl(
+      `${apiBaseUrl}/api/matches/${matchId}/analysis-package/refresh`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionToken}` },
+      }
+    );
+  } catch {
+    return { ok: false, message: "We could not reach the assistant. Please try again." };
+  }
+
+  const payload = await response.json().catch(() => null);
+  // Refresh is asynchronous: 202 means the core chain was accepted and is
+  // running in the background. The client polls run status and refetches.
+  if (!response.ok) {
+    const error = toAIWorkflowError(payload, response.status);
+    return { ok: false, message: error.message, retryable: error.retryable };
+  }
+
+  return { ok: true, status: payload?.status ?? "refreshing" };
 }
 
 export async function regenerateActivityDescription({

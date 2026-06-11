@@ -49,6 +49,26 @@ The product should repeatedly answer this user question:
 
 > Apply now or improve first?
 
+The job analysis surface (`/matches/:id`) leads with that answer: a single
+decision-first overview (Period 11) showing one verdict — Strong Apply Target,
+Apply With Improvements, Learning Target, or Not Recommended Yet — with the
+match score, risk, a plain-language recommendation, and the supporting
+evidence, rather than a stack of independent module outputs. Detail is reached
+through a fixed six-tab shell — Overview, Skill Gaps, Resume Strategy,
+Application Materials, Interview Prep, and **Advanced** — whose order never
+changes between jobs or verdicts; the decision label only emphasizes the most
+useful tab. The technical module detail (workflow steps, models, the numeric
+confidence %, and decision history) remains available behind the **Advanced**
+tab (Analysis Details).
+
+The surface is named for what it is (US-053, copy-only — route paths stay
+`/matches`): the list is **Analyzed Jobs**, a single analysis is **Job
+Analysis**, and a breadcrumb (`Analyzed Jobs → Job Analysis`) doubles as the
+back-to-jobs link. The matches list shows each row's decision label badge and
+match % in the same vocabulary as the detail page. Incomplete-profile and
+analysis-failure states show friendly, recoverable copy (re-import the job, or
+Refresh Analysis); technical detail stays in the Advanced tab.
+
 ## MVP Modules
 
 | Module | Responsibility |
@@ -57,7 +77,7 @@ The product should repeatedly answer this user question:
 | Resume Workspace | Resume text storage, primary resume summary, parse status. |
 | Job Workspace | Manual job description storage, job URL intake, metadata, contact info, parse status. |
 | AI Analysis Engine | Resume parsing, JD parsing, scoring, gaps, suggestions, draft CV generation with PDF/DOCX export, roadmap, interview prep. |
-| Application Tracker | Application status, job link, match link, notes, contacts. |
+| Application Tracker | Application status, job link, match link, notes, contacts. Learning Targets (US-052) are tracked in their own segment and excluded from active-application counts. |
 | Billing Placeholder | Pricing and plan positioning only; no payment processing in MVP. |
 
 ## Public And Protected Surfaces

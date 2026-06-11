@@ -21,9 +21,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatShortDate, getMatchesList } from "@/lib/data/server";
+import {
+  ANALYZED_JOBS_LABEL,
+  matchListScore,
+  matchListVerdict,
+} from "@/lib/matches-list-view.mjs";
 
 type BadgeVariant = "success" | "info" | "warning" | "destructive";
 
+// Legacy score-derived badge for never-recomputed matches only (decision 0015
+// §10 — a match with a decision snapshot shows the decision label instead).
 const RECOMMENDATION_META: Record<string, { label: string; variant: BadgeVariant }> = {
   apply_now: { label: "Apply now", variant: "success" },
   apply_with_improvements: { label: "Apply with improvements", variant: "info" },
@@ -46,20 +53,20 @@ export default async function MatchesPage() {
       <PageHeader
         actions={
           <Link href="/matches/new" className={buttonVariants({ size: "lg" })}>
-            Generate match
+            Analyze a job
           </Link>
         }
-        description="Every resume-to-job analysis you have run, most recent first."
-        title="Matches"
+        description="Every job you've analyzed, most recent first. Each row shows the verdict and match score."
+        title={ANALYZED_JOBS_LABEL}
       />
 
       <Card>
         <CardHeader>
-          <CardTitle>Saved match analyses</CardTitle>
+          <CardTitle>Your analyzed jobs</CardTitle>
           <CardDescription>
             {matches.length > 0
-              ? "Latest generated reports."
-              : "Generated analyses appear here after you compare a resume and job."}
+              ? "Latest analyses, newest first."
+              : "Analyzed jobs appear here after you compare a resume and job."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -69,15 +76,19 @@ export default async function MatchesPage() {
                 <TableRow>
                   <TableHead>Job</TableHead>
                   <TableHead>Resume</TableHead>
-                  <TableHead>Score</TableHead>
-                  <TableHead>Recommendation</TableHead>
-                  <TableHead className="text-right">Generated</TableHead>
+                  <TableHead>Match</TableHead>
+                  <TableHead>Verdict</TableHead>
+                  <TableHead className="text-right">Analyzed</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {matches.map((match) => {
-                  const score = match.overall_score ?? 0;
-                  const recommendation = match.apply_recommendation
+                  const score = matchListScore(match.decision?.match_score, match.overall_score) ?? 0;
+                  // Prefer the decision snapshot's verdict (same vocabulary as the
+                  // detail page); fall back to the legacy badge only when a match
+                  // has never been recomputed.
+                  const verdict = matchListVerdict(match.decision?.label);
+                  const legacy = match.apply_recommendation
                     ? RECOMMENDATION_META[match.apply_recommendation]
                     : null;
                   const needsReview =
@@ -97,8 +108,10 @@ export default async function MatchesPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-2">
-                          {recommendation ? (
-                            <Badge variant={recommendation.variant}>{recommendation.label}</Badge>
+                          {verdict ? (
+                            <Badge variant={verdict.variant}>{verdict.display}</Badge>
+                          ) : legacy ? (
+                            <Badge variant={legacy.variant}>{legacy.label}</Badge>
                           ) : (
                             <span className="text-sm text-muted-foreground">—</span>
                           )}
@@ -119,12 +132,12 @@ export default async function MatchesPage() {
               variant="create"
               action={
                 <Link href="/matches/new" className={buttonVariants({ variant: "outline" })}>
-                  Generate match
+                  Analyze a job
                 </Link>
               }
-              description="Generate a match after saving a resume and job description."
+              description="Analyze a job after saving a resume and job description."
               icon={ListChecks}
-              title="No saved matches"
+              title="No analyzed jobs yet"
             />
           )}
         </CardContent>

@@ -2,7 +2,12 @@
 
 ## Status
 
-planned
+implemented (reusable breadcrumb primitive; "Job Analysis" / "Analyzed Jobs"
+copy across nav + list + detail with route paths unchanged; matches-list rows
+show the decision label badge + match % from the latest snapshot with legacy
+fallback; profile re-check banner on `?recheck=`; profile-completeness warning +
+centralized analysis error/health mapping on the main surface; web unit tests +
+tsc + eslint green; browser E2E deferred — suite-wide gap)
 
 ## Lane
 
@@ -106,4 +111,49 @@ re-inventing one.
 
 ## Evidence
 
-Not started — packet created 2026-06-10.
+Implemented 2026-06-10.
+
+- **Breadcrumb primitive** (`apps/web/src/components/ui/breadcrumb.tsx`): reusable
+  `Breadcrumb` over `Crumb[]` (last crumb = current page, `aria-current`; earlier
+  crumbs link). Naming + crumb construction live in
+  `apps/web/src/lib/matches-list-view.mjs` (`ANALYZED_JOBS_LABEL`,
+  `JOB_ANALYSIS_LABEL`, `jobAnalysisBreadcrumb` → `Analyzed Jobs → Job Analysis`).
+  The match layout swaps its US-051 back link for the breadcrumb (first crumb is
+  the back-to-jobs link).
+- **Naming (copy-only, routes unchanged)**: nav label `Matches → Analyzed Jobs`
+  (`app-data.ts`); matches-list title → "Analyzed Jobs"; detail surface named via
+  the breadcrumb. `/matches` route paths untouched (restatement #8).
+- **List decision badges** (`apps/web/src/app/(app)/matches/page.tsx` +
+  `getMatchesList`): one **batched** `analysis_decisions` read (newest-first,
+  `.in(match_id, …)`, first-seen-per-match = latest) attaches the latest decision
+  to each row. The Verdict column shows the decision label badge (same vocabulary
+  as the detail page — decision 0015 §10) with the match % from the snapshot;
+  never-recomputed matches fall back to the legacy `apply_recommendation` badge.
+  Pure helpers `matchListVerdict` / `matchListScore`.
+- **Profile re-check** (`apps/web/src/app/(app)/profile/page.tsx` +
+  `profile-recheck-banner.tsx`): a `?recheck={matchId}` deep link (the target of
+  US-048's evidence "add it to my profile" / "update your profile" links) renders
+  a banner that sends the user back to Refresh the analysis — closing decision
+  0015 §10's staleness loop from the profile end.
+- **Profile completeness + error/health states** (`analysis-notices.tsx` on the
+  overview): `profilePromptFromReasons` gained `showCompletenessWarning`
+  (`profile_incomplete`) → a completeness warning + Update-profile action.
+  `apps/web/src/lib/analysis-error-view.mjs` (`analysisHealthNotice`) centralizes
+  the cause → copy → recovery mapping: a failed module → "Refresh Analysis"; a
+  missing/short job description → link to the job edit surface; no module/error
+  vocabulary on the main surface (technical detail stays in Advanced).
+- **Tests**: `apps/web/tests/matches-list-view.test.mjs` (naming, breadcrumb,
+  verdict vocabulary + legacy fallback, score preference) +
+  `apps/web/tests/analysis-error-view.test.mjs` (healthy → none, model-failure →
+  Refresh, missing-JD → edit-job, precedence, no technical vocabulary) + extended
+  `decision-overview.test.mjs` for the completeness flag. **Web: 185 tests pass;
+  tsc + eslint clean.**
+- **Scope notes**: the matches-list snapshot read uses the service client filtered
+  by `user_id` (ownership enforced; RLS-equivalent). Action-phrase CTAs elsewhere
+  ("Find matches" / "Review matches") are left as verbs — only the surface name
+  (nav, list title, detail breadcrumb) is the "Analyzed Jobs / Job Analysis"
+  vocabulary. Page-render integration (failure/incomplete-profile fixtures) and
+  browser E2E (breadcrumb visible, states reachable) remain the suite-wide gap.
+
+Durable proof:
+`scripts/bin/harness-cli story update --id US-053 --status implemented --unit 1 --integration 0 --e2e 0 --platform 0`.

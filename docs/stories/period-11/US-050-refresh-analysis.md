@@ -2,7 +2,10 @@
 
 ## Status
 
-planned
+implemented (orchestrator core-chain step-profile + async 202 refresh endpoint
+with server-side 409 guard + single header Refresh control with progress/result
+banners; API + web unit/integration tests green; browser E2E deferred —
+suite-wide gap)
 
 ## Lane
 
@@ -134,4 +137,46 @@ the trace.
 
 ## Evidence
 
-Not started — packet created 2026-06-10.
+Implemented 2026-06-10.
+
+- **Orchestrator step-profile** (`apps/api/app/services/ai/run_full_orchestrator.py`):
+  `CORE_STEP_TYPES` / `CORE_MANIFEST` / `EXCLUDED_FROM_CORE` make the included
+  and excluded step lists explicit; a `flip_prepared=False` flag stops the
+  core-chain refresh from marking the application "prepared". The full manifest
+  still backs the existing run-full endpoint.
+- **Refresh orchestration** (`apps/api/app/services/refresh_analysis.py`):
+  `core_chain_running` (the 409 guard), `should_extract_job` (conditional
+  re-extraction predicate), and `run_refresh` — conditional best-effort job
+  re-extraction → core chain (force) → **exactly one** `recompute_decision`,
+  **skipped on any core-step failure** (no snapshot, prior package stands).
+- **Endpoint** `POST /api/matches/{id}/analysis-package/refresh`
+  (`apps/api/app/routers/matches.py`): validates the job description (422),
+  server-side 409 against a running core chain, inserts an in-flight marker run
+  to close the double-submit race, schedules the chain via FastAPI
+  `BackgroundTasks`, returns **202**. `update_job_extraction` (no `updated_at`
+  bump, so enrichment doesn't re-trip staleness) added to `supabase_data.py`.
+- **Web**: `refreshAnalysisPackage` (`ai-workflow-client.mjs`),
+  `refreshAnalysisAction` (`actions.ts`), `refresh-view.mjs`
+  (`isCoreChainRunning`, `refreshResultBanner`), and
+  `RefreshAnalysisControl` — the single header control that replaces the US-048
+  stub, polls via the existing `AutoRefresh`, shows a progress banner (no
+  skeleton wipe), and a focus-managed `aria-live` result banner announcing the
+  label transition on completion. The other regenerate buttons are gone from
+  the header.
+- **Tests**: `apps/api/tests/test_refresh_analysis.py` (11 — core manifest,
+  no-downstream + no prepared-flip, `should_extract_job`, recompute-once,
+  no-snapshot-on-failure, 202, 409 guard, 422, 404) and
+  `apps/web/tests/refresh-analysis.test.mjs` (5 — `isCoreChainRunning`, banner
+  copy changed/unchanged/first-run). Full suites: **API 388 passed**, **web 164
+  passed**; ruff / tsc / eslint clean.
+- **Scope boundaries** (decision 0015 §6): downstream artifacts (resume draft,
+  draft CV, cover letter, roadmap, interview prep) are never regenerated and
+  carry no post-refresh staleness markers. Job re-extraction triggers when the
+  job isn't yet extracted; a precise "edited since last extraction" signal needs
+  an `extracted_at` column (deferred). `analyzed_at` is stamped by the
+  match-analysis step; the strong guarantee is "no decision snapshot on
+  failure," which holds. Browser E2E (progress→result banner, screen-reader
+  announcement, no draft-CV regeneration) remains the suite-wide gap.
+
+Durable proof:
+`scripts/bin/harness-cli story update --id US-050 --status implemented --unit 1 --integration 1 --e2e 0 --platform 0`.

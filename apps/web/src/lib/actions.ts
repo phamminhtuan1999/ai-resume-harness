@@ -28,6 +28,7 @@ import {
   AIWorkflowError,
   patchDraftCvBullet,
   patchResumeSuggestion,
+  refreshAnalysisPackage,
   regenerateActivityDescription,
   runFullWorkflow,
   runMatchAnalysis,
@@ -37,6 +38,11 @@ import {
 import { analyzeResumeJobFit } from "@/lib/match-analyzer.mjs";
 import { saveImportedCandidateProfile } from "@/lib/profile-import-flow.mjs";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
+import {
+  canChangeApplicationStatus,
+  getApplicationStatusLabel,
+  learningTargetSavePlan,
+} from "@/lib/application-tracker.mjs";
 
 async function requireWritableContext(): Promise<
   | { ok: true; userProfileId: string }
@@ -503,6 +509,187 @@ export async function saveApplicationAction(
   return successWithRedirect("Job saved to tracker.", "/tracker");
 }
 
+// "Keep for reference" (US-049, decision 0015 §4): archive the job with a note
+// rather than treating it as an active application. Reuses the existing
+// applications table and the saved-application validator — no new tracker
+// status, no new API endpoint.
+export async function saveReferenceAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const parsed = validateSaveApplicationInput(readForm(formData));
+  if (!parsed.success) {
+    return failure(
+      "Choose a valid job before keeping it for reference.",
+      getValidationFieldErrors(parsed.error)
+    );
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data: job, error: jobError } = await supabase
+    .from("jobs")
+    .select("id")
+    .eq("id", parsed.data.job_id)
+    .eq("user_id", context.userProfileId)
+    .single();
+
+  if (jobError || !job?.id) {
+    return failure("Unable to load the selected job for this account.");
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from("applications")
+    .select("id")
+    .eq("user_id", context.userProfileId)
+    .eq("job_id", parsed.data.job_id)
+    .maybeSingle();
+
+  if (existingError) {
+    return failure("Could not keep this job for reference.");
+  }
+
+  const note = "Kept for reference from job analysis.";
+  const now = new Date().toISOString();
+  const mutation = existing?.id
+    ? supabase
+        .from("applications")
+        .update({ status: "archived", notes: note, updated_at: now })
+        .eq("id", existing.id)
+        .eq("user_id", context.userProfileId)
+    : supabase.from("applications").insert({
+        user_id: context.userProfileId,
+        job_id: parsed.data.job_id,
+        match_id: parsed.data.match_id,
+        status: "archived",
+        notes: note,
+      });
+
+  const { error: writeError } = await mutation;
+  if (writeError) {
+    return failure("Could not keep this job for reference.");
+  }
+
+  revalidatePath("/tracker");
+  revalidatePath(`/jobs/${parsed.data.job_id}`);
+  if (parsed.data.match_id) {
+    revalidatePath(`/matches/${parsed.data.match_id}`);
+  }
+
+  return success("Kept for reference in your tracker (archived).");
+}
+
+// "Save as Learning Target" (US-052, brief Epic 9): track a weak-but-relevant
+// role as a learning target rather than an active application. Upserts the
+// unique (user_id, job_id) row to status learning_target and asserts directional
+// relevance for future decision recomputes (decision 0015 §3). A row already in
+// the application pipeline is never silently demoted — it requires explicit
+// confirmation (the client re-submits with confirm=true).
+export async function saveLearningTargetAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const form = readForm(formData);
+  const parsed = validateSaveApplicationInput(form);
+  if (!parsed.success) {
+    return failure(
+      "Choose a valid job before saving it as a learning target.",
+      getValidationFieldErrors(parsed.error)
+    );
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data: job, error: jobError } = await supabase
+    .from("jobs")
+    .select("id")
+    .eq("id", parsed.data.job_id)
+    .eq("user_id", context.userProfileId)
+    .single();
+
+  if (jobError || !job?.id) {
+    return failure("Unable to load the selected job for this account.");
+  }
+
+  if (parsed.data.match_id) {
+    const { data: match, error: matchError } = await supabase
+      .from("matches")
+      .select("id,job_id")
+      .eq("id", parsed.data.match_id)
+      .eq("user_id", context.userProfileId)
+      .single();
+
+    if (matchError || !match?.id || match.job_id !== parsed.data.job_id) {
+      return failure("Unable to link that match to the selected job.");
+    }
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from("applications")
+    .select("id,match_id,status")
+    .eq("user_id", context.userProfileId)
+    .eq("job_id", parsed.data.job_id)
+    .maybeSingle();
+
+  if (existingError) {
+    return failure("Could not save this learning target.");
+  }
+
+  const confirmed = form.confirm === "true";
+  const plan = learningTargetSavePlan(existing?.status, confirmed);
+
+  if (plan === "needs_confirm") {
+    return {
+      status: "error",
+      requiresConfirm: true,
+      message: `This job is already in your application pipeline (${getApplicationStatusLabel(
+        existing?.status
+      )}). Saving it as a learning target removes it from your active applications. Confirm to continue.`,
+    };
+  }
+
+  const now = new Date().toISOString();
+  const mutation =
+    plan === "update" && existing?.id
+      ? supabase
+          .from("applications")
+          .update({
+            status: "learning_target",
+            match_id: parsed.data.match_id ?? existing.match_id ?? null,
+            updated_at: now,
+          })
+          .eq("id", existing.id)
+          .eq("user_id", context.userProfileId)
+      : supabase.from("applications").insert({
+          user_id: context.userProfileId,
+          job_id: parsed.data.job_id,
+          match_id: parsed.data.match_id,
+          status: "learning_target",
+        });
+
+  const { error: writeError } = await mutation;
+  if (writeError) {
+    return failure("Could not save this learning target.");
+  }
+
+  revalidatePath("/tracker");
+  revalidatePath(`/jobs/${parsed.data.job_id}`);
+  if (parsed.data.match_id) {
+    revalidatePath(`/matches/${parsed.data.match_id}`);
+  }
+  revalidatePath("/dashboard");
+
+  return success("Saved as a learning target.");
+}
+
 export async function updateApplicationStatusAction(
   _previousState: ActionState,
   formData: FormData
@@ -515,6 +702,27 @@ export async function updateApplicationStatusAction(
   const parsed = validateUpdateApplicationStatusInput(readForm(formData));
   if (!parsed.success) {
     return failure("Choose a valid tracker status.", getValidationFieldErrors(parsed.error));
+  }
+
+  const supabase = getSupabaseServiceClient();
+
+  // Transition guard (US-052): a learning target can only move to
+  // saved/applied/archived, so it's never silently treated as a live
+  // application. Moves that don't touch the learning group are unrestricted.
+  const { data: current, error: currentError } = await supabase
+    .from("applications")
+    .select("status")
+    .eq("id", parsed.data.application_id)
+    .eq("user_id", context.userProfileId)
+    .maybeSingle();
+
+  if (currentError) {
+    return failure("Tracker status update failed.");
+  }
+  if (current && !canChangeApplicationStatus(current.status, parsed.data.status)) {
+    return failure(
+      "That status change isn't allowed for a learning target. Move it to Saved, Applied, or Archived instead."
+    );
   }
 
   const updatePayload: {
@@ -530,7 +738,6 @@ export async function updateApplicationStatusAction(
     updatePayload.applied_date = new Date().toISOString().slice(0, 10);
   }
 
-  const supabase = getSupabaseServiceClient();
   const { data: application, error } = await supabase
     .from("applications")
     .update(updatePayload)
@@ -1080,6 +1287,40 @@ export async function regenerateWorkflowStepAction(
 
   revalidatePath(`/matches/${matchId}`);
   return success("Step regenerated.");
+}
+
+export async function refreshAnalysisAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  // US-050: re-run the decision core chain only (match → missing skills →
+  // assistant insight → recompute). Asynchronous — the endpoint returns 202 and
+  // the client polls run status, refetching the package on completion.
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const matchId = formData.get("match_id");
+  if (typeof matchId !== "string" || !matchId) {
+    return failure("A match is required.");
+  }
+
+  const sessionToken = await getCurrentSessionToken();
+  const result = await refreshAnalysisPackage({
+    apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
+    matchId,
+    sessionToken,
+  });
+
+  if (!result.ok) {
+    return failure(result.message ?? "Could not start the refresh.");
+  }
+
+  // Surfaces the in-flight marker run so the page renders the running state and
+  // begins polling.
+  revalidatePath(`/matches/${matchId}`);
+  return success("Refreshing your analysis…");
 }
 
 export async function regenerateActivityDescriptionAction(
