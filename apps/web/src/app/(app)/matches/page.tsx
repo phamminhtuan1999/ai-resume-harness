@@ -120,7 +120,7 @@ export default async function MatchesPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        {formatShortDate(match.created_at)}
+                        {formatShortDate(match.analyzed_at ?? match.created_at)}
                       </TableCell>
                     </TableRow>
                   );

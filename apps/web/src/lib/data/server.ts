@@ -677,6 +677,15 @@ export async function getMatchesList() {
     decision: latestDecisionByMatch.get(match.id) ?? null,
   }));
 
+  // The list promises "latest analyses, newest first": a refresh bumps
+  // analyzed_at, so order by it rather than row creation. Falls back to
+  // created_at for matches that have never finished an analysis.
+  matches.sort(
+    (a, b) =>
+      new Date(b.analyzed_at ?? b.created_at).getTime() -
+      new Date(a.analyzed_at ?? a.created_at).getTime()
+  );
+
   return { appUser, profile, matches };
 }
 

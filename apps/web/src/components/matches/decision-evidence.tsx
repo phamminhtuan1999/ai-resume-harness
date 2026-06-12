@@ -85,6 +85,30 @@ export function DecisionEvidence({ pkg, matchId }: DecisionEvidenceProps) {
           </div>
         ) : null}
 
+        {/* Breakdown first: the at-a-glance summary of the "why"; the matched
+            and missing lists below are its detail. */}
+        <section className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold">Score breakdown</h3>
+          <div>
+            <div className="mb-2 flex items-center justify-between text-sm">
+              <span className="font-medium">Overall match</span>
+              <span className="font-semibold">{pkg.scores.overall}/100</span>
+            </div>
+            <Progress value={pkg.scores.overall} />
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {SCORE_ROWS.map(([key, label]) => (
+              <div key={key} className="rounded-lg border p-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">{label}</span>
+                  <span>{pkg.scores[key]}</span>
+                </div>
+                <Progress value={Number(pkg.scores[key]) || 0} className="mt-2" />
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section className="flex flex-col gap-3">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <CheckCircle2 className="size-4 text-success" />
@@ -145,28 +169,6 @@ export function DecisionEvidence({ pkg, matchId }: DecisionEvidenceProps) {
             </ul>
           </section>
         ) : null}
-
-        <section className="flex flex-col gap-3">
-          <h3 className="text-sm font-semibold">Score breakdown</h3>
-          <div>
-            <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="font-medium">Overall match</span>
-              <span className="font-semibold">{pkg.scores.overall}/100</span>
-            </div>
-            <Progress value={pkg.scores.overall} />
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            {SCORE_ROWS.map(([key, label]) => (
-              <div key={key} className="rounded-lg border p-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">{label}</span>
-                  <span>{pkg.scores[key]}</span>
-                </div>
-                <Progress value={Number(pkg.scores[key]) || 0} className="mt-2" />
-              </div>
-            ))}
-          </div>
-        </section>
       </CardContent>
     </Card>
   );
