@@ -25,3 +25,10 @@ export function isApplyWiseProtectedPath(pathname) {
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
 }
+
+export function needsClerkProxyForRequest({ method = "GET", pathname }) {
+  return (
+    isApplyWiseProtectedPath(pathname) ||
+    (method === "POST" && pathname === "/pricing")
+  );
+}

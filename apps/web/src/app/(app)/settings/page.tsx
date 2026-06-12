@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2, Database, UserRound } from "lucide-react";
+import { CheckCircle2, Coins, Database, UserRound } from "lucide-react";
 
 import { DangerZoneCard } from "@/components/settings/danger-zone-card";
 import { PageHeader } from "@/components/page-header";
@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { getCreditBalanceForUser } from "@/lib/billing-ledger";
 import { getTrackerData, getWorkspaceData } from "@/lib/data/server";
 
 export default async function SettingsPage() {
@@ -19,6 +20,7 @@ export default async function SettingsPage() {
     getWorkspaceData(),
     getTrackerData(),
   ]);
+  const creditBalance = profile?.id ? await getCreditBalanceForUser(profile.id) : 0;
 
   const dataRows = [
     ["Profiles", profile ? 1 : 0],
@@ -95,6 +97,27 @@ export default async function SettingsPage() {
         </section>
 
         <DangerZoneCard recordCount={totalRecords} />
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Coins className="size-4" />
+              Credits
+            </CardTitle>
+            <CardDescription>
+              Credit balance is derived from posted purchase and spend ledger rows.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-3xl font-semibold">{creditBalance}</p>
+              <p className="text-sm text-muted-foreground">available credits</p>
+            </div>
+            <Link href="/pricing" className={buttonVariants()}>
+              Buy credits
+            </Link>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

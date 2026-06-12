@@ -1,7 +1,11 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import type { NextFetchEvent, NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-import { protectedRoutePatterns } from "@/lib/route-policy.mjs";
+import {
+  needsClerkProxyForRequest,
+  protectedRoutePatterns,
+} from "@/lib/route-policy.mjs";
 
 const hasClerkEnv = Boolean(
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY
@@ -15,9 +19,20 @@ const clerkProxy = clerkMiddleware(async (auth, req) => {
   }
 });
 
-export default hasClerkEnv ? clerkProxy : function proxy() {
-  return NextResponse.next();
-};
+export default function proxy(req: NextRequest, event: NextFetchEvent) {
+  if (
+    !hasClerkEnv ||
+    !needsClerkProxyForRequest({
+      method: req.method,
+      pathname: req.nextUrl.pathname,
+    })
+  ) {
+    return NextResponse.next();
+  }
+
+  return clerkProxy(req, event);
+}
+
 
 export const config = {
   matcher: [

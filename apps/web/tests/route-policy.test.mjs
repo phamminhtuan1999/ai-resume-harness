@@ -3,7 +3,11 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { isApplyWiseProtectedPath, protectedRoutePatterns } from "../src/lib/route-policy.mjs";
+import {
+  isApplyWiseProtectedPath,
+  needsClerkProxyForRequest,
+  protectedRoutePatterns,
+} from "../src/lib/route-policy.mjs";
 
 test("protected route policy covers authenticated app sections", () => {
   for (const pathname of [
@@ -33,6 +37,21 @@ test("protected route policy leaves Clerk auth routes public", () => {
   ]) {
     assert.equal(isApplyWiseProtectedPath(pathname), false, pathname);
   }
+});
+
+test("pricing is public for reads but uses Clerk proxy for checkout actions", () => {
+  assert.equal(
+    needsClerkProxyForRequest({ method: "GET", pathname: "/pricing" }),
+    false
+  );
+  assert.equal(
+    needsClerkProxyForRequest({ method: "POST", pathname: "/pricing" }),
+    true
+  );
+  assert.equal(
+    needsClerkProxyForRequest({ method: "POST", pathname: "/api/billing/stripe/webhook" }),
+    false
+  );
 });
 
 test("proxy exports Clerk-compatible protected route patterns", () => {

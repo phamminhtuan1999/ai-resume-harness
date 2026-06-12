@@ -21,6 +21,9 @@ the work is selected or when a product decision needs a durable place to land.
 | Period 9 AI Draft CV Export | Truth-guarded structured draft CV generation (enhancement-protocol prompt + server guards), review/approval flow, and on-demand ATS-safe PDF/DOCX export rendered in the backend. | implemented |
 | Period 10 Draft CV Rendering Rework | Deterministic page-count policy clamping the model's recommendation, vendored embedded Unicode font profiles, page-aware layout configs, selection-only deterministic compression with a protected floor + report, and a bounded user page override. | implemented |
 | Period 11 Decision-Based Job Analysis | Refactor the job analysis page from a module-output dashboard into a decision-based assistant: server-side decision engine + unified analysis package, recommendation-driven next actions and material guardrails, one Refresh Analysis, workflow panel behind Advanced Details, learning-target tracker status, decision history. | sliced |
+| Period 12 Deletion And Data Controls | Resume, job, and full account deletion with blast-radius confirmations, owner-scoped hard deletes, audit rows, and retention rules. | implemented |
+| Period 13 One Tailored CV | Consolidate Tailored CV generation, feedback, inline edits, coverage, exports, and cover-letter grounding into one truth-guarded artifact. | implemented |
+| Period 14 Pricing And Payments | Finalize the pricing page and add post-MVP Stripe subscription payment processing with webhook-confirmed entitlements. | sliced |
 
 ## Period 8 Epics (AI Overhaul)
 
@@ -141,6 +144,17 @@ US-049; US-054 after US-047 + US-051).
 | US-052 | Learning Target Tracker Flow | high-risk | implemented |
 | US-053 | Page Naming, Empty/Error States & Profile Completeness | normal | implemented |
 | US-054 | Analysis Decision History View | normal | implemented |
+| US-055 | Resume and Job Deletion | high-risk | implemented |
+| US-056 | Account Deletion | high-risk | implemented |
+| US-057 | Structured Location and Phone Validation | normal | implemented |
+| US-058 | Record actions menu, modal confirm, and flash | normal | implemented |
+| US-059 | Retire Markdown resume draft; Markdown export from Tailored CV | normal | implemented |
+| US-060 | Inline bullet editing with Truth Guard re-verification | normal | implemented |
+| US-061 | Inline tailoring diffs — suggestions fold into the CV document | normal | implemented |
+| US-062 | Live keyword-coverage panel with delta | normal | implemented |
+| US-063 | Cover letter generated from the final Tailored CV | normal | implemented |
+| US-064 | Check and finalize the pricing page | normal | implemented |
+| US-065 | Integrate credit payment processing | high-risk | implemented |
 
 All Period 8 stories now have full packets under `docs/stories/period-8/`
 (high-risk folders for US-027/US-028/US-031/US-033; flat files otherwise) plus

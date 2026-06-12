@@ -79,6 +79,13 @@ The MVP includes `/pricing` with Free and Pro plan positioning. Upgrade buttons
 must communicate `Coming soon` and must not initiate checkout or collect
 payment details.
 
+## Post-MVP Pricing and Credits
+
+Period 14 replaces the placeholder with prepaid credits (decision 0020).
+Users buy Starter, Builder, or Pro credit packs through Stripe-hosted Checkout.
+Credits are granted only after signed Stripe webhook confirmation and are
+stored in an append-only ledger. Subscriptions remain deferred.
+
 ## UI Quality Exit Criteria
 
 Before MVP release, Period 5 must complete the UI, UX, and validation quality

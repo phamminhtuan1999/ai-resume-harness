@@ -52,6 +52,10 @@ import { analyzeResumeJobFit } from "@/lib/match-analyzer.mjs";
 import { saveImportedCandidateProfile } from "@/lib/profile-import-flow.mjs";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import {
+  hasEnoughCredits,
+  spendCreditsForAction,
+} from "@/lib/billing-ledger";
+import {
   canChangeApplicationStatus,
   getApplicationStatusLabel,
   learningTargetSavePlan,
@@ -978,6 +982,7 @@ async function runMatchSubWorkflowAction(
     successMessage: string;
     failureMessage: string;
     extraPaths?: (matchId: string) => string[];
+    creditActionId?: string;
   }
 ): Promise<ActionState> {
   const context = await requireWritableContext();
@@ -1005,6 +1010,15 @@ async function runMatchSubWorkflowAction(
     return failure("Unable to load that match for this account.");
   }
 
+  if (options.creditActionId) {
+    const creditCheck = await hasEnoughCredits(context.userProfileId, options.creditActionId);
+    if (!creditCheck.ok) {
+      return failure(
+        `You need ${creditCheck.cost} credits for this action. Your balance is ${creditCheck.balance}.`
+      );
+    }
+  }
+
   const sessionToken = await getCurrentSessionToken();
   const result = await runMatchSubWorkflow({
     apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
@@ -1015,6 +1029,18 @@ async function runMatchSubWorkflowAction(
 
   if (!result.ok) {
     return failure(result.message ?? options.failureMessage);
+  }
+
+  if (options.creditActionId) {
+    const spend = await spendCreditsForAction({
+      userProfileId: context.userProfileId,
+      actionId: options.creditActionId,
+      subjectType: "match",
+      subjectId: match.id,
+    });
+    if (!spend.ok) {
+      return failure(spend.message ?? "Could not spend credits for this action.");
+    }
   }
 
   revalidatePath(`/matches/${match.id}`);
@@ -1125,6 +1151,7 @@ export async function generateCoverLetterAction(
 ): Promise<ActionState> {
   return runMatchSubWorkflowAction(formData, {
     segment: "cover-letter",
+    creditActionId: "cover_letter",
     successMessage: "Cover letter generated.",
     failureMessage: "Cover letter generation failed.",
     extraPaths: (matchId) => [`/matches/${matchId}/cover-letter`],
@@ -1140,6 +1167,7 @@ export async function generateDraftCvAction(
   // draft_cvs version. Routes onto /api/matches/{id}/draft-cv via the segment.
   return runMatchSubWorkflowAction(formData, {
     segment: "draft-cv",
+    creditActionId: "tailored_cv_generation",
     successMessage: "Draft CV generated.",
     failureMessage: "Draft CV generation failed.",
     extraPaths: (matchId) => [`/matches/${matchId}/draft-cv`],
@@ -1199,6 +1227,7 @@ export async function generateRoadmapAction(
   // workflow (Gemini + deterministic fallback) which upserts the roadmaps row.
   return runMatchSubWorkflowAction(formData, {
     segment: "roadmap",
+    creditActionId: "roadmap",
     successMessage: "4-week roadmap generated.",
     failureMessage: "Roadmap generation failed.",
     extraPaths: (matchId) => [`/matches/${matchId}/roadmap`],
@@ -1335,6 +1364,13 @@ export async function refreshAnalysisAction(
   }
 
   const sessionToken = await getCurrentSessionToken();
+  const creditCheck = await hasEnoughCredits(context.userProfileId, "job_analysis_refresh");
+  if (!creditCheck.ok) {
+    return failure(
+      `You need ${creditCheck.cost} credits for this action. Your balance is ${creditCheck.balance}.`
+    );
+  }
+
   const result = await refreshAnalysisPackage({
     apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
     matchId,
@@ -1343,6 +1379,16 @@ export async function refreshAnalysisAction(
 
   if (!result.ok) {
     return failure(result.message ?? "Could not start the refresh.");
+  }
+
+  const spend = await spendCreditsForAction({
+    userProfileId: context.userProfileId,
+    actionId: "job_analysis_refresh",
+    subjectType: "match",
+    subjectId: matchId,
+  });
+  if (!spend.ok) {
+    return failure(spend.message ?? "Could not spend credits for this action.");
   }
 
   // Surfaces the in-flight marker run so the page renders the running state and
@@ -1391,6 +1437,7 @@ export async function generateInterviewPrepAction(
   // workflow (Gemini + deterministic fallback) which upserts interview_preps.
   return runMatchSubWorkflowAction(formData, {
     segment: "interview-prep",
+    creditActionId: "interview_prep",
     successMessage: "Interview prep generated.",
     failureMessage: "Interview prep generation failed.",
     extraPaths: (matchId) => [`/matches/${matchId}/interview-prep`],

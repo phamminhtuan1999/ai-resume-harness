@@ -21,7 +21,12 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Logo } from "@/components/brand/logo";
+import {
+  MarketingAuthLinks,
+  MarketingAuthNav,
+} from "@/components/marketing-auth-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { hasClerkEnv } from "@/lib/env";
 
 const targetRoles = [
   "AI Engineer",
@@ -174,12 +179,7 @@ export default function Home() {
               Pricing
             </Link>
             <ThemeToggle />
-            <Link href="/sign-in" className={buttonVariants({ variant: "outline" })}>
-              Sign in
-            </Link>
-            <Link href="/sign-up" className={buttonVariants({ className: "hidden sm:inline-flex" })}>
-              Start workspace
-            </Link>
+            {hasClerkEnv() ? <MarketingAuthNav /> : <MarketingAuthLinks />}
           </nav>
         </div>
       </header>

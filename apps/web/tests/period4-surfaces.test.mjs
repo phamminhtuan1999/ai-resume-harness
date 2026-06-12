@@ -17,15 +17,32 @@ test("home page is a public landing page instead of a dashboard redirect", () =>
   assert.doesNotMatch(source, /redirect\("\/dashboard"\)/);
 });
 
-test("pricing page is a placeholder and does not start checkout", () => {
+test("pricing page sells credits without collecting payment details directly", () => {
   const source = readAppFile("pricing/page.tsx");
 
-  assert.match(source, /Payment disabled in MVP/);
-  assert.match(source, /Coming soon/);
+  assert.match(source, /Credits-first billing/);
+  assert.match(source, /Credit packs/);
+  assert.match(source, /startCreditCheckoutAction/);
   assert.doesNotMatch(source, /from ["']stripe["']/i);
   assert.doesNotMatch(source, /new Stripe/i);
-  assert.doesNotMatch(source, /checkoutSession/i);
-  assert.doesNotMatch(source, /href=\{?["'].*checkout/i);
+  assert.doesNotMatch(source, /subscription/i);
+  assert.doesNotMatch(source, /payment method/i);
+});
+
+test("public marketing headers resolve auth state instead of hardcoding sign-in", () => {
+  for (const path of ["page.tsx", "pricing/page.tsx"]) {
+    const source = readAppFile(path);
+    assert.match(source, /MarketingAuthNav/, path);
+    assert.match(source, /hasClerkEnv\(\)/, path);
+  }
+
+  const nav = readFileSync(
+    join(process.cwd(), "src", "components", "marketing-auth-nav.tsx"),
+    "utf8"
+  );
+  assert.match(nav, /useUser/);
+  assert.match(nav, /Open dashboard/);
+  assert.match(nav, /Sign in/);
 });
 
 test("settings page uses live account data and exposes real account deletion", () => {

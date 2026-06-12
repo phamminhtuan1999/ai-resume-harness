@@ -541,6 +541,47 @@ is the privacy/GDPR deletion path — snapshot evidence text is resume-derived
 PII. Retention policy: most recent 50 snapshots per match (enforcement may be
 deferred; the policy may not).
 
+### `billing_events` (Period 14, US-065)
+
+Stores Stripe webhook idempotency records. The webhook handler verifies the
+Stripe signature before writing a row. Duplicate event ids are skipped so
+Stripe retries cannot double-grant credits.
+
+Required fields:
+
+- `id uuid primary key`
+- `stripe_event_id text not null unique`
+- `event_type text not null`
+- `processing_result text not null` - `received | ignored | granted |
+  duplicate | failed`
+- `error_message text`
+- timestamps
+
+### `billing_credit_ledger` (Period 14, US-065)
+
+Append-only credit ledger. Balance is derived from `sum(credits_delta)` over
+posted rows for the user; checkout return URLs never mutate this table.
+
+Required fields:
+
+- `id uuid primary key`
+- `user_id uuid references user_profiles(id) on delete cascade`
+- `entry_type text not null` - `purchase | spend | adjustment`
+- `credits_delta integer not null`
+- `status text not null` - `posted | void`
+- `source text not null` - `stripe_checkout | workflow_spend |
+  admin_adjustment`
+- `stripe_event_id text references billing_events(stripe_event_id)`
+- `stripe_checkout_session_id text unique`
+- `stripe_payment_intent_id text`
+- `metadata_json jsonb not null`
+- timestamps
+
+Credit grants are positive `purchase` rows inserted only from signed
+`checkout.session.completed` webhooks whose metadata matches a known credit
+pack. Future paid workflow gates should insert negative `spend` rows in the
+same ledger.
+
 ## Deletion and Retention (Period 12, US-055/US-056, decision 0016)
 
 Deletion is an immediate, permanent hard delete; the FK cascade graph above

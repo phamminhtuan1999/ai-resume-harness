@@ -23,7 +23,7 @@ The MVP helps a user:
 - Generate a 4-week skill and project roadmap.
 - Generate interview preparation suggestions.
 - Save jobs, recruiter/contact details, and tracker status.
-- View a pricing page placeholder without processing payment.
+- View pricing and buy prepaid credits for paid AI workflows.
 
 ## Target User
 
@@ -79,7 +79,7 @@ Refresh Analysis); technical detail stays in the Advanced tab.
 | Job Workspace | Manual job description storage, job URL intake, metadata, contact info, parse status. |
 | AI Analysis Engine | Resume parsing, JD parsing, scoring, gaps, suggestions, draft CV generation with PDF/DOCX/Markdown export, roadmap, interview prep. |
 | Application Tracker | Application status, job link, match link, notes, contacts. Learning Targets (US-052) are tracked in their own segment and excluded from active-application counts. |
-| Billing Placeholder | Pricing and plan positioning only; no payment processing in MVP. |
+| Billing Credits | Prepaid credit packs, Stripe-hosted checkout, webhook-confirmed credit grants, and server-side spend checks for paid AI workflows. |
 
 ## Public And Protected Surfaces
 
