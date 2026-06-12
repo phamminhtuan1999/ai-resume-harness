@@ -2,9 +2,9 @@
 
 ## Status
 
-planned (amended 2026-06-11 twice: became the post-generation "Final check"
-step per decision 0019 Amendment I; verbatim-final replaced by
-polish-and-confirm per Amendment II)
+implemented (verified 2026-06-11; amended same day twice: became the
+post-generation "Final check" step per decision 0019 Amendment I;
+verbatim-final replaced by polish-and-confirm per Amendment II)
 
 ## Lane
 
@@ -93,4 +93,44 @@ Durable story row predates the amendments; this packet is the source of truth.
 
 ## Evidence
 
-Added after verification.
+Implemented 2026-06-11.
+
+- **API:** `bullet_edit.py` — one combined polish+verify pass
+  (`polish_and_verify`) as a lightweight structured Gemini call (no run row,
+  like the extractors) over the same evidence corpus the generator uses
+  (`build_edit_corpus`); two deterministic floors (invented metric in the
+  user's text ⇒ `do_not_use_yet`; a polish that introduces a foreign number is
+  discarded for the user's wording); no-key/provider-failure fallback skips
+  polish and is conservative. Endpoints: `PATCH
+  /draft-cvs/{id}/bullets/{bid}/text` **stages** the server-stored result
+  (`pending_edit` — previous text stays renderable),
+  `POST .../text/confirm {polished|mine|cancel}` applies it (the client never
+  sends a status, so the gate cannot be bypassed); chosen text lands with
+  `user_edited`, `polished`, `original_text`, `finalized_at`, fresh status;
+  `needs_confirmation` flows into the existing review queue.
+- **Preservation:** `draft_cv_preservation.py` (pure) — generation persist
+  merges finalized bullets into the new version by entry identity (same-text
+  fresh bullet replaced, else appended); restructured entries become
+  `preservation_conflicts`, resolved per bullet via
+  `POST /draft-cvs/{id}/preservation/resolve` (keep recreates the entry shell;
+  discard accepts the new content) — never a silent loss.
+- **Web:** in-place `DraftCvBulletEditor` on every CV-preview bullet
+  (provenance chip AI suggested / From your feedback / Edited here; "Restore
+  original" prefill from `original_text`); Save shows "Checking…", then the
+  word-diff confirm (reuses the US-061 LCS helper) with **Use polished**
+  (default) / **Keep my wording** / Cancel and the truth-guard outcome +
+  evidence question; a staged-but-unconfirmed edit reopens the confirm on
+  reload. `DraftCvPreservationCard` renders the keep/take prompts.
+- **Proof:** API pytest 429 passed (`test_draft_cv_edit.py`: deterministic
+  floors, Gemini parity/status floors, stage→confirm state machine incl.
+  cancel/no-stage-404, wired endpoints with status recompute; workflow tests:
+  regenerate carries finalized bullets / restructured entry surfaces a
+  conflict). Web 235 unit tests (bullet edit-state projection, conflict
+  labels), tsc + eslint clean. Playwright: live edit→"Keep my wording" lands
+  the exact text (one real single-bullet pass), conflict keep/take roundtrip
+  with DB-seeded conflict.
+- **Note on the packet's single-PATCH shape:** implemented as stage + confirm
+  (two server calls, one LLM pass) so the applied text/status always come from
+  server-stored data; "not renderable while checking" is the in-flight UI
+  state — the previous text stays renderable until confirm, which also covers
+  the failure-keeps-previous-text AC.

@@ -43,12 +43,52 @@ def _wire(monkeypatch: pytest.MonkeyPatch, data: FakeData) -> None:
     monkeypatch.setattr("app.routers.matches.SupabaseDataClient", lambda _s: data)
 
 
-def _data(**kwargs) -> FakeData:
+def _data(*, with_draft_cv: bool = True, **kwargs) -> FakeData:
     # Saved analysis + missing-skill rows satisfy every downstream guard, so the
-    # whole chain can run deterministically (no key, no live calls).
+    # whole chain can run deterministically (no key, no live calls). The cover
+    # letter additionally needs a Tailored CV (US-063) — seeded by default.
     kwargs.setdefault("saved_analysis_row", saved_match_row())
     kwargs.setdefault("missing_skills_row", saved_missing_skills_row())
-    return FakeData(**kwargs)
+    data = FakeData(**kwargs)
+    if with_draft_cv:
+        _seed_tailored_cv(data)
+    return data
+
+
+def _seed_tailored_cv(data: FakeData) -> None:
+    data.insert_draft_cv(
+        user_profile_id="profile_1",
+        match_id="match_1",
+        job_id="job_1",
+        resume_id="resume_1",
+        title="Draft CV — Acme AI Senior AI Engineer",
+        status="ready_to_export",
+        cv_json={
+            "professional_summary": "Backend engineer with FastAPI depth.",
+            "work_experience": [
+                {
+                    "company": "Acme",
+                    "title": "Engineer",
+                    "bullets": [
+                        {
+                            "id": "b1",
+                            "text": "Built FastAPI services for production.",
+                            "source_evidence": "ev",
+                            "truth_guard_status": "safe_to_use",
+                            "keywords_used": [],
+                            "user_action": "pending",
+                        }
+                    ],
+                }
+            ],
+            "projects": [],
+        },
+        cv_strategy_json={},
+        quality_notes_json=[],
+        confidence_score=0.8,
+        provider="deterministic",
+        model_name="m",
+    )
 
 
 class _FailingWorkflow:
@@ -152,6 +192,25 @@ def test_no_application_row_means_no_prepared_status() -> None:
     result = _orchestrator(data).run(match_id="match_1", user_profile_id="profile_1")
     assert result["status"] == "complete"
     assert result["application_status"] is None
+
+
+def test_cover_letter_blocks_without_a_tailored_cv() -> None:
+    """US-063: the letter is written from the Tailored CV, which is not an
+    orchestrator step — without one the step blocks (guided message) and the
+    rest of the chain still runs."""
+    data = _data(with_draft_cv=False)
+    result = _orchestrator(data).run(match_id="match_1", user_profile_id="profile_1")
+
+    assert result["status"] == "partial"
+    assert result["steps_blocked"] == 1
+    assert result["steps_failed"] == 0
+    assert result["steps_completed"] == len(STEP_MANIFEST) - 1
+    blocked = [
+        fields for _run_id, fields in data.run_updates
+        if fields.get("error_code") == BLOCKED_ERROR_CODE
+    ]
+    assert len(blocked) == 1
+    assert "Tailored CV" in blocked[0]["error_message"]
 
 
 def test_unauthorized_runs_nothing() -> None:

@@ -14,6 +14,7 @@ from ai_fakes import (
     FakeData,
     FakeGeminiClient,
     default_resume,
+    gemini_response,
     gemini_valid_draft_cv,
     make_settings,
     profile_with_cv,
@@ -467,3 +468,134 @@ def test_default_resume_corpus_supports_fixture_skills() -> None:
     text = default_resume()["raw_text"].lower()
     for skill in ("python", "fastapi", "postgres", "aws", "docker"):
         assert skill in text
+
+
+# --- US-061 tier-1 feedback: prompt contract + traceability ----------------------
+
+
+def _suggestion_row(sid: str, text: str, *, action: str = "accepted", edited: bool = False) -> dict:
+    return {
+        "id": sid,
+        "suggested_text": text,
+        "user_action": action,
+        "user_edited": edited,
+        "truth_guard_status": "Safe to use",
+    }
+
+
+def test_load_input_takes_only_accepted_feedback() -> None:
+    """The Respond step is the official gate: a suggestion the user has not
+    accepted never shapes generation, even when it is marked Safe to use."""
+    data = _data(
+        resume_suggestions_rows=[
+            _suggestion_row("s1", "Accepted plain.", action="accepted"),
+            _suggestion_row("s2", "Accepted edited.", action="accepted", edited=True),
+            _suggestion_row("s3", "Safe but unreviewed.", action="pending"),
+            _suggestion_row("s4", "Rejected.", action="rejected"),
+        ]
+    )
+    wf = _wf(data)
+    context = wf.authorize(subject_id="match_1", user_profile_id="profile_1")
+    context["user_profile_id"] = "profile_1"
+    loaded = wf.load_input(context)
+    assert [f["id"] for f in loaded.accepted_feedback] == ["s1", "s2"]
+    assert loaded.accepted_feedback[1]["user_edited"] is True
+
+
+def test_prompt_marks_user_edited_feedback_as_authoritative() -> None:
+    data = _data(
+        resume_suggestions_rows=[
+            _suggestion_row("s1", "Accepted plain.", action="accepted"),
+            _suggestion_row("s2", "Shipped the payments migration.", action="accepted", edited=True),
+        ]
+    )
+    wf = _wf(data)
+    context = wf.authorize(subject_id="match_1", user_profile_id="profile_1")
+    context["user_profile_id"] = "profile_1"
+    prompt = wf.build_prompt(wf.load_input(context))
+    assert "[id=s1] [ai-suggested] Accepted plain." in prompt
+    assert "[id=s2] [USER-EDITED] Shipped the payments migration." in prompt
+    assert "authoritative information" in prompt
+    assert "source_feedback_id" in prompt
+    assert "feedback without resume evidence is needs_confirmation" in prompt
+
+
+def test_source_feedback_ids_are_sanitized_and_persisted() -> None:
+    """A valid link survives into cv_json; an invented one is nulled."""
+    cv = valid_draft_cv()
+    cv["work_experience"][0]["bullets"][0]["source_feedback_id"] = "s1"  # real
+    cv["work_experience"][0]["bullets"][1]["source_feedback_id"] = "ghost"  # invented
+    data = _data(
+        resume_suggestions_rows=[_suggestion_row("s1", "Built FastAPI services.", action="accepted")]
+    )
+    client = FakeGeminiClient([gemini_response(text=json.dumps(cv))])
+    _wf(data, key="key", client=client).run(subject_id="match_1", user_profile_id="profile_1")
+
+    bullets = _saved_bullets(data)
+    assert bullets[0]["source_feedback_id"] == "s1"
+    assert bullets[1]["source_feedback_id"] is None
+
+
+# --- US-060 regenerate preservation ----------------------------------------------
+
+
+def _finalized_bullet(text: str) -> dict:
+    return {
+        "id": "finalized_1",
+        "text": text,
+        "source_evidence": "ev",
+        "truth_guard_status": "safe_to_use",
+        "keywords_used": [],
+        "user_action": "pending",
+        "user_edited": True,
+        "polished": True,
+        "finalized_at": "2026-06-11T00:00:00Z",
+    }
+
+
+def _previous_draft(data: FakeData, *, company: str, title: str, text: str) -> None:
+    data.insert_draft_cv(
+        user_profile_id="profile_1",
+        match_id="match_1",
+        job_id="job_1",
+        resume_id="resume_1",
+        title="Draft CV — previous",
+        status="exported",
+        cv_json={
+            "work_experience": [
+                {"company": company, "title": title, "bullets": [_finalized_bullet(text)]}
+            ],
+            "projects": [],
+        },
+        cv_strategy_json={},
+        quality_notes_json=[],
+        confidence_score=0.8,
+        provider="gemini",
+        model_name="m",
+    )
+
+
+def test_regenerate_carries_finalized_bullets_into_the_new_version() -> None:
+    data = _data()
+    # Same entry identity as the model output (Acme / Senior Engineer).
+    _previous_draft(data, company="Acme", title="Senior Engineer", text="My confirmed bullet.")
+    client = FakeGeminiClient([gemini_valid_draft_cv()])
+    _wf(data, key="key", client=client).run(subject_id="match_1", user_profile_id="profile_1")
+
+    new_cv = data.draft_cvs[-1]["cv_json"]
+    texts = [b["text"] for e in new_cv["work_experience"] for b in e["bullets"]]
+    assert "My confirmed bullet." in texts
+    assert "preservation_conflicts" not in new_cv
+
+
+def test_regenerate_restructured_entry_surfaces_a_conflict() -> None:
+    data = _data()
+    _previous_draft(data, company="OldCo", title="Engineer", text="Kept work.")
+    client = FakeGeminiClient([gemini_valid_draft_cv()])
+    _wf(data, key="key", client=client).run(subject_id="match_1", user_profile_id="profile_1")
+
+    new_cv = data.draft_cvs[-1]["cv_json"]
+    conflicts = new_cv.get("preservation_conflicts") or []
+    assert len(conflicts) == 1
+    assert conflicts[0]["bullet"]["text"] == "Kept work."
+    assert conflicts[0]["entry"]["company"] == "OldCo"

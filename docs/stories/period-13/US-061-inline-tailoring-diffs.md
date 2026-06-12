@@ -2,9 +2,9 @@
 
 ## Status
 
-planned (amended 2026-06-11 twice: elevated to the official pre-generation
-feedback step per decision 0019 Amendment I; verbatim weave replaced by
-information-preserving tone-true weave per Amendment II)
+implemented (verified 2026-06-11; amended same day twice: elevated to the
+official pre-generation feedback step per decision 0019 Amendment I; verbatim
+weave replaced by information-preserving tone-true weave per Amendment II)
 
 ## Lane
 
@@ -82,4 +82,29 @@ amendments (CLI has no contract update); this packet is the source of truth.
 
 ## Evidence
 
-Added after verification.
+Implemented 2026-06-11.
+
+- **Schema:** migration `0024` adds `resume_suggestions.user_edited` (applied
+  live via psql). `cv_json` bullets gain `source_feedback_id` (additive JSON).
+- **API:** `patch_suggestion_user_action` flips `user_edited` whenever edited
+  text is saved; `upsert_resume_suggestions` now replaces only `pending` rows
+  (responded rows survive a refresh; duplicate text vs survivors is dropped).
+  `DraftCvWorkflow` consumes only **accepted** feedback as `{id, text,
+  user_edited}`, prompts USER-EDITED items as authoritative information
+  (meaning preserved, tone matched, no new claims), instructs
+  `source_feedback_id`, and `sanitize_feedback_links` nulls invented ids.
+- **Web:** shared `TailoringStepper` (pure state in `tailoring-stepper.mjs`)
+  on the suggestions + draft-cv pages; word-level LCS diff (`word-diff.mjs`)
+  rendered per suggestion vs the base text; "Edited by you" provenance badge;
+  unchanged-text Accept no longer marks an edit (hidden initial-text field);
+  Generator card shows "N approved responses shape this CV" with a 0-approved
+  warning + link; Truth Guard review bullets carry "From your feedback" / "AI
+  suggested" chips; new "From your feedback" card pairs feedback and woven
+  bullet side by side (`collectFeedbackTrace`).
+- **Proof:** API pytest 409 passed (refresh-preserve/dedup on the real client
+  via stubbed transport, PATCH user_edited payload, accepted-only load_input,
+  prompt contract, sanitize+persist of `source_feedback_id`). Web 233 unit
+  tests (word-diff insert/delete/replace/unicode/empty, stepper state machine,
+  feedback trace), eslint + tsc clean. Playwright 16/16 incl. 2 new US-061
+  specs (Respond flow: stepper current step, provenance badge, accept updates
+  status; Generate link + side-by-side trace with seeded data).

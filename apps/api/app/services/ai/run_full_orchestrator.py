@@ -31,6 +31,10 @@ from app.services.ai.roadmap_workflow import RoadmapWorkflow
 
 BLOCKED_ERROR_CODE = "blocked_by_dependency"
 BLOCKED_MESSAGE = "Blocked — a previous step failed."
+# US-063: the cover letter is written from the Tailored CV, which is generated
+# outside this manifest (its own page/flow). Without one the step is blocked,
+# consistent with existing blocked semantics, instead of failing the run.
+BLOCKED_NO_DRAFT_CV_MESSAGE = "Blocked — generate the Tailored CV first."
 
 _SUCCESS_STATUSES = ("completed", "needs_review")
 
@@ -121,6 +125,20 @@ class RunFullOrchestrator:
                 outcomes[workflow_type] = "blocked"
                 continue
 
+            # US-063 precondition: the cover letter needs a Tailored CV, which
+            # is not an orchestrator step — block rather than fail.
+            if workflow_type == "cover_letter" and not self.data.get_latest_draft_cv(
+                match_id=match_id, user_profile_id=user_profile_id
+            ):
+                self._write_blocked(
+                    workflow_type=workflow_type,
+                    match_id=match_id,
+                    user_profile_id=user_profile_id,
+                    message=BLOCKED_NO_DRAFT_CV_MESSAGE,
+                )
+                outcomes[workflow_type] = "blocked"
+                continue
+
             existing = latest.get(workflow_type)
             if not force and existing and existing.get("status") in _SUCCESS_STATUSES:
                 outcomes[workflow_type] = "completed"
@@ -170,7 +188,12 @@ class RunFullOrchestrator:
         return result
 
     def _write_blocked(
-        self, *, workflow_type: str, match_id: str, user_profile_id: str
+        self,
+        *,
+        workflow_type: str,
+        match_id: str,
+        user_profile_id: str,
+        message: str = BLOCKED_MESSAGE,
     ) -> None:
         run = self.data.insert_workflow_run(
             user_profile_id=user_profile_id,
@@ -183,5 +206,5 @@ class RunFullOrchestrator:
             status="failed",
             completed_at=datetime.now(UTC).isoformat(),
             error_code=BLOCKED_ERROR_CODE,
-            error_message=BLOCKED_MESSAGE,
+            error_message=message,
         )

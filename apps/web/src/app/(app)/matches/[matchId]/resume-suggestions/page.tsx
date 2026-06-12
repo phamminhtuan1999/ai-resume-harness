@@ -3,6 +3,7 @@ import { ArrowLeft, ShieldCheck } from "lucide-react";
 
 import { ResumeSuggestionsForm } from "@/components/forms/resume-suggestions-form";
 import { SuggestionReviewForm } from "@/components/forms/suggestion-review-form";
+import { TailoringStepper } from "@/components/tailoring-stepper";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -13,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getResumeSuggestionsDetail } from "@/lib/data/server";
+import { hasWordDiff, wordDiff } from "@/lib/word-diff.mjs";
 
 type ResumeSuggestionsPageProps = {
   params: Promise<{ matchId: string }>;
@@ -20,6 +22,7 @@ type ResumeSuggestionsPageProps = {
 
 type SuggestionRow = {
   id: string;
+  original_text?: string | null;
   suggested_text?: string;
   suggestion_type?: string;
   related_job_requirement?: string;
@@ -27,7 +30,39 @@ type SuggestionRow = {
   reason?: string;
   truth_guard_status?: string;
   user_action?: string;
+  user_edited?: boolean | null;
 };
+
+type DiffSegment = { type: "same" | "removed" | "added"; text: string };
+
+// Word-level diff vs the base resume text (US-061): removed words struck
+// through, added words highlighted, so the user can judge a suggestion at a
+// glance before accepting, editing, or rejecting it.
+function SuggestionDiff({ original, suggested }: { original: string; suggested: string }) {
+  const segments = wordDiff(original, suggested) as DiffSegment[];
+  if (!hasWordDiff(segments)) {
+    return null;
+  }
+  return (
+    <p className="mt-2 rounded-md bg-muted/40 p-3 text-sm leading-6">
+      {segments.map((segment, index) => (
+        <span
+          key={index}
+          className={
+            segment.type === "removed"
+              ? "text-muted-foreground line-through decoration-destructive/60"
+              : segment.type === "added"
+                ? "rounded-sm bg-brand-muted px-0.5 font-medium"
+                : undefined
+          }
+        >
+          {segment.text}
+          {index < segments.length - 1 ? " " : ""}
+        </span>
+      ))}
+    </p>
+  );
+}
 
 const TRUTH_SECTIONS: {
   status: string;
@@ -57,8 +92,10 @@ const TRUTH_SECTIONS: {
 
 export default async function ResumeSuggestionsPage({ params }: ResumeSuggestionsPageProps) {
   const { matchId } = await params;
-  const { match, suggestions, snapshot } = await getResumeSuggestionsDetail(matchId);
+  const { match, suggestions, snapshot, draftSummary } =
+    await getResumeSuggestionsDetail(matchId);
   const rows = (suggestions ?? []) as unknown as SuggestionRow[];
+  const respondedCount = rows.filter((row) => (row.user_action ?? "pending") !== "pending").length;
 
   const strategy = typeof snapshot?.resume_strategy === "string" ? snapshot.resume_strategy : "";
   const assistantSummary =
@@ -85,6 +122,14 @@ export default async function ResumeSuggestionsPage({ params }: ResumeSuggestion
         <ArrowLeft data-icon="inline-start" />
         Match report
       </Link>
+
+      <TailoringStepper
+        matchId={match.id}
+        suggestionCount={rows.length}
+        respondedCount={respondedCount}
+        hasDraft={Boolean(draftSummary)}
+        draftStatus={draftSummary?.status ?? null}
+      />
 
       <section className="grid gap-5 lg:grid-cols-[1fr_320px]">
         <Card>
@@ -171,7 +216,12 @@ export default async function ResumeSuggestionsPage({ params }: ResumeSuggestion
                         <p className="text-sm font-medium">
                           {row.related_job_requirement || "Resume positioning"}
                         </p>
-                        <Badge variant="outline">{row.suggestion_type || "suggestion"}</Badge>
+                        <div className="flex items-center gap-1.5">
+                          {row.user_edited ? (
+                            <Badge variant="secondary">Edited by you</Badge>
+                          ) : null}
+                          <Badge variant="outline">{row.suggestion_type || "suggestion"}</Badge>
+                        </div>
                       </div>
                       {row.reason ? (
                         <p className="mt-1 text-sm leading-6 text-muted-foreground">{row.reason}</p>
@@ -180,6 +230,12 @@ export default async function ResumeSuggestionsPage({ params }: ResumeSuggestion
                         <p className="mt-1 text-sm leading-6 text-muted-foreground">
                           <span className="font-medium text-foreground">Evidence:</span> {row.evidence}
                         </p>
+                      ) : null}
+                      {row.original_text ? (
+                        <SuggestionDiff
+                          original={row.original_text}
+                          suggested={row.suggested_text ?? ""}
+                        />
                       ) : null}
                       <div className="mt-3">
                         <SuggestionReviewForm

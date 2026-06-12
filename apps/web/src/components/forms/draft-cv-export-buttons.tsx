@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { Download, FileCode, FileText } from "lucide-react";
 
@@ -46,6 +47,7 @@ export function DraftCvExportButtons({
   rendering,
 }: DraftCvExportButtonsProps) {
   const { getToken } = useAuth();
+  const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedPages, setSelectedPages] = useState<number>(
@@ -137,6 +139,10 @@ export function DraftCvExportButtons({
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
+      // The export stamped the draft (status -> exported) server-side; refresh
+      // the server components so the stepper and status badge turn green now,
+      // not on the next manual reload.
+      router.refresh();
     } catch {
       setError("We could not reach the assistant. Please try again.");
     } finally {

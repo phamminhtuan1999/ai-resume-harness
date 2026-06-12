@@ -1,12 +1,17 @@
 """Deterministic resume suggestions — the typed fallback for ``resume_suggestions``.
 
-Runs when no ``gemini_api_key`` is configured or Gemini fails after retries. It is
-the Python port of ``buildResumeSuggestions`` from
-``apps/web/src/lib/resume-suggestion-generator.mjs`` (US-008), re-projected onto
-the saved US-028 match analysis snapshot: resume strengths become ``safe_to_use``
-positioning rewrites, wording/proof gaps become ``needs_confirmation`` reviews,
-and true gaps become ``do_not_use_yet`` Truth Guard blocks. It invents nothing —
-every suggestion is derived from gaps/strengths the match analysis already found.
+Runs when no ``gemini_api_key`` is configured or Gemini fails after retries.
+Originally the Python port of the US-008 web generator (removed — the backend
+owns generation per decision 0012), re-projected onto the saved US-028 match
+analysis snapshot: resume strengths become ``safe_to_use`` positioning rewrites,
+wording/proof gaps become ``needs_confirmation`` reviews, and true gaps become
+``do_not_use_yet`` Truth Guard blocks. It invents nothing — every suggestion is
+derived from gaps/strengths the match analysis already found.
+
+US-061 contract: ``suggested_text`` is resume-ready content (text that could sit
+on the CV), because the user edits it directly and accepted text feeds the CV
+generation as authoritative information. Coaching and caveats live in ``reason``,
+never in ``suggested_text``.
 """
 
 from __future__ import annotations
@@ -48,14 +53,15 @@ def build_resume_suggestions(*, match_analysis: dict[str, Any], job_title: str) 
             {
                 "section": "experience",
                 "original_text": None,
-                "suggested_text": (
-                    f"Clarify your existing {skill} impact with a concrete result, "
-                    "system, or project outcome already supported by your resume."
-                ),
+                # Resume-ready: the candidate's own supported line (or a claim
+                # the analysis already proved) — never an instruction.
+                "suggested_text": evidence
+                or f"Hands-on {skill} experience across recent production work.",
                 "related_job_requirement": _clean(strength.get("job_requirement"), skill),
                 "reason": (
-                    f"The match analysis found resume evidence for {skill}, so the "
-                    "wording can be sharpened without adding unsupported facts."
+                    f"The match analysis found resume evidence for {skill}. Sharpen "
+                    "this line with a concrete result, system, or metric — the "
+                    "wording can improve without adding unsupported facts."
                 ),
                 "evidence": evidence,
                 "truth_guard_status": "safe_to_use",
@@ -73,14 +79,15 @@ def build_resume_suggestions(*, match_analysis: dict[str, Any], job_title: str) 
                 {
                     "section": "experience",
                     "original_text": None,
-                    "suggested_text": (
-                        f"Review whether your existing work can honestly show stronger "
-                        f"{skill} evidence before changing the resume."
-                    ),
+                    # A claim-shaped starting point the user edits into their
+                    # true specifics; the gate keeps it out of exports until
+                    # they confirm it.
+                    "suggested_text": f"Worked with {skill} in recent production projects.",
                     "related_job_requirement": requirement,
                     "reason": (
                         "The resume may have related experience, but the current text "
-                        "does not clearly prove it."
+                        f"does not clearly prove it. Edit this into your real {skill} "
+                        "specifics (systems, scope, results) before accepting — or reject it."
                     ),
                     "evidence": _clean(gap.get("why_it_matters")) or None,
                     "truth_guard_status": "needs_confirmation",
@@ -92,12 +99,14 @@ def build_resume_suggestions(*, match_analysis: dict[str, Any], job_title: str) 
                 {
                     "section": "skills",
                     "original_text": None,
-                    "suggested_text": (
-                        f"Do not claim {skill} yet. Build or document real evidence "
-                        "first, then add a truthful resume bullet."
-                    ),
+                    "suggested_text": f"Hands-on experience with {skill}.",
                     "related_job_requirement": requirement,
-                    "reason": "Adding this claim now would create unsupported resume content.",
+                    "reason": (
+                        f"No resume evidence supports {skill} yet — adding it now would "
+                        "create unsupported content. Accept ONLY if this is genuinely "
+                        "true and edit in your real specifics; otherwise reject it, or "
+                        "build the evidence first."
+                    ),
                     "evidence": None,
                     "truth_guard_status": "do_not_use_yet",
                 }
@@ -111,11 +120,15 @@ def build_resume_suggestions(*, match_analysis: dict[str, Any], job_title: str) 
                 "section": "summary",
                 "original_text": None,
                 "suggested_text": (
-                    "Tighten one existing resume bullet by adding scope, production "
-                    "context, and a measurable outcome already present in your experience."
+                    f"Experienced professional aligned with the core requirements "
+                    f"of {job_title}."
                 ),
                 "related_job_requirement": "General role fit",
-                "reason": "The app needs stronger parsed evidence before marking a specific suggestion safe.",
+                "reason": (
+                    "The app needs stronger parsed evidence before proposing specific "
+                    "content — edit this into a truthful summary line with your scope, "
+                    "context, and a measurable outcome."
+                ),
                 "evidence": None,
                 "truth_guard_status": "needs_confirmation",
             }

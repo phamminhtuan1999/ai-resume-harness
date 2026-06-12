@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   buildDraftCvView,
   buildRenderingView,
+  collectFeedbackTrace,
+  collectPreservationConflicts,
   collectReviewBullets,
   compressionSummary,
   draftStatusLabel,
@@ -15,6 +17,7 @@ import {
   overrideWarning,
   pageOptions,
   pendingReviewCount,
+  staleFeedbackCount,
 } from "../src/lib/draft-cv-view.mjs";
 
 function bullet(text, status, action = "pending") {
@@ -64,12 +67,70 @@ test("isRenderable mirrors the backend gate", () => {
 test("buildDraftCvView shows only renderable bullets and drops empty skill groups", () => {
   const view = buildDraftCvView(cvJson());
   const bullets = view.workExperience[0].bullets;
-  assert.deepEqual(bullets, ["safe one", "approved one"]);
+  // US-060: bullets keep identity + edit state for in-place editing, but the
+  // visible text set is still exactly the export's.
+  assert.deepEqual(
+    bullets.map((b) => b.text),
+    ["safe one", "approved one"]
+  );
+  assert.ok(bullets.every((b) => typeof b.id === "string"));
+  assert.ok(bullets.every((b) => b.pendingEdit === null));
   assert.deepEqual(
     view.skills.map((g) => g.category),
     ["Backend"]
   );
   assert.equal(view.professionalSummary, "Summary line.");
+});
+
+test("buildDraftCvView surfaces edit state and a staged pending edit (US-060)", () => {
+  const cv = cvJson();
+  Object.assign(cv.work_experience[0].bullets[0], {
+    user_edited: true,
+    polished: true,
+    original_text: "previous wording",
+    pending_edit: {
+      user_text: "my text",
+      polished_text: "polished text",
+      truth_guard_status: "needs_confirmation",
+      evidence_question: "What proves it?",
+    },
+  });
+  const bullet = buildDraftCvView(cv).workExperience[0].bullets[0];
+  assert.equal(bullet.userEdited, true);
+  assert.equal(bullet.polished, true);
+  assert.equal(bullet.originalText, "previous wording");
+  assert.deepEqual(bullet.pendingEdit, {
+    userText: "my text",
+    polishedText: "polished text",
+    truthGuardStatus: "needs_confirmation",
+    evidenceQuestion: "What proves it?",
+  });
+});
+
+test("collectPreservationConflicts labels each keep/take prompt (US-060)", () => {
+  const cv = cvJson();
+  cv.preservation_conflicts = [
+    {
+      section: "work_experience",
+      entry: { company: "OldCo", title: "Engineer" },
+      bullet: { id: "old1", text: "Kept work." },
+    },
+    {
+      section: "projects",
+      entry: { name: "Sidekick" },
+      bullet: { id: "old2", text: "Project bullet." },
+    },
+  ];
+  const conflicts = collectPreservationConflicts(cv);
+  assert.deepEqual(
+    conflicts.map((c) => c.entryLabel),
+    ["Engineer — OldCo", "Sidekick"]
+  );
+  assert.deepEqual(
+    conflicts.map((c) => c.bulletId),
+    ["old1", "old2"]
+  );
+  assert.deepEqual(collectPreservationConflicts(cvJson()), []);
 });
 
 test("collectReviewBullets splits pending and excluded", () => {
@@ -220,4 +281,58 @@ test("compressionSummary summarizes an applied report", () => {
   // A no-op / missing report yields null.
   assert.equal(compressionSummary({ applied: false }), null);
   assert.equal(compressionSummary(null), null);
+});
+
+test("collectReviewBullets carries the feedback link for provenance chips (US-061)", () => {
+  const cv = cvJson();
+  cv.work_experience[0].bullets[0].truth_guard_status = "needs_confirmation";
+  cv.work_experience[0].bullets[0].user_action = "pending";
+  cv.work_experience[0].bullets[0].source_feedback_id = "sug-9";
+  const { pending } = collectReviewBullets(cv);
+  const linked = pending.find((b) => b.sourceFeedbackId === "sug-9");
+  assert.ok(linked);
+  // A bullet without a link reports null, never undefined.
+  assert.ok(pending.every((b) => b.sourceFeedbackId !== undefined));
+});
+
+test("collectFeedbackTrace pairs bullets with their feedback side by side (US-061)", () => {
+  const cv = cvJson();
+  cv.work_experience[0].bullets[0].source_feedback_id = "sug-1";
+  cv.work_experience[0].bullets[1].source_feedback_id = "ghost"; // unknown id -> skipped
+  const suggestions = [
+    { id: "sug-1", suggested_text: "Shipped the payments migration.", user_edited: true },
+    { id: "sug-2", suggested_text: "Unused feedback.", user_edited: false },
+  ];
+  const rows = collectFeedbackTrace(cv, suggestions);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].feedbackText, "Shipped the payments migration.");
+  assert.equal(rows[0].userEdited, true);
+  assert.equal(rows[0].bulletText, cv.work_experience[0].bullets[0].text);
+  assert.equal(typeof rows[0].renderable, "boolean");
+});
+
+test("collectFeedbackTrace is empty without links or suggestions", () => {
+  assert.deepEqual(collectFeedbackTrace(cvJson(), []), []);
+  assert.deepEqual(collectFeedbackTrace(null, null), []);
+});
+
+test("staleFeedbackCount counts responses given after the draft was generated", () => {
+  const draftCreatedAt = "2026-06-10T13:30:00Z";
+  const suggestions = [
+    // Responded before generation -> woven in, not stale.
+    { user_action: "accepted", updated_at: "2026-06-10T12:30:00Z" },
+    // Responded after generation -> not in the CV yet.
+    { user_action: "accepted", updated_at: "2026-06-10T14:00:00Z" },
+    // Rejected after generation also counts (woven content may be invalidated).
+    { user_action: "rejected", updated_at: "2026-06-10T15:00:00Z" },
+    // Pending responses never count, whatever their timestamp.
+    { user_action: "pending", updated_at: "2026-06-10T16:00:00Z" },
+  ];
+  assert.equal(staleFeedbackCount(draftCreatedAt, suggestions), 2);
+});
+
+test("staleFeedbackCount is 0 without a draft timestamp or suggestions", () => {
+  assert.equal(staleFeedbackCount(null, [{ user_action: "accepted", updated_at: "2026-06-10T14:00:00Z" }]), 0);
+  assert.equal(staleFeedbackCount("not-a-date", []), 0);
+  assert.equal(staleFeedbackCount("2026-06-10T13:30:00Z", null), 0);
 });

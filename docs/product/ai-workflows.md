@@ -410,6 +410,14 @@ generated Tailored CV. (The standalone Markdown resume draft workflow,
 US-032, was retired by US-059 / decision 0019 — Markdown is now an export
 format of the Draft CV below.)
 
+**Tier-1 feedback step (Period 13, US-061).** The suggestions review is the
+official "Respond" step of the tailoring stepper (Suggest → Respond → Generate
+→ Final check → Export). Each suggestion is accepted, edited, or rejected;
+saving edited text flips `user_edited` (provenance). Regenerating suggestions
+replaces only `pending` rows — responded rows survive, and duplicates of
+surviving text are dropped. **Only explicitly accepted feedback shapes the
+Draft CV generation** (the page states "N approved responses shape this CV").
+
 ## Draft CV Generator (Period 9)
 
 Runs on the AI Workflow Foundation (`workflow_type = 'draft_cv'`,
@@ -424,7 +432,9 @@ Input:
 - candidate profile (contact fields come only from here; null when absent)
 - job raw description + structured/extraction keywords
 - missing-skill analysis (**optional** enrichment)
-- accepted / `safe_to_use` resume suggestions (optional input)
+- **explicitly accepted** tier-1 feedback responses (optional input; US-061 —
+  each `{id, text, user_edited}`; unreviewed suggestions never feed
+  generation, even when marked `Safe to use`)
 
 Generation is **one structured call** whose prompt embeds the
 Cross-Referencing & Enhancement Protocol (keyword extraction with
@@ -442,16 +452,68 @@ guards after Pydantic validation:
 - **XYZ/ATS lint (soft):** action-verb start (curated lexicon) and length;
   violations become quality notes and can mark the run `needs_review`.
 
+The prompt's feedback block (US-061) lists approved responses with their ids;
+items marked USER-EDITED are **authoritative information** — meaning
+preserved, wording matched to the CV's tone, no new claims (decision 0019:
+the user owns the information, the LLM owns the tone, Truth Guard owns the
+truth). The model records `source_feedback_id` on bullets produced from
+feedback; the server nulls any id that was not actually in the prompt.
+
 Every bullet carries a server-assigned stable `id`, `source_evidence`,
 `truth_guard_status` (`safe_to_use | needs_confirmation | do_not_use_yet`),
-`keywords_used`, and `user_action` (`pending | approved | rejected`). Output
-versions are append-only in `draft_cvs`; regenerate creates a new version and
-approvals do not carry over.
+`keywords_used`, `user_action` (`pending | approved | rejected`), and a
+nullable `source_feedback_id`. Output versions are append-only in
+`draft_cvs`; regenerate creates a new version and approvals do not carry
+over.
 
 Deterministic fallback: builds the CV mechanically from the candidate
 profile, parsed resume sections, job keywords, and accepted suggestions —
 copying source text **verbatim** (verbatim ⇒ `safe_to_use` by construction),
 `confidence_score = 0.0`.
+
+## Tier-2 Bullet Edits — Polish and Confirm (Period 13, US-060)
+
+An edit at final check is information-level feedback (decision 0019 Amendment
+II). `PATCH /api/draft-cvs/{id}/bullets/{bulletId}/text` runs **one combined
+pass** — tone-polish (information parity: no claims added or dropped) +
+truth-guard verification against the same evidence corpus the generator uses —
+as a lightweight structured Gemini call (like the extractors: retry + typed
+errors, **no `ai_workflow_runs` row**). The result is **staged** on the bullet
+(`pending_edit`); text and status change only when
+`POST .../text/confirm {choice: polished | mine | cancel}` applies the
+**server-stored** result — the client never supplies a status, so the export
+gate cannot be bypassed. Two deterministic floors are absolute: a number in
+the user's text absent from the corpus forces `do_not_use_yet`, and a polished
+text introducing a number absent from both the user's text and the corpus is
+discarded for the user's wording. The no-key/provider-failure fallback skips
+polish and verifies the user's text unchanged — conservative
+(`needs_confirmation`, never `safe_to_use` by default). A confirmed bullet
+carries `user_edited`, `polished`, `original_text`, `finalized_at`; a
+`needs_confirmation` result flows into the existing approve/reject review.
+
+**Regenerate preservation:** generation's persist step merges the previous
+version's finalized bullets into the new `cv_json` (entry identity:
+company+title / project name; same-text fresh bullets are replaced, others
+appended). A restructured entry becomes a `preservation_conflicts` item the
+user resolves per bullet via
+`POST /api/draft-cvs/{id}/preservation/resolve {bullet_id, choice: keep |
+discard}` — never a silent loss.
+
+## Cover Letter from the Tailored CV (Period 13, US-063)
+
+The cover letter (`workflow_type = 'cover_letter'`, US-033) is written from
+the **final Tailored CV**, not the raw resume: `load_input` requires the
+latest `draft_cvs` version with renderable content and raises the typed
+`missing_draft_cv` guided error otherwise (no raw-resume fallback). The prompt
+embeds the compact renderable CV content with a "reference ONLY claims present
+here" constraint; the deterministic fallback drops analysis strengths that do
+not appear in the renderable bullets. The letter row records
+`source_draft_cv_id` + `source_draft_cv_version` so the UI can show
+"From Tailored CV vN" and flag staleness when a newer CV version exists — a
+regenerated CV never silently invalidates an existing letter. In the run-full
+orchestrator the cover-letter step is **blocked** ("generate the Tailored CV
+first") when no draft CV exists, since the CV is generated outside the
+manifest; the rest of the chain still runs.
 
 ### Rendering Recommendation & Page Policy (Period 10, US-043)
 

@@ -509,7 +509,7 @@ class SupabaseDataClient:
                 "select": (
                     "id,match_id,original_text,suggested_text,suggestion_type,"
                     "related_job_requirement,evidence,truth_guard_status,reason,"
-                    "user_action,created_at,updated_at,matches!inner(user_id)"
+                    "user_action,user_edited,created_at,updated_at,matches!inner(user_id)"
                 ),
                 "match_id": f"eq.{match_id}",
                 "matches.user_id": f"eq.{user_profile_id}",
@@ -524,23 +524,45 @@ class SupabaseDataClient:
     def upsert_resume_suggestions(
         self, *, match_id: str, suggestions: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
-        """Replace a match's suggestion rows: delete existing, then bulk insert.
+        """Refresh a match's suggestion rows, preserving responded ones (US-061).
 
-        Ownership is enforced upstream (the workflow authorizes the match before
-        persist). Regenerate reuses this, so prior Accept/Reject decisions are
-        intentionally reset.
+        Tier-1 responses are the user's curation work: a regenerate deletes and
+        replaces only ``pending`` rows. Accepted/rejected rows survive, and an
+        incoming suggestion that duplicates a surviving row's text is dropped so
+        the user never re-reviews the same wording twice. Ownership is enforced
+        upstream (the workflow authorizes the match before persist).
         """
+        existing = self._request(
+            "GET",
+            "/resume_suggestions",
+            params={
+                "select": "id,suggested_text,user_action",
+                "match_id": f"eq.{match_id}",
+            },
+        ).json()
+        kept_texts = {
+            _normalized_text(row.get("suggested_text"))
+            for row in existing
+            if row.get("user_action") in ("accepted", "rejected")
+        }
+
         self._request(
             "DELETE",
             "/resume_suggestions",
-            params={"match_id": f"eq.{match_id}"},
+            params={"match_id": f"eq.{match_id}", "user_action": "eq.pending"},
         )
-        if not suggestions:
+
+        fresh = [
+            row
+            for row in suggestions
+            if _normalized_text(row.get("suggested_text")) not in kept_texts
+        ]
+        if not fresh:
             return []
         now = datetime.now(UTC).isoformat()
         payload = [
             {**row, "match_id": match_id, "created_at": now, "updated_at": now}
-            for row in suggestions
+            for row in fresh
         ]
         response = self._request(
             "POST",
@@ -561,6 +583,8 @@ class SupabaseDataClient:
     ) -> dict[str, Any] | None:
         """Update one suggestion's ``user_action`` (and optionally its edited text).
 
+        An edited text also flips ``user_edited`` (US-061 provenance): the
+        generator treats user-edited feedback as authoritative information.
         Ownership is asserted by first confirming the suggestion's parent match is
         owned by the user; returns ``None`` when it is not (router maps to 403).
         """
@@ -583,6 +607,7 @@ class SupabaseDataClient:
         }
         if suggested_text is not None:
             update["suggested_text"] = suggested_text
+            update["user_edited"] = True
         response = self._request(
             "PATCH",
             "/resume_suggestions",
@@ -591,7 +616,7 @@ class SupabaseDataClient:
                 "select": (
                     "id,match_id,original_text,suggested_text,suggestion_type,"
                     "related_job_requirement,evidence,truth_guard_status,reason,"
-                    "user_action,created_at,updated_at"
+                    "user_action,user_edited,created_at,updated_at"
                 ),
             },
             json=update,
@@ -1279,6 +1304,11 @@ class SupabaseDataClient:
             except ValueError:
                 pass
         return rows, total
+
+
+def _normalized_text(value: Any) -> str:
+    """Whitespace-collapsed, case-folded text key for suggestion dedup (US-061)."""
+    return " ".join(str(value or "").split()).casefold()
 
 
 def _raise_for_supabase(response: httpx.Response) -> None:

@@ -8,9 +8,13 @@ import {
   Sparkles,
 } from "lucide-react";
 
+import { DraftCvCoveragePanel } from "@/components/draft-cv-coverage-panel";
+import { DraftCvBulletEditor } from "@/components/forms/draft-cv-bullet-editor";
 import { DraftCvBulletReviewForm } from "@/components/forms/draft-cv-bullet-review-form";
 import { DraftCvExportButtons } from "@/components/forms/draft-cv-export-buttons";
 import { DraftCvGenerateForm } from "@/components/forms/draft-cv-generate-form";
+import { DraftCvPreservationCard } from "@/components/forms/draft-cv-preservation-card";
+import { TailoringStepper } from "@/components/tailoring-stepper";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -22,16 +26,41 @@ import {
 } from "@/components/ui/card";
 import { formatShortDate, getDraftCvDetail } from "@/lib/data/server";
 import {
+  coverageReport,
+  extractJobKeywords,
+  renderableCvTexts,
+} from "@/lib/coverage-view.mjs";
+import {
   buildDraftCvView,
   buildRenderingView,
+  collectFeedbackTrace,
+  collectPreservationConflicts,
   collectReviewBullets,
   draftStatusLabel,
   draftStatusVariant,
+  staleFeedbackCount,
 } from "@/lib/draft-cv-view.mjs";
 import { serverEnv } from "@/lib/env";
 
 type DraftCvPageProps = {
   params: Promise<{ matchId: string }>;
+};
+
+// Renderable bullet shape from buildDraftCvView (US-060: identity + edit state
+// ride along so the preview offers in-place polish-and-confirm editing).
+type PreviewBullet = {
+  id: string | null;
+  text: string;
+  userEdited: boolean;
+  polished: boolean;
+  originalText: string;
+  sourceFeedbackId: string | null;
+  pendingEdit: {
+    userText: string;
+    polishedText: string;
+    truthGuardStatus: string;
+    evidenceQuestion: string | null;
+  } | null;
 };
 
 function slugify(parts: Array<string | null | undefined>): string {
@@ -49,7 +78,7 @@ function slugify(parts: Array<string | null | undefined>): string {
 
 export default async function DraftCvPage({ params }: DraftCvPageProps) {
   const { matchId } = await params;
-  const { match, draft, versions } = await getDraftCvDetail(matchId);
+  const { match, draft, versions, suggestions } = await getDraftCvDetail(matchId);
 
   const analyzed = match.apply_recommendation != null || match.analyzed_at != null;
   const company = match.jobs?.company || "Unknown company";
@@ -58,6 +87,17 @@ export default async function DraftCvPage({ params }: DraftCvPageProps) {
   const view = draft ? buildDraftCvView(draft.cv_json) : null;
   const rendering = draft ? buildRenderingView(draft.rendering_json) : null;
   const review = draft ? collectReviewBullets(draft.cv_json) : { pending: [], excluded: [] };
+  const respondedCount = suggestions.filter(
+    (row) => (row.user_action ?? "pending") !== "pending"
+  ).length;
+  const approvedCount = suggestions.filter((row) => row.user_action === "accepted").length;
+  // Responses given after this draft was generated are NOT in it yet —
+  // feedback applies at generation time, never at export time (US-061).
+  const staleCount = draft ? staleFeedbackCount(draft.created_at, suggestions) : 0;
+  const feedbackTrace = draft ? collectFeedbackTrace(draft.cv_json, suggestions) : [];
+  const preservationConflicts = draft ? collectPreservationConflicts(draft.cv_json) : [];
+  const apiBaseUrl = serverEnv.NEXT_PUBLIC_API_BASE_URL ?? null;
+
   const strategy = (draft?.cv_strategy_json ?? {}) as {
     summary?: string;
     primary_positioning?: string;
@@ -65,6 +105,18 @@ export default async function DraftCvPage({ params }: DraftCvPageProps) {
     keywords_excluded?: Array<{ keyword: string; reason: string }>;
   };
   const slug = slugify([view?.contact?.full_name, company, role]);
+
+  // Deterministic tailoring coverage (US-062): job keywords vs base resume vs
+  // the renderable (exportable) CV content. No LLM involved.
+  const coverage =
+    draft && view
+      ? coverageReport({
+          keywords: extractJobKeywords(match.jobs?.structured_json),
+          baseText: match.resumes?.raw_text ?? "",
+          tailoredTexts: renderableCvTexts(view),
+          excludedKeywords: (strategy.keywords_excluded ?? []).map((item) => item.keyword),
+        })
+      : null;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
@@ -75,6 +127,14 @@ export default async function DraftCvPage({ params }: DraftCvPageProps) {
         <ArrowLeft data-icon="inline-start" />
         Match report
       </Link>
+
+      <TailoringStepper
+        matchId={match.id}
+        suggestionCount={suggestions.length}
+        respondedCount={respondedCount}
+        hasDraft={Boolean(draft)}
+        draftStatus={draft?.status ?? null}
+      />
 
       <section className="grid gap-5 lg:grid-cols-[1fr_320px]">
         <Card>
@@ -124,7 +184,48 @@ export default async function DraftCvPage({ params }: DraftCvPageProps) {
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             {analyzed ? (
-              <DraftCvGenerateForm matchId={match.id} hasDraft={Boolean(draft)} />
+              <>
+                {/* The explicit feedback→generation link (US-061). A fallback-
+                    generated version did NOT weave feedback, so the claim is
+                    suppressed in favor of the fallback warning below. */}
+                {approvedCount > 0 && draft?.provider !== "deterministic" ? (
+                  <p className="text-xs text-muted-foreground">
+                    {approvedCount} approved response{approvedCount === 1 ? "" : "s"}{" "}
+                    shape{approvedCount === 1 ? "s" : ""} this CV.
+                  </p>
+                ) : null}
+                {staleCount > 0 ? (
+                  <p className="text-xs text-warning-foreground">
+                    {staleCount} response{staleCount === 1 ? "" : "s"} changed after this CV
+                    was generated and {staleCount === 1 ? "is" : "are"} not in it yet —
+                    exporting now ships the CV as shown. Regenerate the draft CV to weave
+                    your latest feedback in.
+                  </p>
+                ) : null}
+                {draft?.provider === "deterministic" ? (
+                  <p className="text-xs text-warning-foreground">
+                    This version came from the offline fallback — the AI model was
+                    unavailable when it was generated (usually a rate limit or daily
+                    quota). The fallback copies your profile content and does not weave
+                    your feedback responses. Regenerate once the model is available
+                    again.
+                  </p>
+                ) : null}
+                {approvedCount === 0 ? (
+                  <p className="text-xs text-warning-foreground">
+                    No approved responses yet — the CV will be tailored from your resume and the
+                    job description only.{" "}
+                    <Link
+                      href={`/matches/${match.id}/resume-suggestions`}
+                      className="font-medium underline underline-offset-2"
+                    >
+                      Respond to suggestions first
+                    </Link>{" "}
+                    for a better result.
+                  </p>
+                ) : null}
+                <DraftCvGenerateForm matchId={match.id} hasDraft={Boolean(draft)} />
+              </>
             ) : (
               <Link
                 href={`/matches/${match.id}`}
@@ -248,6 +349,28 @@ export default async function DraftCvPage({ params }: DraftCvPageProps) {
             </CardContent>
           </Card>
 
+          {preservationConflicts.length ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShieldAlert className="size-4 text-warning" />
+                  Confirmed bullets need a decision ({preservationConflicts.length})
+                </CardTitle>
+                <CardDescription>
+                  Regeneration restructured the entry these confirmed bullets belonged to.
+                  Decide per bullet — nothing is dropped silently.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DraftCvPreservationCard
+                  apiBaseUrl={apiBaseUrl}
+                  draftCvId={draft.id}
+                  conflicts={preservationConflicts}
+                />
+              </CardContent>
+            </Card>
+          ) : null}
+
           {review.pending.length ? (
             <Card>
               <CardHeader>
@@ -263,7 +386,12 @@ export default async function DraftCvPage({ params }: DraftCvPageProps) {
               <CardContent className="flex flex-col gap-4">
                 {review.pending.map((bullet) => (
                   <div key={bullet.id} className="rounded-lg border p-3">
-                    <p className="text-sm">{bullet.text}</p>
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <p className="text-sm">{bullet.text}</p>
+                      <Badge variant={bullet.sourceFeedbackId ? "secondary" : "outline"}>
+                        {bullet.sourceFeedbackId ? "From your feedback" : "AI suggested"}
+                      </Badge>
+                    </div>
                     {bullet.evidence ? (
                       <p className="mt-1 text-xs text-muted-foreground">
                         Evidence: {bullet.evidence}
@@ -282,6 +410,56 @@ export default async function DraftCvPage({ params }: DraftCvPageProps) {
               </CardContent>
             </Card>
           ) : null}
+
+          {feedbackTrace.length ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="size-4 text-muted-foreground" />
+                  From your feedback ({feedbackTrace.length})
+                </CardTitle>
+                <CardDescription>
+                  Each row pairs your approved feedback with the bullet it produced — check that
+                  the information survived the rewording (US-061: your information, the CV&apos;s
+                  tone).
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                {feedbackTrace.map(
+                  (
+                    row: {
+                      bulletId: string | null;
+                      bulletText: string;
+                      feedbackText: string;
+                      userEdited: boolean;
+                      renderable: boolean;
+                    },
+                    index: number
+                  ) => (
+                    <div
+                      key={row.bulletId ?? index}
+                      className="grid gap-2 rounded-lg border p-3 md:grid-cols-2"
+                    >
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">
+                          Your feedback{row.userEdited ? " (edited by you)" : ""}
+                        </p>
+                        <p className="mt-1 text-sm leading-6">{row.feedbackText}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">
+                          Woven into the CV{row.renderable ? "" : " (awaiting review)"}
+                        </p>
+                        <p className="mt-1 text-sm leading-6">{row.bulletText}</p>
+                      </div>
+                    </div>
+                  )
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {coverage ? <DraftCvCoveragePanel report={coverage} /> : null}
 
           <Card>
             <CardHeader>
@@ -335,7 +513,7 @@ export default async function DraftCvPage({ params }: DraftCvPageProps) {
               ) : null}
 
               {view.workExperience.some(
-                (e: { bullets: string[] }) => e.bullets.length
+                (e: { bullets: PreviewBullet[] }) => e.bullets.length
               ) ? (
                 <PreviewSection title="Work Experience">
                   {view.workExperience.map(
@@ -345,28 +523,43 @@ export default async function DraftCvPage({ params }: DraftCvPageProps) {
                         title?: string;
                         start_date?: string;
                         end_date?: string;
-                        bullets: string[];
+                        bullets: PreviewBullet[];
                       },
                       index: number
                     ) => (
-                      <ExperienceEntry key={index} entry={entry} />
+                      <ExperienceEntry
+                        key={index}
+                        entry={entry}
+                        apiBaseUrl={apiBaseUrl}
+                        draftCvId={draft.id}
+                      />
                     )
                   )}
                 </PreviewSection>
               ) : null}
 
-              {view.projects.some((e: { bullets: string[] }) => e.bullets.length) ? (
+              {view.projects.some((e: { bullets: PreviewBullet[] }) => e.bullets.length) ? (
                 <PreviewSection title="Projects">
                   {view.projects.map(
                     (
-                      entry: { name?: string; bullets: string[]; tech_stack?: string[] },
+                      entry: {
+                        name?: string;
+                        bullets: PreviewBullet[];
+                        tech_stack?: string[];
+                      },
                       index: number
                     ) => (
                       <div key={index} className="flex flex-col gap-1">
                         <p className="font-medium">{entry.name}</p>
                         <ul className="ml-4 list-disc">
-                          {entry.bullets.map((b: string, i: number) => (
-                            <li key={i}>{b}</li>
+                          {entry.bullets.map((b: PreviewBullet) => (
+                            <li key={b.id ?? b.text}>
+                              <DraftCvBulletEditor
+                                apiBaseUrl={apiBaseUrl}
+                                draftCvId={draft.id}
+                                bullet={b}
+                              />
+                            </li>
                           ))}
                         </ul>
                       </div>
@@ -475,14 +668,18 @@ function PreviewSection({
 
 function ExperienceEntry({
   entry,
+  apiBaseUrl,
+  draftCvId,
 }: {
   entry: {
     company?: string;
     title?: string;
     start_date?: string;
     end_date?: string;
-    bullets: string[];
+    bullets: PreviewBullet[];
   };
+  apiBaseUrl: string | null;
+  draftCvId: string;
 }) {
   const dates = [entry.start_date, entry.end_date].filter(Boolean).join(" – ");
   return (
@@ -492,8 +689,10 @@ function ExperienceEntry({
         {dates ? <span className="text-muted-foreground"> ({dates})</span> : null}
       </p>
       <ul className="ml-4 list-disc">
-        {entry.bullets.map((b, i) => (
-          <li key={i}>{b}</li>
+        {entry.bullets.map((b) => (
+          <li key={b.id ?? b.text}>
+            <DraftCvBulletEditor apiBaseUrl={apiBaseUrl} draftCvId={draftCvId} bullet={b} />
+          </li>
         ))}
       </ul>
     </div>

@@ -15,17 +15,36 @@ export function isRenderable(bullet) {
   return false;
 }
 
-function renderableTexts(bullets) {
+/* Renderable bullets keep their identity + edit state (US-060) so the preview
+   can offer in-place editing; the visible text set is still exactly the
+   export's. */
+function renderableBullets(bullets) {
   return (Array.isArray(bullets) ? bullets : [])
     .filter(isRenderable)
-    .map((b) => (b.text || "").trim())
-    .filter(Boolean);
+    .filter((b) => (b.text || "").trim())
+    .map((b) => ({
+      id: b.id ?? null,
+      text: (b.text || "").trim(),
+      userEdited: Boolean(b.user_edited),
+      polished: Boolean(b.polished),
+      originalText: b.original_text || "",
+      sourceFeedbackId: b.source_feedback_id || null,
+      pendingEdit:
+        b.pending_edit && typeof b.pending_edit === "object"
+          ? {
+              userText: b.pending_edit.user_text || "",
+              polishedText: b.pending_edit.polished_text || "",
+              truthGuardStatus: b.pending_edit.truth_guard_status || "",
+              evidenceQuestion: b.pending_edit.evidence_question || null,
+            }
+          : null,
+    }));
 }
 
 function entriesWith(section, bulletsKey) {
   return (Array.isArray(section) ? section : []).map((entry) => ({
     ...entry,
-    bullets: renderableTexts(entry?.[bulletsKey] ?? entry?.bullets),
+    bullets: renderableBullets(entry?.[bulletsKey] ?? entry?.bullets),
   }));
 }
 
@@ -62,6 +81,7 @@ export function collectReviewBullets(cvJson) {
             id: bullet.id,
             text: bullet.text || "",
             evidence: bullet.source_evidence || "",
+            sourceFeedbackId: bullet.source_feedback_id || null,
           });
         } else if (status === "do_not_use_yet" || action === "rejected") {
           excluded.push({
@@ -77,6 +97,74 @@ export function collectReviewBullets(cvJson) {
 
 export function pendingReviewCount(cvJson) {
   return collectReviewBullets(cvJson).pending.length;
+}
+
+/* Regenerate-preservation conflicts (US-060): finalized bullets whose entry
+   the regeneration restructured away. Each needs a keep-mine / take-new
+   answer — never a silent loss. */
+export function collectPreservationConflicts(cvJson) {
+  const cv = cvJson && typeof cvJson === "object" ? cvJson : {};
+  return (Array.isArray(cv.preservation_conflicts) ? cv.preservation_conflicts : [])
+    .filter((c) => c && typeof c === "object" && c.bullet)
+    .map((c) => ({
+      bulletId: c.bullet.id ?? "",
+      bulletText: c.bullet.text || "",
+      entryLabel:
+        c.section === "projects"
+          ? c.entry?.name || "a project"
+          : [c.entry?.title, c.entry?.company].filter(Boolean).join(" — ") ||
+            "a previous role",
+    }));
+}
+
+/* Pair each bullet that carries a source_feedback_id with the tier-1 feedback
+   item that produced it (US-061). Powers the final-check side-by-side display
+   so information drift between feedback and woven bullet is visible and
+   rejectable. Links to unknown/missing suggestions are skipped — the server
+   sanitizes ids, so a miss here only means the suggestion list moved on. */
+export function collectFeedbackTrace(cvJson, suggestions) {
+  const cv = cvJson && typeof cvJson === "object" ? cvJson : {};
+  const byId = new Map(
+    (Array.isArray(suggestions) ? suggestions : [])
+      .filter((item) => item && item.id)
+      .map((item) => [String(item.id), item])
+  );
+  const rows = [];
+  for (const section of ["work_experience", "projects"]) {
+    for (const entry of Array.isArray(cv[section]) ? cv[section] : []) {
+      for (const bullet of Array.isArray(entry?.bullets) ? entry.bullets : []) {
+        const feedbackId = bullet?.source_feedback_id;
+        if (!feedbackId || !byId.has(String(feedbackId))) continue;
+        const suggestion = byId.get(String(feedbackId));
+        rows.push({
+          bulletId: bullet.id ?? null,
+          bulletText: bullet.text || "",
+          feedbackText: suggestion.suggested_text || "",
+          userEdited: Boolean(suggestion.user_edited),
+          status: bullet.truth_guard_status || "",
+          renderable: isRenderable(bullet),
+        });
+      }
+    }
+  }
+  return rows;
+}
+
+/* Tier-1 responses given AFTER this draft was generated (US-061). Feedback
+   shapes the CV at generation time only — an export renders the stored
+   version — so a response newer than the draft means the CV on screen does
+   not reflect it until a regenerate. Counts any non-pending response
+   (accepting adds content; rejecting may invalidate woven content). */
+export function staleFeedbackCount(draftCreatedAt, suggestions) {
+  const generatedAt = Date.parse(draftCreatedAt ?? "");
+  if (!Number.isFinite(generatedAt)) return 0;
+  let count = 0;
+  for (const row of Array.isArray(suggestions) ? suggestions : []) {
+    if (!row || (row.user_action ?? "pending") === "pending") continue;
+    const respondedAt = Date.parse(row.updated_at ?? "");
+    if (Number.isFinite(respondedAt) && respondedAt > generatedAt) count += 1;
+  }
+  return count;
 }
 
 const STATUS_LABELS = {

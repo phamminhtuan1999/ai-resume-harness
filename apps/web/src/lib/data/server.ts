@@ -165,6 +165,7 @@ export type ResumeSuggestion = {
   truth_guard_status: string;
   reason: string | null;
   user_action: string;
+  user_edited: boolean | null;
   created_at: string;
   updated_at: string;
 };
@@ -227,6 +228,9 @@ export type CoverLetter = {
   tone: string | null;
   confidence_score: number | null;
   provider: string | null;
+  // US-063: the Tailored CV version the letter was written from.
+  source_draft_cv_id: string | null;
+  source_draft_cv_version: number | null;
   updated_at: string;
 };
 
@@ -1022,36 +1026,49 @@ export async function getCoverLetterDetail(matchId: string) {
   }
 
   const supabase = getSupabaseServiceClient();
-  const [{ data: matchRow, error: matchError }, { data: letterRow, error: letterError }] =
-    await Promise.all([
-      supabase
-        .from("matches")
-        .select(
-          [
-            "id",
-            "resume_id",
-            "job_id",
-            "overall_score",
-            "apply_recommendation",
-            "created_at",
-            "updated_at",
-            "resumes(id,title)",
-            "jobs(id,company,title)",
-          ].join(",")
-        )
-        .eq("id", matchId)
-        .eq("user_id", profile.id)
-        .single(),
-      supabase
-        .from("cover_letters")
-        .select(
-          "id,match_id,job_id,cover_letter,cover_letter_strategy,key_points_json," +
-            "claims_avoided_json,tone,confidence_score,provider,updated_at"
-        )
-        .eq("match_id", matchId)
-        .eq("user_id", profile.id)
-        .maybeSingle(),
-    ]);
+  const [
+    { data: matchRow, error: matchError },
+    { data: letterRow, error: letterError },
+    { data: draftRow },
+  ] = await Promise.all([
+    supabase
+      .from("matches")
+      .select(
+        [
+          "id",
+          "resume_id",
+          "job_id",
+          "overall_score",
+          "apply_recommendation",
+          "created_at",
+          "updated_at",
+          "resumes(id,title)",
+          "jobs(id,company,title)",
+        ].join(",")
+      )
+      .eq("id", matchId)
+      .eq("user_id", profile.id)
+      .single(),
+    supabase
+      .from("cover_letters")
+      .select(
+        "id,match_id,job_id,cover_letter,cover_letter_strategy,key_points_json," +
+          "claims_avoided_json,tone,confidence_score,provider," +
+          "source_draft_cv_id,source_draft_cv_version,updated_at"
+      )
+      .eq("match_id", matchId)
+      .eq("user_id", profile.id)
+      .maybeSingle(),
+    // Latest Tailored CV: the letter's source + the staleness check (US-063).
+    supabase
+      .from("draft_cvs")
+      .select("id,version")
+      .eq("match_id", matchId)
+      .eq("user_id", profile.id)
+      .order("version", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
   if (matchError || !matchRow) {
     notFound();
@@ -1066,6 +1083,7 @@ export async function getCoverLetterDetail(matchId: string) {
     profile,
     match: matchRow as unknown as WorkspaceMatch,
     coverLetter: (letterRow ?? null) as CoverLetter | null,
+    latestDraft: (draftRow ?? null) as { id: string; version: number } | null,
   };
 }
 
@@ -1081,6 +1099,7 @@ export async function getResumeSuggestionsDetail(matchId: string) {
     { data: matchRow, error: matchError },
     { data: suggestionRows, error: suggestionsError },
     { data: runRow },
+    { data: draftRow },
   ] = await Promise.all([
     supabase
       .from("matches")
@@ -1116,6 +1135,7 @@ export async function getResumeSuggestionsDetail(matchId: string) {
           "truth_guard_status",
           "reason",
           "user_action",
+          "user_edited",
           "created_at",
           "updated_at",
         ].join(",")
@@ -1130,6 +1150,15 @@ export async function getResumeSuggestionsDetail(matchId: string) {
       .eq("subject_id", matchId)
       .eq("workflow_type", "resume_suggestions")
       .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    // Latest Tailored CV summary for the shared stepper (US-061).
+    supabase
+      .from("draft_cvs")
+      .select("id,status")
+      .eq("match_id", matchId)
+      .eq("user_id", profile.id)
+      .order("version", { ascending: false })
       .limit(1)
       .maybeSingle(),
   ]);
@@ -1153,6 +1182,7 @@ export async function getResumeSuggestionsDetail(matchId: string) {
     match: matchRow as unknown as WorkspaceMatch,
     suggestions: (suggestionRows ?? []) as unknown as ResumeSuggestion[],
     snapshot,
+    draftSummary: (draftRow ?? null) as { id: string; status: string | null } | null,
   };
 }
 
@@ -1162,8 +1192,13 @@ export type DraftCvMatch = {
   job_id: string | null;
   apply_recommendation: string | null;
   analyzed_at: string | null;
-  jobs?: { id: string; company: string | null; title: string | null } | null;
-  resumes?: { id: string; title: string | null } | null;
+  jobs?: {
+    id: string;
+    company: string | null;
+    title: string | null;
+    structured_json?: unknown;
+  } | null;
+  resumes?: { id: string; title: string | null; raw_text?: string | null } | null;
 };
 
 export type DraftCvRecord = {
@@ -1197,6 +1232,7 @@ export async function getDraftCvDetail(matchId: string) {
   const [
     { data: matchRow, error: matchError },
     { data: draftRows, error: draftsError },
+    { data: suggestionRows },
   ] = await Promise.all([
     supabase
       .from("matches")
@@ -1210,8 +1246,10 @@ export async function getDraftCvDetail(matchId: string) {
           "analyzed_at",
           "created_at",
           "updated_at",
-          "resumes(id,title)",
-          "jobs(id,company,title)",
+          // raw_text + structured_json feed the deterministic tailoring
+          // coverage panel (US-062).
+          "resumes(id,title,raw_text)",
+          "jobs(id,company,title,structured_json)",
         ].join(",")
       )
       .eq("id", matchId)
@@ -1243,6 +1281,15 @@ export async function getDraftCvDetail(matchId: string) {
       .eq("match_id", matchId)
       .eq("user_id", profile.id)
       .order("version", { ascending: false }),
+    // Tier-1 feedback responses for the stepper, the "N approved responses"
+    // link, the staleness nudge, and the final-check side-by-side display
+    // (US-061). updated_at vs the draft's created_at detects responses given
+    // AFTER generation — those are not in the CV until a regenerate.
+    supabase
+      .from("resume_suggestions")
+      .select("id,suggested_text,user_action,user_edited,updated_at")
+      .eq("match_id", matchId)
+      .order("created_at", { ascending: true }),
   ]);
 
   if (matchError || !matchRow) {
@@ -1261,6 +1308,13 @@ export async function getDraftCvDetail(matchId: string) {
     match: matchRow as unknown as DraftCvMatch,
     draft: versions[0] ?? null,
     versions,
+    suggestions: (suggestionRows ?? []) as {
+      id: string;
+      suggested_text: string | null;
+      user_action: string | null;
+      user_edited: boolean | null;
+      updated_at: string | null;
+    }[],
   };
 }
 

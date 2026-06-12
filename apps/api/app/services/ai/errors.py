@@ -85,6 +85,17 @@ class MissingSkillAnalysisRequiredError(AIWorkflowError):
     retryable = False
 
 
+class MissingDraftCvError(AIWorkflowError):
+    """The cover letter (US-063, decision 0019) was requested before a Tailored
+    CV with renderable content exists for the match. The letter must reference
+    only claims that survived the truth guard, so there is no raw-resume
+    fallback — the guided error points the user at the Tailored CV step."""
+
+    code = "missing_draft_cv"
+    http_status = 422
+    retryable = False
+
+
 class UnknownStepError(AIWorkflowError):
     """``POST .../ai-workflow/{step}/regenerate`` (US-038) received a ``step``
     that is not a recognised, panel-orchestrated ``workflow_type``."""
@@ -151,6 +162,9 @@ DEFAULT_MESSAGES: dict[str, str] = {
     ),
     "missing_skill_analysis_required": (
         "Run gap analysis before generating a roadmap."
+    ),
+    "missing_draft_cv": (
+        "Generate the Tailored CV first — the cover letter is written from it."
     ),
     "unknown_step": "That AI workflow step is not recognized.",
     "invalid_json": "The assistant returned an unexpected response. Please try again.",

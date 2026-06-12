@@ -26,7 +26,9 @@ from app.services.ai.draft_cv_logic import (
     derive_draft_status,
     lint_forces_review,
     run_guards,
+    sanitize_feedback_links,
 )
+from app.services.ai.draft_cv_preservation import merge_finalized_bullets
 from app.services.ai.errors import (
     DEFAULT_MESSAGES,
     MissingMatchAnalysisError,
@@ -52,7 +54,9 @@ class DraftCvInput:
     candidate_profile: dict[str, Any]
     contact: dict[str, Any]
     job_keywords: list[str]
-    accepted_suggestions: list[str]
+    # US-061: approved tier-1 feedback items, each {id, text, user_edited}.
+    # User-edited items are authoritative information for the generator.
+    accepted_feedback: list[dict[str, Any]]
     corpus: str = ""
     keyword_hint: str = ""
     # US-043: the server-authoritative page policy (computed before the prompt)
@@ -102,14 +106,18 @@ class DraftCvWorkflow(BaseAIWorkflow):
         suggestions = self.data.get_resume_suggestions_for_match(
             match_id=str(match["id"]), user_profile_id=context["user_profile_id"]
         )
-        accepted = [
-            (row.get("suggested_text") or "").strip()
+        # US-061: the Respond step is the official curation gate — only feedback
+        # the user explicitly accepted shapes the generation (the page states
+        # "N approved responses shape this CV", so N must be exactly this list).
+        accepted_feedback = [
+            {
+                "id": str(row.get("id") or ""),
+                "text": (row.get("suggested_text") or "").strip(),
+                "user_edited": bool(row.get("user_edited")),
+            }
             for row in suggestions or []
             if isinstance(row, dict)
-            and (
-                row.get("user_action") == "accepted"
-                or row.get("truth_guard_status") == "Safe to use"
-            )
+            and row.get("user_action") == "accepted"
             and (row.get("suggested_text") or "").strip()
         ]
 
@@ -138,9 +146,11 @@ class DraftCvWorkflow(BaseAIWorkflow):
                 "portfolio_url": basic.get("portfolio_url"),
             },
             job_keywords=job_keywords,
-            accepted_suggestions=accepted,
+            accepted_feedback=accepted_feedback,
         )
-        data.corpus = _build_corpus(resume_text, candidate_profile, accepted)
+        data.corpus = _build_corpus(
+            resume_text, candidate_profile, [item["text"] for item in accepted_feedback]
+        )
         data.keyword_hint = ", ".join(job_keywords[:40]) or "(none parsed)"
         data.page_policy = compute_page_policy(
             years_of_experience=(profile_row or {}).get("years_of_experience"),
@@ -189,8 +199,17 @@ short). Word every bullet concisely so the full CV fits the target page count.
 Candidate profile (structured, source of truth):
 {_profile_hint(data.candidate_profile)}
 
-Accepted/safe resume suggestions to weave in when relevant:
-{_suggestions_hint(data.accepted_suggestions)}
+Approved feedback responses to weave in (each item has an id):
+{_feedback_hint(data.accepted_feedback)}
+
+Feedback rules: items marked USER-EDITED are authoritative information from the
+candidate — preserve their meaning exactly, reword them to match the CV's
+overall tone and the XYZ rule, and never add claims beyond the feedback plus
+the resume evidence. For every bullet you produce from a feedback item (edited
+or not), set that bullet's source_feedback_id to the item's id; for all other
+bullets leave source_feedback_id null. Truth Guard still applies to every
+bullet: feedback without resume evidence is needs_confirmation, never
+safe_to_use.
 
 Canonical resume text:
 ---
@@ -215,6 +234,10 @@ Canonical resume text:
         output.candidate = CandidateContact(**data.contact)
         output.target_job = TargetJob(
             company=data.company, title=data.job_title, source_url=data.source_url
+        )
+        # Traceability links may only point at feedback that was in the prompt.
+        sanitize_feedback_links(
+            output, {item["id"] for item in data.accepted_feedback if item.get("id")}
         )
         notes = run_guards(output, data.corpus)
         # > 2 weak-verb notes is a quality signal worth a human look; force the
@@ -274,6 +297,14 @@ Canonical resume text:
         data: DraftCvInput,
     ) -> None:
         cv_json = assign_bullet_ids(output)
+        # US-060 regenerate preservation: bullets the user finalized at final
+        # check are carried into the new version unchanged; a restructured
+        # entry surfaces as a per-bullet keep/take conflict, never silent loss.
+        previous = self.data.get_latest_draft_cv(
+            match_id=subject_id, user_profile_id=user_profile_id
+        )
+        if previous:
+            merge_finalized_bullets(cv_json, previous.get("cv_json") or {})
         draft_status = derive_draft_status(cv_json, output.confidence_score)
         title = _draft_title(data)
         rendering_json = None
@@ -371,10 +402,14 @@ def _profile_hint(candidate_profile: dict[str, Any]) -> str:
     )
 
 
-def _suggestions_hint(accepted_suggestions: list[str]) -> str:
-    if not accepted_suggestions:
-        return "- (none accepted; tailor from the resume directly)"
-    return "\n".join(f"- {text}" for text in accepted_suggestions[:20])
+def _feedback_hint(accepted_feedback: list[dict[str, Any]]) -> str:
+    if not accepted_feedback:
+        return "- (none approved; tailor from the resume directly)"
+    return "\n".join(
+        f"- [id={item['id']}] [{'USER-EDITED' if item.get('user_edited') else 'ai-suggested'}] "
+        f"{item['text']}"
+        for item in accepted_feedback[:20]
+    )
 
 
 def _policy_hint(policy: PagePolicy | None) -> str:

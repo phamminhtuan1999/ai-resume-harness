@@ -1080,6 +1080,8 @@ export async function updateSuggestionAction(
   const matchId = typeof raw.match_id === "string" ? raw.match_id : "";
   const userAction = typeof raw.user_action === "string" ? raw.user_action : "";
   const editedText = typeof raw.suggested_text === "string" ? raw.suggested_text.trim() : "";
+  const initialText =
+    typeof raw.initial_suggested_text === "string" ? raw.initial_suggested_text.trim() : "";
 
   if (!suggestionId || !["accepted", "rejected", "pending"].includes(userAction)) {
     return failure("Invalid suggestion update.");
@@ -1091,8 +1093,13 @@ export async function updateSuggestionAction(
     suggestionId,
     sessionToken,
     userAction,
-    // Only send edited text on accept, when the user actually changed it.
-    suggestedText: userAction === "accepted" && editedText ? editedText : null,
+    // Only send edited text on accept when the user actually changed it — the
+    // API marks any sent text as user_edited (US-061 provenance), so an
+    // unchanged Accept must not flip the flag.
+    suggestedText:
+      userAction === "accepted" && editedText && editedText !== initialText
+        ? editedText
+        : null,
   });
 
   if (!result.ok) {

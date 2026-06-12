@@ -249,6 +249,18 @@ def lint_forces_review(notes: list[QualityNote]) -> bool:
     return weak > LINT_NOTES_NEEDS_REVIEW_THRESHOLD
 
 
+def sanitize_feedback_links(output: DraftCvOutput, valid_ids: set[str]) -> None:
+    """Null any ``source_feedback_id`` the model invented (US-061).
+
+    Traceability links power the final-check side-by-side display, so a link
+    must only ever point at a feedback item that was actually in the prompt."""
+    for section in (output.work_experience, output.projects):
+        for entry in section:
+            for bullet in entry.bullets:
+                if bullet.source_feedback_id and bullet.source_feedback_id not in valid_ids:
+                    bullet.source_feedback_id = None
+
+
 # --- cv_json assembly + status derivation ---------------------------------------
 
 
@@ -291,6 +303,81 @@ def set_bullet_action(cv_json: dict[str, Any], bullet_id: str, user_action: str)
             bullet["user_action"] = user_action
             return True
     return False
+
+
+def find_cv_json_bullet(cv_json: dict[str, Any], bullet_id: str) -> dict[str, Any] | None:
+    for bullet in iter_cv_json_bullets(cv_json):
+        if bullet.get("id") == bullet_id:
+            return bullet
+    return None
+
+
+# --- US-060 tier-2 polish-and-confirm edit state ---------------------------------
+
+
+def stage_bullet_edit(
+    cv_json: dict[str, Any],
+    bullet_id: str,
+    user_text: str,
+    pass_result: dict[str, Any],
+) -> bool:
+    """Store one polish+verify result on the bullet as a pending edit.
+
+    Nothing user-visible changes yet: the bullet's text/status stay as they
+    were (a failure or an abandoned dialog keeps the previous text renderable).
+    The confirm step applies the server-stored result — the client never sends
+    a status, so the gate cannot be bypassed.
+    """
+    bullet = find_cv_json_bullet(cv_json, bullet_id)
+    if bullet is None:
+        return False
+    bullet["pending_edit"] = {
+        "user_text": user_text,
+        "polished_text": pass_result.get("polished_text") or user_text,
+        "truth_guard_status": pass_result.get("truth_guard_status")
+        or "needs_confirmation",
+        "evidence_question": pass_result.get("evidence_question"),
+    }
+    return True
+
+
+def confirm_bullet_edit(
+    cv_json: dict[str, Any],
+    bullet_id: str,
+    choice: str,
+    *,
+    now_iso: str,
+) -> dict[str, Any] | None:
+    """Apply (or cancel) a staged edit. ``choice``: polished | mine | cancel.
+
+    Returns the bullet, or None when there is no such bullet / pending edit.
+    On apply: the chosen text lands with the verified status, ``user_edited``,
+    a ``polished`` flag, ``original_text`` (single-level revert), and
+    ``finalized_at`` — a finalized bullet is stable (never re-polished) and
+    survives regeneration via the preservation merge.
+    """
+    bullet = find_cv_json_bullet(cv_json, bullet_id)
+    if bullet is None or not isinstance(bullet.get("pending_edit"), dict):
+        return None
+    pending = bullet.pop("pending_edit")
+    if choice == "cancel":
+        return bullet
+
+    chosen = pending["polished_text"] if choice == "polished" else pending["user_text"]
+    bullet["original_text"] = bullet.get("text") or ""
+    bullet["text"] = chosen
+    bullet["truth_guard_status"] = pending["truth_guard_status"]
+    bullet["user_edited"] = True
+    bullet["polished"] = choice == "polished"
+    bullet["finalized_at"] = now_iso
+    # A needs_confirmation result flows into the existing approve/reject
+    # review with its evidence question; safe_to_use renders immediately.
+    bullet["user_action"] = "pending"
+    if pending.get("evidence_question"):
+        bullet["evidence_question"] = pending["evidence_question"]
+    else:
+        bullet.pop("evidence_question", None)
+    return bullet
 
 
 def derive_draft_status(cv_json: dict[str, Any], confidence: float | None) -> str:

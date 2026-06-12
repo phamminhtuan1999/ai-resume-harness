@@ -1,15 +1,19 @@
-"""Cover letter workflow (US-033) on the US-027 foundation.
+"""Cover letter workflow (US-033, reworked by US-063) on the US-027 foundation.
 
 Feature 5: generates a personalized, honest cover letter per match. Depends on a
-saved US-028 match analysis (raises ``missing_match_analysis`` if absent). The
-model writes around the candidate's strongest supported angle and avoids claims
-the resume does not support; the deterministic fallback assembles the same from a
-template. One cover letter per match (upserted on regenerate).
+saved US-028 match analysis (raises ``missing_match_analysis`` if absent) and —
+since US-063 / decision 0019 — on a Tailored CV with renderable content
+(raises ``missing_draft_cv`` otherwise; there is no raw-resume fallback). The
+letter is written from the **final Tailored CV**: only claims that survived the
+truth guard can be referenced, so the letter always matches the document the
+candidate actually submits. The deterministic fallback assembles the same from
+a template using renderable content only. One cover letter per match (upserted
+on regenerate), linked to the source draft CV version for the staleness hint.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from app.schemas.ai_workflow import WorkflowStatus
@@ -18,10 +22,12 @@ from app.services.ai.base_workflow import ActivitySpec, BaseAIWorkflow
 from app.services.ai.cover_letter_deterministic import build_cover_letter
 from app.services.ai.errors import (
     DEFAULT_MESSAGES,
+    MissingDraftCvError,
     MissingMatchAnalysisError,
     UnauthorizedError,
 )
 from app.services.ai.prompting import with_preamble
+from app.services.export.render_model import build_render_model, is_empty_cv
 
 
 @dataclass
@@ -32,6 +38,11 @@ class CoverLetterInput:
     company: str
     profile_summary: str
     match_analysis: dict[str, Any]
+    # US-063: the renderable Tailored CV the letter is written from.
+    draft_cv_id: str | None = None
+    draft_cv_version: int | None = None
+    cv_content: str = ""
+    cv_bullets: list[str] = field(default_factory=list)
 
 
 class CoverLetterWorkflow(BaseAIWorkflow):
@@ -64,6 +75,21 @@ class CoverLetterWorkflow(BaseAIWorkflow):
         )
         match = context.get("match") or {}
         job = context.get("job") or {}
+
+        # US-063: the letter is written from the final Tailored CV. No CV (or
+        # no renderable content) is a guided error, never a raw-resume fallback.
+        draft = self.data.get_latest_draft_cv(
+            match_id=str(match["id"]), user_profile_id=context["user_profile_id"]
+        )
+        if not draft:
+            raise MissingDraftCvError(DEFAULT_MESSAGES["missing_draft_cv"])
+        render_model = build_render_model(draft.get("cv_json") or {})
+        if is_empty_cv(render_model):
+            raise MissingDraftCvError(
+                "Your Tailored CV has no approved content yet. Approve at least "
+                "one item, then generate the cover letter."
+            )
+
         return CoverLetterInput(
             match_id=str(match["id"]),
             job_id=str(job["id"]) if job.get("id") else None,
@@ -71,6 +97,10 @@ class CoverLetterWorkflow(BaseAIWorkflow):
             company=job.get("company") or "the company",
             profile_summary=self._profile_summary(profile),
             match_analysis=analysis,
+            draft_cv_id=str(draft["id"]) if draft.get("id") else None,
+            draft_cv_version=draft.get("version"),
+            cv_content=_cv_content(render_model),
+            cv_bullets=_cv_bullets(render_model),
         )
 
     def build_prompt(self, data: CoverLetterInput) -> str:
@@ -80,10 +110,11 @@ Task: Write a concise, honest cover letter for this job.
 Requirements:
 - Reference the company ({data.company}) and role ({data.job_title}) by name.
 - Lead with the candidate's strongest supported angle from the match analysis.
-- Use relevant technical and transferable experience; keep it to ~3 short
-  paragraphs with a professional closing.
-- Do NOT claim experience, skills, or results the resume does not support. List
-  anything you deliberately avoided in claims_avoided.
+- Reference ONLY claims that appear in the tailored CV content below — it is
+  the exact document the candidate will submit, already verified for truth.
+  Never reach beyond it for experience, skills, or results.
+- Keep it to ~3 short paragraphs with a professional closing. List anything
+  you deliberately avoided in claims_avoided.
 
 Return: cover_letter (full text), cover_letter_strategy (the angle you chose and
 why), key_points_used, claims_avoided, tone (professional | concise |
@@ -94,6 +125,11 @@ Candidate profile:
 
 Match analysis:
 {self._analysis_hint(data.match_analysis)}
+
+Tailored CV content (the verified source of claims):
+---
+{data.cv_content}
+---
 """
         return with_preamble(task)
 
@@ -102,6 +138,7 @@ Match analysis:
             match_analysis=data.match_analysis,
             job_title=data.job_title,
             company=data.company,
+            cv_bullets=data.cv_bullets,
         )
 
     def persist(
@@ -127,6 +164,9 @@ Match analysis:
                 "tone": output.tone,
                 "confidence_score": output.confidence_score,
                 "provider": provider_name,
+                # US-063 version linkage for the staleness hint.
+                "source_draft_cv_id": data.draft_cv_id,
+                "source_draft_cv_version": data.draft_cv_version,
             },
         )
 
@@ -195,3 +235,38 @@ Match analysis:
             f"- Proven strengths to lead with: {', '.join(strengths[:5]) or 'none recorded'}\n"
             f"- Unproven skills to avoid claiming: {', '.join(gaps[:5]) or 'none recorded'}"
         )
+
+
+# --- US-063 renderable-CV content helpers ----------------------------------------
+
+_MAX_CV_CONTENT_CHARS = 6_000
+
+
+def _cv_bullets(render_model: dict[str, Any]) -> list[str]:
+    return [
+        text
+        for section in ("work_experience", "projects")
+        for entry in render_model.get(section) or []
+        for text in entry.get("bullets") or []
+    ]
+
+
+def _cv_content(render_model: dict[str, Any]) -> str:
+    """Compact text view of the renderable CV for the prompt: exactly the
+    claims the export contains, nothing more."""
+    lines: list[str] = []
+    summary = (render_model.get("professional_summary") or "").strip()
+    if summary:
+        lines.append(f"Summary: {summary}")
+    for group in render_model.get("skills") or []:
+        items = ", ".join(group.get("items") or [])
+        if items:
+            lines.append(f"Skills — {group.get('category') or 'General'}: {items}")
+    for section, label in (("work_experience", "Experience"), ("projects", "Project")):
+        for entry in render_model.get(section) or []:
+            heading = entry.get("title") or entry.get("name") or ""
+            company = entry.get("company") or ""
+            name = " — ".join(part for part in (heading, company) if part)
+            for text in entry.get("bullets") or []:
+                lines.append(f"{label} ({name}): {text}" if name else f"{label}: {text}")
+    return "\n".join(lines)[:_MAX_CV_CONTENT_CHARS]

@@ -19,6 +19,9 @@ export const SEED = {
   jobId: "22222222-2222-4222-8222-222222222222",
   matchId: "33333333-3333-4333-8333-333333333333",
   draftCvId: "44444444-4444-4444-8444-444444444444",
+  draftCvV2Id: "44444444-4444-4444-8444-444444444445",
+  suggestionAcceptedId: "55555555-5555-4555-8555-555555555551",
+  suggestionPendingId: "55555555-5555-4555-8555-555555555552",
 };
 
 // Resolve the test user's user_profiles.id from their Clerk user id. The app
@@ -113,6 +116,11 @@ export async function seedAnalyzedMatch(profileId: string): Promise<{ matchId: s
       title: "Applied AI Engineer",
       raw_description:
         "We are hiring an Applied AI Engineer to build RAG pipelines and LLM features. Requires Python, FastAPI, vector embeddings, and production LLM experience.",
+      // Extracted keywords feed the deterministic coverage panel (US-062).
+      structured_json: {
+        required_skills: ["Python", "FastAPI", "RAG pipelines", "Kubernetes"],
+        preferred_skills: ["AWS"],
+      },
       updated_at: "2026-06-09T00:00:00Z",
       created_at: "2026-06-09T00:00:00Z",
     },
@@ -227,12 +235,73 @@ export async function seedAnalyzedMatch(profileId: string): Promise<{ matchId: s
   return { matchId: SEED.matchId };
 }
 
+// Seed two tier-1 feedback rows for the seeded match (US-061): one already
+// accepted with a user edit (authoritative information) and one still pending,
+// so the Respond step renders both a responded and an actionable card.
+export async function seedResumeSuggestions(): Promise<void> {
+  const db = adminClient();
+  const { error } = await db.from("resume_suggestions").upsert(
+    [
+      {
+        id: SEED.suggestionAcceptedId,
+        match_id: SEED.matchId,
+        original_text: "Built APIs in Python.",
+        suggested_text: "Shipped FastAPI services powering the E2E payments flow.",
+        suggestion_type: "experience",
+        related_job_requirement: "Python/FastAPI services",
+        evidence: "Resume: 6 years building APIs in Python and FastAPI.",
+        truth_guard_status: "Safe to use",
+        reason: "Directly supported by resume evidence.",
+        user_action: "accepted",
+        user_edited: true,
+        created_at: "2026-06-10T12:00:00Z",
+        updated_at: "2026-06-10T12:30:00Z",
+      },
+      {
+        id: SEED.suggestionPendingId,
+        match_id: SEED.matchId,
+        original_text: "Worked with AWS.",
+        suggested_text: "Operated E2E workloads on AWS with infrastructure as code.",
+        suggestion_type: "experience",
+        related_job_requirement: "Cloud infrastructure",
+        evidence: "Resume: APIs on AWS.",
+        truth_guard_status: "Needs confirmation",
+        reason: "IaC depth is not explicit in the resume.",
+        user_action: "pending",
+        user_edited: false,
+        created_at: "2026-06-10T12:00:00Z",
+        updated_at: "2026-06-10T12:00:00Z",
+      },
+    ],
+    { onConflict: "id" }
+  );
+  if (error) throw new Error(`Could not seed suggestions: ${error.message}`);
+}
+
 // Seed one exportable Draft CV version for the seeded match (US-059). One
 // renderable bullet plus one do_not_use_yet bullet prove the export gating in
 // the browser; rendering_json stays null so the page uses the legacy render
 // path (no page/font pickers — just the export buttons).
-export async function seedDraftCv(profileId: string): Promise<{ draftCvId: string }> {
+export async function seedDraftCv(
+  profileId: string,
+  options: { withPendingAwsBullet?: boolean; provider?: "gemini" | "deterministic" } = {}
+): Promise<{ draftCvId: string }> {
   const db = adminClient();
+  // Optional needs_confirmation bullet covering a job keyword (AWS) the
+  // renderable content misses — approving it moves the coverage number
+  // (US-062 E2E).
+  const pendingBullets = options.withPendingAwsBullet
+    ? [
+        {
+          id: "b-aws",
+          text: "Operated production workloads on AWS.",
+          source_evidence: "resume: APIs on AWS",
+          truth_guard_status: "needs_confirmation",
+          keywords_used: ["AWS"],
+          user_action: "pending",
+        },
+      ]
+    : [];
   const { error } = await db.from("draft_cvs").upsert(
     {
       id: SEED.draftCvId,
@@ -242,7 +311,7 @@ export async function seedDraftCv(profileId: string): Promise<{ draftCvId: strin
       resume_id: SEED.resumeId,
       version: 1,
       title: "Draft CV — Northwind AI Applied AI Engineer v1",
-      status: "ready_to_export",
+      status: options.withPendingAwsBullet ? "needs_review" : "ready_to_export",
       cv_json: {
         candidate: { full_name: "Dana E2E Engineer", email: "dana.e2e@example.com" },
         target_job: { company: "Northwind AI", title: "Applied AI Engineer" },
@@ -263,6 +332,8 @@ export async function seedDraftCv(profileId: string): Promise<{ draftCvId: strin
                 truth_guard_status: "safe_to_use",
                 keywords_used: ["FastAPI"],
                 user_action: "pending",
+                // Links to the accepted seeded suggestion (US-061 trace).
+                source_feedback_id: SEED.suggestionAcceptedId,
               },
               {
                 id: "b-blocked",
@@ -272,6 +343,7 @@ export async function seedDraftCv(profileId: string): Promise<{ draftCvId: strin
                 keywords_used: [],
                 user_action: "pending",
               },
+              ...pendingBullets,
             ],
           },
         ],
@@ -283,12 +355,20 @@ export async function seedDraftCv(profileId: string): Promise<{ draftCvId: strin
         summary: "Lead with FastAPI evidence.",
         primary_positioning: "Backend engineer moving toward AI roles.",
         keywords_prioritized: ["FastAPI"],
-        keywords_excluded: [],
+        // Kubernetes is a job keyword the candidate cannot support — the
+        // coverage panel must list it as "not claimable", never as a miss.
+        keywords_excluded: [{ keyword: "Kubernetes", reason: "unsupported" }],
       },
       quality_notes_json: [],
       confidence_score: 0.9,
-      provider: "deterministic",
-      model_name: "deterministic",
+      // The seeded draft carries woven feedback links, which only the model
+      // path produces in reality — so it defaults to "gemini". Pass
+      // provider: "deterministic" to exercise the offline-fallback labeling.
+      provider: options.provider ?? "gemini",
+      model_name:
+        (options.provider ?? "gemini") === "gemini"
+          ? "gemini-3.5-flash"
+          : "deterministic-baseline",
       rendering_json: null,
       created_at: "2026-06-10T13:30:00Z",
       updated_at: "2026-06-10T13:30:00Z",
@@ -299,12 +379,114 @@ export async function seedDraftCv(profileId: string): Promise<{ draftCvId: strin
   return { draftCvId: SEED.draftCvId };
 }
 
+// Seed a second Tailored CV version for the match (US-063 staleness): a
+// letter linked to v1 becomes stale once v2 is the latest version.
+export async function seedSecondDraftVersion(profileId: string): Promise<void> {
+  const db = adminClient();
+  const { error } = await db.from("draft_cvs").upsert(
+    {
+      id: SEED.draftCvV2Id,
+      user_id: profileId,
+      match_id: SEED.matchId,
+      job_id: SEED.jobId,
+      resume_id: SEED.resumeId,
+      version: 2,
+      title: "Draft CV — Northwind AI Applied AI Engineer v2",
+      status: "ready_to_export",
+      cv_json: {
+        candidate: { full_name: "Dana E2E Engineer" },
+        professional_summary: "Backend engineer moving into applied AI (v2).",
+        skills: [{ category: "Backend", items: ["Python", "FastAPI"] }],
+        work_experience: [],
+        projects: [],
+        education: [],
+        certifications: [],
+      },
+      cv_strategy_json: {},
+      quality_notes_json: [],
+      confidence_score: 0.9,
+      provider: "deterministic",
+      model_name: "deterministic",
+      rendering_json: null,
+      created_at: "2026-06-10T15:00:00Z",
+      updated_at: "2026-06-10T15:00:00Z",
+    },
+    { onConflict: "id" }
+  );
+  if (error) throw new Error(`Could not seed draft v2: ${error.message}`);
+}
+
+// Seed a cover letter linked to a Tailored CV version (US-063). Pass a
+// sourceDraftCvId that differs from the latest seeded draft to exercise the
+// staleness hint.
+export async function seedCoverLetter(
+  profileId: string,
+  options: { sourceDraftCvId?: string; sourceVersion?: number } = {}
+): Promise<void> {
+  const db = adminClient();
+  const { error } = await db.from("cover_letters").upsert(
+    {
+      user_id: profileId,
+      match_id: SEED.matchId,
+      job_id: SEED.jobId,
+      cover_letter: "Dear Northwind AI Hiring Team,\n\nE2E letter body.\n\nSincerely,\nDana",
+      cover_letter_strategy: "Lead with FastAPI evidence from the tailored CV.",
+      key_points_json: ["FastAPI"],
+      claims_avoided_json: [],
+      tone: "professional",
+      confidence_score: 0.8,
+      provider: "deterministic",
+      source_draft_cv_id: options.sourceDraftCvId ?? SEED.draftCvId,
+      source_draft_cv_version: options.sourceVersion ?? 1,
+    },
+    { onConflict: "match_id" }
+  );
+  if (error) throw new Error(`Could not seed cover letter: ${error.message}`);
+}
+
+// Attach one regenerate-preservation conflict to the seeded draft (US-060):
+// a finalized bullet whose previous entry the "regeneration" restructured away.
+export async function seedPreservationConflict(): Promise<void> {
+  const db = adminClient();
+  const { data, error } = await db
+    .from("draft_cvs")
+    .select("cv_json")
+    .eq("id", SEED.draftCvId)
+    .single();
+  if (error || !data) throw new Error(`Could not load seeded draft: ${error?.message}`);
+  const cvJson = data.cv_json as Record<string, unknown>;
+  cvJson.preservation_conflicts = [
+    {
+      section: "work_experience",
+      entry: { company: "OldCo", title: "Platform Engineer" },
+      bullet: {
+        id: "b-conflict",
+        text: "Stabilized the E2EConflictDelta platform rollout.",
+        source_evidence: "resume",
+        truth_guard_status: "safe_to_use",
+        keywords_used: [],
+        user_action: "pending",
+        user_edited: true,
+        polished: true,
+        finalized_at: "2026-06-10T14:00:00Z",
+      },
+    },
+  ];
+  const { error: updateError } = await db
+    .from("draft_cvs")
+    .update({ cv_json: cvJson })
+    .eq("id", SEED.draftCvId);
+  if (updateError) throw new Error(`Could not seed conflict: ${updateError.message}`);
+}
+
 // Remove everything the seed created for this profile (including any learning
 // target the test saved, and any resume/job deletion audit rows a US-055 test
 // wrote). Exact, so it never leaves residue in the live DB.
 export async function teardownAnalyzedMatch(profileId: string): Promise<void> {
   const db = adminClient();
   await db.from("applications").delete().eq("user_id", profileId);
+  await db.from("cover_letters").delete().eq("match_id", SEED.matchId);
+  await db.from("draft_cvs").delete().eq("id", SEED.draftCvV2Id);
   await db.from("draft_cvs").delete().eq("id", SEED.draftCvId);
   await db.from("analysis_decisions").delete().eq("match_id", SEED.matchId);
   await db.from("matches").delete().eq("id", SEED.matchId);

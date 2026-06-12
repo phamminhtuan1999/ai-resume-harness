@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { letterSourceStatus } from "@/lib/cover-letter-view.mjs";
 import { formatShortDate, getCoverLetterDetail } from "@/lib/data/server";
 
 type CoverLetterPageProps = {
@@ -23,10 +24,12 @@ function toStringList(value: unknown): string[] {
 
 export default async function CoverLetterPage({ params }: CoverLetterPageProps) {
   const { matchId } = await params;
-  const { match, coverLetter } = await getCoverLetterDetail(matchId);
+  const { match, coverLetter, latestDraft } = await getCoverLetterDetail(matchId);
 
   const keyPoints = toStringList(coverLetter?.key_points_json);
   const claimsAvoided = toStringList(coverLetter?.claims_avoided_json);
+  // US-063: which Tailored CV version produced this letter + staleness.
+  const source = letterSourceStatus(coverLetter, latestDraft);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
@@ -57,7 +60,7 @@ export default async function CoverLetterPage({ params }: CoverLetterPageProps) 
           <CardContent className="grid gap-3 text-sm leading-6 text-muted-foreground">
             <p>
               {coverLetter?.cover_letter_strategy ||
-                "Generate a personalized cover letter built around your strongest supported angle. It references the company and role and avoids claims your resume does not support."}
+                "Generate a personalized cover letter written from your Tailored CV — it can only reference claims that survived the truth guard, so it always matches the document you submit."}
             </p>
             {coverLetter?.tone ? (
               <div className="flex flex-wrap gap-2">
@@ -65,7 +68,17 @@ export default async function CoverLetterPage({ params }: CoverLetterPageProps) 
                 {coverLetter.provider ? (
                   <Badge variant="outline">{coverLetter.provider}</Badge>
                 ) : null}
+                {source && !source.legacy && source.sourceVersion != null ? (
+                  <Badge variant="outline">From Tailored CV v{source.sourceVersion}</Badge>
+                ) : null}
               </div>
+            ) : null}
+            {source?.isStale ? (
+              <p className="text-xs text-warning-foreground">
+                Your Tailored CV has changed since this letter
+                {source.latestVersion != null ? ` (v${source.latestVersion} is current)` : ""}.
+                Regenerate the letter so it matches the CV you&apos;ll submit.
+              </p>
             ) : null}
           </CardContent>
         </Card>
@@ -79,7 +92,19 @@ export default async function CoverLetterPage({ params }: CoverLetterPageProps) 
                 : "Create the first cover letter."}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-3">
+            {!latestDraft ? (
+              <p className="text-xs text-warning-foreground">
+                The letter is written from your Tailored CV.{" "}
+                <Link
+                  href={`/matches/${match.id}/draft-cv`}
+                  className="font-medium underline underline-offset-2"
+                >
+                  Generate the Tailored CV first
+                </Link>
+                .
+              </p>
+            ) : null}
             <CoverLetterForm matchId={match.id} hasExisting={Boolean(coverLetter)} />
           </CardContent>
         </Card>

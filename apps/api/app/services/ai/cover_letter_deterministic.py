@@ -28,12 +28,27 @@ def _names(items: Any, gap_type: str | None = None) -> list[str]:
 
 
 def build_cover_letter(
-    *, match_analysis: dict[str, Any], job_title: str, company: str
+    *,
+    match_analysis: dict[str, Any],
+    job_title: str,
+    company: str,
+    cv_bullets: list[str] | None = None,
 ) -> dict:
-    """Return a Feature 5.4 ``CoverLetterOutput``-shaped dict (no model call)."""
+    """Return a Feature 5.4 ``CoverLetterOutput``-shaped dict (no model call).
+
+    With ``cv_bullets`` (US-063: the renderable Tailored CV bullets), the
+    letter's claims are restricted to that content: analysis strengths that do
+    not appear in the renderable CV are dropped, and when none survive the key
+    points are the bullets themselves."""
     strengths = _names(match_analysis.get("top_strengths_json"))
     claims_avoided = _names(match_analysis.get("top_gaps_json"), gap_type="true_gap")
-    key_points = strengths[:4] or ["relevant production engineering experience"]
+    if cv_bullets is not None:
+        blob = " ".join(cv_bullets).lower()
+        strengths = [s for s in strengths if s.lower() in blob]
+        key_points = strengths[:4] or [b.strip() for b in cv_bullets[:3] if b.strip()]
+        key_points = key_points or ["the experience shown in my tailored CV"]
+    else:
+        key_points = strengths[:4] or ["relevant production engineering experience"]
 
     strengths_phrase = ", ".join(key_points[:3])
     opening = (

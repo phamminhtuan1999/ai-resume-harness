@@ -314,6 +314,9 @@ Required fields:
 - `tone text` — `professional | concise | enthusiastic`
 - `confidence_score numeric`
 - `provider text` — `gemini | deterministic`
+- `source_draft_cv_id uuid references draft_cvs(id) on delete set null`,
+  `source_draft_cv_version integer` — US-063 (migration `0025`): the Tailored
+  CV version the letter was written from; powers the staleness hint.
 - timestamps
 
 ### `draft_cvs`
@@ -346,8 +349,20 @@ Required fields:
   server-assigned stable `id`, `text` (≤ 240 chars), `source_evidence`,
   `truth_guard_status` (`safe_to_use | needs_confirmation | do_not_use_yet`,
   stored snake_case — unlike `resume_suggestions`, which stores title-case
-  display values), `keywords_used`, and `user_action`
-  (`pending | approved | rejected`; approvals do not carry across versions).
+  display values), `keywords_used`, `user_action`
+  (`pending | approved | rejected`; approvals do not carry across versions),
+  and `source_feedback_id` (US-061, additive JSON — the `resume_suggestions.id`
+  the bullet was produced from, or null; server-sanitized against the feedback
+  ids that were actually in the prompt). Tier-2 edits (US-060, additive JSON)
+  add per-bullet `user_edited`, `polished`, `original_text` (single-level
+  revert), `finalized_at` (a finalized bullet is stable — never re-polished —
+  and survives regeneration), `evidence_question`, and a transient
+  `pending_edit {user_text, polished_text, truth_guard_status,
+  evidence_question}` staged between the polish+verify pass and the user's
+  diff confirm (render gating ignores it). A regeneration that restructures a
+  finalized bullet's entry stores `preservation_conflicts
+  [{section, entry, bullet}]` at the cv_json root for per-bullet keep/take
+  resolution — never a silent loss.
 - `cv_strategy_json jsonb` — summary, primary positioning,
   `keywords_prioritized`, `keywords_excluded [{keyword, reason:
   unsupported | weak_evidence | irrelevant}]`
@@ -393,6 +408,9 @@ Required fields:
 - `truth_guard_status text not null`
 - `reason text`
 - `user_action text default 'pending'`
+- `user_edited boolean not null default false` — US-061 (migration `0024`):
+  true once the user saves edited text with an Accept. User-edited feedback is
+  authoritative information for Draft CV generation (decision 0019).
 - timestamps
 
 Valid `truth_guard_status` values:
@@ -400,6 +418,11 @@ Valid `truth_guard_status` values:
 - `Safe to use`
 - `Needs confirmation`
 - `Do not use yet`
+
+Refresh semantics (US-061): regenerating suggestions deletes and replaces only
+`pending` rows. Accepted/rejected rows survive, and an incoming suggestion
+whose text duplicates a surviving row is dropped — tier-1 responses are the
+user's curation work and are never silently reset.
 
 ### `resume_versions`
 

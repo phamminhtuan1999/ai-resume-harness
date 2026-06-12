@@ -73,6 +73,9 @@ class CvBullet(BaseModel):
     source_evidence: str = ""
     truth_guard_status: TruthGuardStatus = "needs_confirmation"
     keywords_used: list[str] = Field(default_factory=list)
+    # US-061 traceability: the tier-1 feedback item (resume_suggestions.id) this
+    # bullet was produced from, or null. Server-sanitized against the real ids.
+    source_feedback_id: str | None = None
 
 
 class WorkExperienceEntry(BaseModel):

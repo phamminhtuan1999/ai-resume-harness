@@ -2,7 +2,7 @@
 
 ## Status
 
-planned
+implemented (verified 2026-06-11)
 
 ## Lane
 
@@ -64,4 +64,25 @@ Intake #47, decision 0019. None beyond story registration (no schema/API).
 
 ## Evidence
 
-Added after verification.
+Implemented 2026-06-11.
+
+- **Scorer:** pure `coverage-view.mjs` — `extractJobKeywords` (mirror of the
+  API's US-047 extraction), `coverageReport` (whole-word/phrase matching,
+  case-insensitive, multi-word across whitespace, "Go" never matches
+  "Google"), `renderableCvTexts` (summary + skill items + renderable bullets —
+  exactly the exportable content). `keywords_excluded` become **notClaimable**
+  and leave the denominator, so the panel cannot pressure fabrication.
+- **UI:** server-rendered `DraftCvCoveragePanel` on the draft-cv page ("Base
+  resume X% → Tailored CV Y%" + delta badge + covered/missing/not-claimable
+  chips), labeled as tailoring coverage, not the match score. Review/edit
+  actions revalidate the page, so the number moves without a browser reload
+  (no client recompute needed — the same deterministic scorer reruns on the
+  refreshed server render).
+- **Data:** `getDraftCvDetail` now selects `resumes.raw_text` +
+  `jobs.structured_json`; no new tables, no API change.
+- **Proof:** 7 unit tests (delta math, exclusion separation, object-shaped
+  excluded keywords, word-boundary + C++ + multi-word matching, empty
+  keywords, renderable-text collection); tsc + eslint clean. Playwright:
+  seeded job keywords → "Base resume 75% / Tailored CV 50%", "RAG pipelines"
+  missing, "Kubernetes" listed not-claimable; approving the pending AWS bullet
+  moves the tailored number to 75% without a reload.

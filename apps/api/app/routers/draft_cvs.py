@@ -14,10 +14,19 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.auth import AuthenticatedUser, require_authenticated_user
-from app.services.ai.draft_cv_logic import derive_draft_status, set_bullet_action
+from app.schemas.draft_cv import BULLET_MAX_CHARS
+from app.services.ai.bullet_edit import build_edit_corpus, polish_and_verify
+from app.services.ai.draft_cv_logic import (
+    confirm_bullet_edit,
+    derive_draft_status,
+    find_cv_json_bullet,
+    set_bullet_action,
+    stage_bullet_edit,
+)
+from app.services.ai.draft_cv_preservation import resolve_preservation_conflict
 from app.services.ai.draft_cv_workflow import DraftCvWorkflow
 from app.services.ai.errors import AIWorkflowError
 from app.services.export.fonts import (
@@ -198,6 +207,157 @@ def patch_draft_cv_bullet(
         cv_json = row.get("cv_json") or {}
         if not set_bullet_action(cv_json, bullet_id, body.user_action):
             raise HTTPException(status_code=404, detail="Bullet not found.")
+
+        new_status = derive_draft_status(cv_json, row.get("confidence_score"))
+        updated = data_client.update_draft_cv(
+            draft_cv_id=draft_cv_id,
+            user_profile_id=user_profile_id,
+            fields={"cv_json": cv_json, "status": new_status},
+        )
+    except SupabaseConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=_MISCONFIGURED) from exc
+    except SupabaseDataError as exc:
+        raise HTTPException(status_code=503, detail=_UNAVAILABLE) from exc
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="Draft CV not found.")
+    return JSONResponse(status_code=200, content={"draft_cv": updated})
+
+
+# --- US-060 tier-2 polish-and-confirm edits --------------------------------------
+
+
+class BulletTextPatch(BaseModel):
+    text: str = Field(min_length=1, max_length=BULLET_MAX_CHARS)
+
+
+class BulletTextConfirm(BaseModel):
+    choice: Literal["polished", "mine", "cancel"]
+
+
+@router.patch("/draft-cvs/{draft_cv_id}/bullets/{bullet_id}/text")
+def patch_draft_cv_bullet_text(
+    draft_cv_id: str,
+    bullet_id: str,
+    body: BulletTextPatch,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> JSONResponse:
+    """One combined polish+verify pass for an edited bullet (US-060).
+
+    The result is staged on the bullet (``pending_edit``) — text and status do
+    not change until the user confirms a choice, so an abandoned dialog or a
+    failure keeps the previous text renderable. The confirm endpoint applies
+    the server-stored result; the client never supplies a status."""
+    data_client = _data_client()
+    try:
+        user_profile_id, row = _owned_draft(data_client, user, draft_cv_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Draft CV not found.")
+
+        cv_json = row.get("cv_json") or {}
+        if find_cv_json_bullet(cv_json, bullet_id) is None:
+            raise HTTPException(status_code=404, detail="Bullet not found.")
+
+        user_text = body.text.strip()
+        corpus = build_edit_corpus(
+            data_client,
+            match_id=str(row.get("match_id")),
+            user_profile_id=user_profile_id,
+        )
+        result = polish_and_verify(
+            user_text=user_text,
+            cv_json=cv_json,
+            corpus=corpus,
+            settings=get_settings(),
+        )
+        stage_bullet_edit(cv_json, bullet_id, user_text, result)
+        updated = data_client.update_draft_cv(
+            draft_cv_id=draft_cv_id,
+            user_profile_id=user_profile_id,
+            fields={"cv_json": cv_json},
+        )
+    except SupabaseConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=_MISCONFIGURED) from exc
+    except SupabaseDataError as exc:
+        raise HTTPException(status_code=503, detail=_UNAVAILABLE) from exc
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="Draft CV not found.")
+    return JSONResponse(
+        status_code=200,
+        content={
+            "draft_cv_id": draft_cv_id,
+            "bullet_id": bullet_id,
+            "user_text": user_text,
+            "polished_text": result["polished_text"],
+            "truth_guard_status": result["truth_guard_status"],
+            "evidence_question": result.get("evidence_question"),
+            "provider": result.get("provider"),
+        },
+    )
+
+
+@router.post("/draft-cvs/{draft_cv_id}/bullets/{bullet_id}/text/confirm")
+def confirm_draft_cv_bullet_text(
+    draft_cv_id: str,
+    bullet_id: str,
+    body: BulletTextConfirm,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> JSONResponse:
+    """Apply or cancel a staged tier-2 edit using only server-stored data."""
+    from datetime import UTC, datetime
+
+    data_client = _data_client()
+    try:
+        user_profile_id, row = _owned_draft(data_client, user, draft_cv_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Draft CV not found.")
+
+        cv_json = row.get("cv_json") or {}
+        bullet = confirm_bullet_edit(
+            cv_json, bullet_id, body.choice, now_iso=datetime.now(UTC).isoformat()
+        )
+        if bullet is None:
+            raise HTTPException(status_code=404, detail="No pending edit for this bullet.")
+
+        new_status = derive_draft_status(cv_json, row.get("confidence_score"))
+        updated = data_client.update_draft_cv(
+            draft_cv_id=draft_cv_id,
+            user_profile_id=user_profile_id,
+            fields={"cv_json": cv_json, "status": new_status},
+        )
+    except SupabaseConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=_MISCONFIGURED) from exc
+    except SupabaseDataError as exc:
+        raise HTTPException(status_code=503, detail=_UNAVAILABLE) from exc
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="Draft CV not found.")
+    return JSONResponse(status_code=200, content={"draft_cv": updated})
+
+
+class PreservationResolve(BaseModel):
+    bullet_id: str
+    choice: Literal["keep", "discard"]
+
+
+@router.post("/draft-cvs/{draft_cv_id}/preservation/resolve")
+def resolve_draft_cv_preservation(
+    draft_cv_id: str,
+    body: PreservationResolve,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> JSONResponse:
+    """Answer one keep-mine / take-new prompt after a regeneration restructured
+    a finalized bullet's entry (US-060 — never a silent loss)."""
+    data_client = _data_client()
+    try:
+        user_profile_id, row = _owned_draft(data_client, user, draft_cv_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Draft CV not found.")
+
+        cv_json = row.get("cv_json") or {}
+        if not resolve_preservation_conflict(cv_json, body.bullet_id, body.choice):
+            raise HTTPException(status_code=404, detail="Conflict not found.")
 
         new_status = derive_draft_status(cv_json, row.get("confidence_score"))
         updated = data_client.update_draft_cv(

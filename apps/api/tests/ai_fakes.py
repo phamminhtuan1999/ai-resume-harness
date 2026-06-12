@@ -784,9 +784,29 @@ class FakeData:
 
     # --- US-031 resume suggestions persistence / reads ---
     def upsert_resume_suggestions(self, *, match_id, suggestions):
+        """Mirror the US-061 refresh semantics: responded rows survive, pending
+        rows are replaced, and duplicates of surviving text are dropped."""
         self.upsert_calls += 1
-        self.upserted_suggestions = suggestions
-        return [{"id": f"sug_{i + 1}"} for i in range(len(suggestions))]
+        kept = [
+            row
+            for row in self._resume_suggestions_rows
+            if row.get("user_action") in ("accepted", "rejected")
+        ]
+        kept_texts = {
+            " ".join(str(row.get("suggested_text") or "").split()).casefold()
+            for row in kept
+        }
+        fresh = [
+            row
+            for row in suggestions
+            if " ".join(str(row.get("suggested_text") or "").split()).casefold()
+            not in kept_texts
+        ]
+        self.upserted_suggestions = fresh
+        self._resume_suggestions_rows = kept + [
+            {**row, "id": f"sug_{i + 1}"} for i, row in enumerate(fresh)
+        ]
+        return [{"id": f"sug_{i + 1}"} for i in range(len(fresh))]
 
     def get_resume_suggestions_for_match(self, *, match_id, user_profile_id):
         return self._resume_suggestions_rows
@@ -804,6 +824,7 @@ class FakeData:
         row = {"id": suggestion_id, "user_action": user_action}
         if suggested_text is not None:
             row["suggested_text"] = suggested_text
+            row["user_edited"] = True
         return row
 
     # --- US-034 roadmap persistence / reads ---

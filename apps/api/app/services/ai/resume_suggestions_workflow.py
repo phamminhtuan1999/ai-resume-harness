@@ -106,6 +106,10 @@ Task: Generate a complete set of tailored resume suggestions for this candidate
 and job. Use the match analysis and missing skill analysis as context.
 
 For each suggestion:
+- suggested_text MUST be resume-ready content — concise text that could sit on
+  the resume as-is (a claim, bullet, or summary line). NEVER write advice or an
+  instruction to the candidate in suggested_text; guidance belongs in reason.
+  The user edits suggested_text directly and accepted text feeds CV generation.
 - Cite only resume evidence that actually exists.
 - Assign truth_guard_status:
     safe_to_use          - claim is clearly supported by resume/profile evidence.
@@ -210,6 +214,7 @@ Job ({data.job_title} at {data.company}):
             "truth_guard_status": TRUTH_GUARD_DISPLAY[item.truth_guard_status],
             "reason": item.reason,
             "user_action": "pending",
+            "user_edited": False,
         }
 
     @staticmethod
