@@ -19,6 +19,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+from app.services.ai.model_routing import resolve_model
 from app.services.ai.prompting import with_preamble
 from app.services.ai.providers import GeminiProvider
 
@@ -116,6 +117,8 @@ class ActivityDescriptionHelper:
             prompt=prompt,
             output_model=ActivityDescriptionOutput,
             settings=self._settings,
+            # Fast tier (US-066): activity descriptions are short, low-stakes text.
+            model=resolve_model("activity_description", self._settings),
             client=self._gemini_client,
         )
         try:

@@ -2,6 +2,7 @@ import time
 from typing import Any, Protocol
 
 from app.schemas.candidate_profile import CandidateProfileDraft
+from app.services.ai.model_routing import resolve_model
 from app.settings import Settings
 
 
@@ -40,7 +41,7 @@ def extract_candidate_profile_from_text(
     )
     response = _generate_with_retry(
         client=client,
-        model=settings.gemini_model,
+        model=resolve_model("candidate_profile_extraction", settings),
         contents=prompt,
         config=config,
         max_attempts=settings.gemini_max_attempts,

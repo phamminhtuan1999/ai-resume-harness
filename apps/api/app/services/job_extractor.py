@@ -2,6 +2,7 @@ import time
 from typing import Any, Protocol
 
 from app.schemas.job import JobExtraction
+from app.services.ai.model_routing import resolve_model
 from app.settings import Settings
 
 # Cap the page content sent to the model. Job posts are short; the rest is
@@ -46,7 +47,7 @@ def extract_job_from_markdown(
     )
     response = _generate_with_retry(
         client=client,
-        model=settings.gemini_model,
+        model=resolve_model("job_extraction", settings),
         contents=prompt,
         config=config,
         max_attempts=settings.gemini_max_attempts,

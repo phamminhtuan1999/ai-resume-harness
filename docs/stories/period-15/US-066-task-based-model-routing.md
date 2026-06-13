@@ -2,7 +2,7 @@
 
 ## Status
 
-planned
+implemented
 
 ## Lane
 
@@ -79,4 +79,31 @@ model policy that future agents must inherit (tier membership per task).
 
 ## Evidence
 
-Add commands, reports, screenshots, or links after validation exists.
+Implemented 2026-06-13.
+
+- Added the single task→tier policy map and resolver
+  `apps/api/app/services/ai/model_routing.py` (`TASK_TIER`, `resolve_tier`,
+  `resolve_model`). No feature service or workflow names a concrete model.
+- Added `GEMINI_FAST_MODEL`, `GEMINI_HEAVY_MODEL`, and
+  `AI_USE_HEAVY_MODEL_FOR_DRAFT_CV` to `Settings` and documented all three in
+  `apps/api/.env.example`; `GEMINI_MODEL` keeps its meaning as the default tier.
+- `GeminiProvider` now takes the resolved `model`; `_build_gemini_provider`,
+  `activity_description.py`, `job_extractor.py`,
+  `candidate_profile_extractor.py`, and `bullet_edit.py` all resolve through the
+  map. `draft_cv_workflow.persist` records the tier-resolved model on the Draft
+  CV row instead of reading `settings.gemini_model`.
+- Recorded decision `docs/decisions/0021-ai-model-tiers.md` (tier membership;
+  heavy maps to the live `draft_cv`, not the retired `resume_draft`).
+- Unit: `tests/test_model_routing.py` — table-tests every task→tier, unset
+  fast/heavy fall back to default, draft CV uses heavy only when flag + model
+  are both set, unknown task → default.
+- Integration: a `dashboard_summary` (fast) run records the fast model and a
+  `match_analysis` (default) run records the default model on the run row.
+- `make_settings` test helper extended with the three tier fields (defaults
+  mirror an unconfigured deployment).
+- `.venv/bin/python -m pytest -q` → 461 passed; `ruff check` clean.
+
+Pending:
+
+- Deploy-with-no-new-env-vars release check (identical model usage) before
+  enabling tiers in any environment.

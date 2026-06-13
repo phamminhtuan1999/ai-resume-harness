@@ -19,12 +19,20 @@ def make_settings(
     gemini_model: str = "gemini-2.5-flash",
     gemini_max_attempts: int = 3,
     gemini_retry_base_delay_seconds: float = 0.0,
+    # US-066 model tiers. Defaults mirror an unconfigured deployment: fast/heavy
+    # unset so every task resolves to ``gemini_model`` (current behavior).
+    gemini_fast_model: str = "",
+    gemini_heavy_model: str = "",
+    ai_use_heavy_model_for_draft_cv: bool = False,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         gemini_api_key=gemini_api_key,
         gemini_model=gemini_model,
         gemini_max_attempts=gemini_max_attempts,
         gemini_retry_base_delay_seconds=gemini_retry_base_delay_seconds,
+        gemini_fast_model=gemini_fast_model,
+        gemini_heavy_model=gemini_heavy_model,
+        ai_use_heavy_model_for_draft_cv=ai_use_heavy_model_for_draft_cv,
     )
 
 

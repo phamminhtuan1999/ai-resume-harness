@@ -29,6 +29,7 @@ from app.services.ai.draft_cv_logic import (
     sanitize_feedback_links,
 )
 from app.services.ai.draft_cv_preservation import merge_finalized_bullets
+from app.services.ai.model_routing import resolve_model
 from app.services.ai.errors import (
     DEFAULT_MESSAGES,
     MissingMatchAnalysisError,
@@ -326,8 +327,10 @@ Canonical resume text:
             quality_notes_json=[n.model_dump(mode="json") for n in output.quality_notes],
             confidence_score=output.confidence_score,
             provider=provider_name,
+            # Mirror the tier the provider actually used (US-066): Draft CV is
+            # the heavy tier, so this records the heavy model when it's enabled.
             model_name=(
-                self.settings.gemini_model
+                resolve_model(self.workflow_type, self.settings)
                 if provider_name == "gemini"
                 else "deterministic-baseline"
             ),

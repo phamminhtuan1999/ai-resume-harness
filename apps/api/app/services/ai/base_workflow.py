@@ -47,6 +47,7 @@ from app.services.ai.errors import (
     SchemaValidationFailureError,
 )
 from app.services.ai.logging import WorkflowLogger
+from app.services.ai.model_routing import resolve_model
 from app.services.ai.providers import (
     DeterministicFallbackProvider,
     GeminiProvider,
@@ -291,6 +292,8 @@ class BaseAIWorkflow(ABC):
             prompt=prompt,
             output_model=self.output_model,
             settings=self.settings,
+            # Tier resolution keyed by this workflow's type (US-066).
+            model=resolve_model(self.workflow_type, self.settings),
             client=self._gemini_client,
         )
 

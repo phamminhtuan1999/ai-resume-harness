@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.draft_cv import BULLET_MAX_CHARS, TruthGuardStatus
 from app.services.ai.prompting import with_preamble
+from app.services.ai.model_routing import resolve_model
 from app.services.ai.providers import ProviderError, generate_structured
 from app.settings import Settings
 
@@ -100,7 +101,7 @@ def polish_and_verify(
     try:
         raw = generate_structured(
             client=client,
-            model=settings.gemini_model,
+            model=resolve_model("bullet_edit", settings),
             prompt=_build_prompt(user_text, cv_json, corpus),
             output_model=BulletEditOutput,
             max_attempts=settings.gemini_max_attempts,

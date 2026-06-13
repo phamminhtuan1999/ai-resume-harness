@@ -190,16 +190,21 @@ class GeminiProvider:
         prompt: str,
         output_model: type[BaseModel],
         settings: Settings,
+        model: str,
         client: _GenerativeClient | None = None,
     ) -> None:
         self._prompt = prompt
         self._output_model = output_model
         self._settings = settings
+        # The tier-resolved model (US-066). The caller resolves it via
+        # ``model_routing.resolve_model`` so the recorded ``model_name`` reflects
+        # the task's tier, not a single global model.
+        self._model = model
         self._client = client
 
     @property
     def model_name(self) -> str:
-        return self._settings.gemini_model
+        return self._model
 
     def generate(self) -> dict:
         client = self._client
@@ -212,7 +217,7 @@ class GeminiProvider:
 
         return generate_structured(
             client=client,
-            model=self._settings.gemini_model,
+            model=self._model,
             prompt=self._prompt,
             output_model=self._output_model,
             max_attempts=self._settings.gemini_max_attempts,
