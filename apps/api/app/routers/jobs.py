@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from app.auth import AuthenticatedUser, require_authenticated_user
 from app.schemas.job import (
@@ -8,6 +9,8 @@ from app.schemas.job import (
     JobImportUrlResponse,
     WorkType,
 )
+from app.services.ai.errors import AIWorkflowError
+from app.services.ai.quick_match_workflow import QuickMatchWorkflow
 from app.services.firecrawl_client import (
     FirecrawlError,
     FirecrawlFetchError,
@@ -181,6 +184,48 @@ def import_job_by_url(
         raw_description=raw_description,
         extraction_confidence=extraction.confidence_score,
     )
+
+
+@router.post("/{job_id}/quick-match")
+def quick_match_job(
+    job_id: str,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> JSONResponse:
+    """Run an explicit AI quick match for one saved job (US-068).
+
+    Manual, per-job, and uncapped — the user asked for this one (the
+    ``AI_QUICK_MATCH_LIMIT`` cap only bounds automatic batch previews). Runs the
+    standard workflow path (fast tier, ``ai_workflow_runs``) and returns the
+    standard envelope; typed ``AIWorkflowError`` failures become a friendly,
+    retryable ``{ error: {...} }`` so the listing stays usable on quota errors."""
+    settings = get_settings()
+    try:
+        data_client = SupabaseDataClient(settings)
+        profile = data_client.get_profile_for_clerk_user(user.clerk_user_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="Profile not found.")
+        user_profile_id = profile["id"]
+    except SupabaseConfigurationError as exc:
+        raise HTTPException(status_code=500, detail="Job data source is misconfigured.") from exc
+    except SupabaseDataError as exc:
+        raise HTTPException(status_code=503, detail="Job data is unavailable.") from exc
+
+    workflow = QuickMatchWorkflow(data_client=data_client, settings=settings)
+    try:
+        result = workflow.run(
+            subject_id=job_id,
+            user_profile_id=user_profile_id,
+            request_id=request.headers.get("x-request-id"),
+        )
+    except AIWorkflowError as exc:
+        return JSONResponse(status_code=exc.http_status, content=exc.to_envelope())
+    except SupabaseConfigurationError as exc:
+        raise HTTPException(status_code=500, detail="Job data source is misconfigured.") from exc
+    except SupabaseDataError as exc:
+        raise HTTPException(status_code=503, detail="Job data is unavailable.") from exc
+
+    return JSONResponse(status_code=200, content=result)
 
 
 def _normalize_choice(value: str | None, aliases: dict[str, str], default: str) -> str:

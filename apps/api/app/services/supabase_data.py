@@ -247,6 +247,23 @@ class SupabaseDataClient:
         rows = response.json()
         return rows[0] if rows else None
 
+    def get_job(self, *, job_id: str, user_profile_id: str) -> dict[str, Any] | None:
+        """Load an owned job with the fields the quick match needs (US-068).
+
+        Returns ``None`` when the job is missing or not owned, which the workflow
+        surfaces as ``unauthorized`` before any run row is written. Includes the
+        structured payloads (``structured_json`` / ``extraction_json``) so the
+        deterministic pre-score and reuse identity can read them."""
+        return self._get_owned_row(
+            table="jobs",
+            select=(
+                "id,company,title,location,work_type,raw_description,"
+                "structured_json,extraction_json,parse_status,updated_at"
+            ),
+            row_id=job_id,
+            user_profile_id=user_profile_id,
+        )
+
     def insert_workflow_run(
         self,
         *,

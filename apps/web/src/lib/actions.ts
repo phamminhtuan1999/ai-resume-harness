@@ -46,6 +46,7 @@ import {
   runFullWorkflow,
   runMatchAnalysis,
   runMatchSubWorkflow,
+  runQuickMatch,
   runWorkflow,
 } from "@/lib/ai-workflow-client.mjs";
 import { analyzeResumeJobFit } from "@/lib/match-analyzer.mjs";
@@ -1398,6 +1399,50 @@ export async function refreshAnalysisAction(
   // begins polling.
   revalidatePath(`/matches/${matchId}`);
   return success("Refreshing your analysis…");
+}
+
+export type QuickMatchActionResult =
+  | { ok: true; likelihood: "strong" | "promising" | "weak"; headline: string }
+  | { ok: false; message: string; retryable: boolean };
+
+export async function quickMatchAction(jobId: string): Promise<QuickMatchActionResult> {
+  // US-068: an explicit, per-job AI quick match preview (fast tier). No credit
+  // spend — it is a zero-commitment hint, not a saved analysis; quota is bounded
+  // by AI_QUICK_MATCH_LIMIT on any future batch path, not here. Reuse (US-067)
+  // serves an unchanged re-request from the persisted preview with no model call.
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return { ok: false, message: context.message, retryable: false };
+  }
+  if (!jobId) {
+    return { ok: false, message: "A job is required.", retryable: false };
+  }
+
+  const sessionToken = await getCurrentSessionToken();
+  const result = await runQuickMatch({
+    apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
+    jobId,
+    sessionToken,
+  });
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      message: result.message ?? "Quick match could not run. Please try again.",
+      retryable: result.retryable ?? true,
+    };
+  }
+
+  const likelihood = result.result?.likelihood;
+  const headline = typeof result.result?.headline === "string" ? result.result.headline : "";
+  if (likelihood !== "strong" && likelihood !== "promising" && likelihood !== "weak") {
+    return {
+      ok: false,
+      message: "The assistant returned an unexpected preview.",
+      retryable: true,
+    };
+  }
+  return { ok: true, likelihood, headline };
 }
 
 export async function regenerateActivityDescriptionAction(

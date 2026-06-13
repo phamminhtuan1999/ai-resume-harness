@@ -6,6 +6,7 @@ import {
   patchResumeSuggestion,
   runMatchAnalysis,
   runMatchSubWorkflow,
+  runQuickMatch,
   runWorkflow,
 } from "../src/lib/ai-workflow-client.mjs";
 
@@ -145,6 +146,55 @@ test("runMatchAnalysis maps a typed error into the ok-shape", async () => {
 
   assert.equal(result.ok, false);
   assert.equal(result.code, "unauthorized");
+  assert.equal(result.retryable, false);
+});
+
+const quickMatchEnvelope = {
+  workflow_run: {
+    id: "run_q",
+    workflow_type: "quick_match",
+    status: "completed",
+    model_provider: "gemini",
+    confidence_score: 0.7,
+  },
+  result: { likelihood: "strong", headline: "Your stack lines up well.", confidence_score: 0.7 },
+};
+
+test("runQuickMatch targets the per-job quick-match path", async () => {
+  let calledPath = "";
+  const result = await runQuickMatch({
+    apiBaseUrl: API,
+    jobId: "job_9",
+    sessionToken: TOKEN,
+    fetchImpl: async (url) => {
+      calledPath = url;
+      return jsonResponse(true, quickMatchEnvelope);
+    },
+  });
+
+  assert.equal(calledPath, `${API}/api/jobs/job_9/quick-match`);
+  assert.equal(result.ok, true);
+  assert.equal(result.result.likelihood, "strong");
+});
+
+test("runQuickMatch maps a retryable provider error into the ok-shape", async () => {
+  const result = await runQuickMatch({
+    apiBaseUrl: API,
+    jobId: "job_9",
+    sessionToken: TOKEN,
+    fetchImpl: async () =>
+      jsonResponse(false, {
+        error: { code: "provider_rate_limit", message: "Busy.", retryable: true },
+      }),
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.retryable, true);
+});
+
+test("runQuickMatch requires a job id", async () => {
+  const result = await runQuickMatch({ apiBaseUrl: API, jobId: "", sessionToken: TOKEN });
+  assert.equal(result.ok, false);
   assert.equal(result.retryable, false);
 });
 

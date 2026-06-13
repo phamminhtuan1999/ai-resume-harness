@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     firecrawl_timeout_seconds: int = Field(
         default=45, ge=1, alias="FIRECRAWL_TIMEOUT_SECONDS"
     )
+    # US-068: an upper bound on how many top pre-scored jobs may receive an
+    # automatic quick match in any batch path; enforced server-side.
+    ai_quick_match_limit: int = Field(default=5, ge=0, alias="AI_QUICK_MATCH_LIMIT")
     gemini_max_attempts: int = Field(default=3, ge=1, alias="GEMINI_MAX_ATTEMPTS")
     gemini_retry_base_delay_seconds: float = Field(
         default=0.5, ge=0, alias="GEMINI_RETRY_BASE_DELAY_SECONDS"

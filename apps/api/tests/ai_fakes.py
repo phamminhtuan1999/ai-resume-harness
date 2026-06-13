@@ -596,6 +596,44 @@ def gemini_valid_cover_letter(**overrides: Any) -> SimpleNamespace:
     return gemini_response(text=json.dumps(valid_cover_letter(**overrides)))
 
 
+# --- US-068 quick match fixtures -------------------------------------------------
+
+
+def valid_quick_match(**overrides: Any) -> dict:
+    base = {
+        "likelihood": "strong",
+        "headline": "Your FastAPI and AWS background lines up well with this role.",
+        "confidence_score": 0.74,
+    }
+    base.update(overrides)
+    return base
+
+
+def gemini_valid_quick_match(**overrides: Any) -> SimpleNamespace:
+    return gemini_response(text=json.dumps(valid_quick_match(**overrides)))
+
+
+def structured_job(**overrides: Any) -> dict:
+    """An owned job with enough structured data for the pre-score to rate it."""
+    base = {
+        "id": "job_1",
+        "company": "Acme AI",
+        "title": "Senior AI Engineer",
+        "location": "Remote US",
+        "work_type": "remote",
+        "raw_description": "Senior AI Engineer. Requires Python, FastAPI, AWS. 5+ years.",
+        "structured_json": None,
+        "extraction_json": {
+            "required_skills": ["Python", "FastAPI", "AWS"],
+            "required_experience_years": 5,
+        },
+        "parse_status": "parsed",
+        "updated_at": "2026-06-10T00:00:00Z",
+    }
+    base.update(overrides)
+    return base
+
+
 class FakeGeminiModels:
     def __init__(self, behaviors: list[Any]) -> None:
         self._behaviors = list(behaviors)
@@ -739,6 +777,12 @@ class FakeData:
 
     def get_candidate_profile(self, *, user_profile_id: str):
         return self._profile
+
+    def get_job(self, *, job_id: str, user_profile_id: str):
+        # US-068 quick match authorizes on a single owned job.
+        if not self._owned:
+            return None
+        return self._job
 
     # --- run + activity writers ---
     def insert_workflow_run(self, *, user_profile_id, workflow_type, subject_type, subject_id):

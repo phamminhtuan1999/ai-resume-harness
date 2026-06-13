@@ -23,6 +23,8 @@ WorkflowType = Literal[
     "dashboard_summary",
     "activity_description",
     "draft_cv",
+    # US-068: a fast-tier, zero-commitment match-likelihood preview on a job.
+    "quick_match",
 ]
 WorkflowStatus = Literal["queued", "running", "completed", "needs_review", "failed"]
 SubjectType = Literal["match", "resume", "job", "dashboard"]

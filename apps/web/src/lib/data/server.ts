@@ -48,6 +48,10 @@ export type WorkspaceJob = {
   contact_notes: string | null;
   created_at: string;
   updated_at: string;
+  // Structured payloads for the US-068 local fit pre-score (no Ai call).
+  work_type: string | null;
+  structured_json: Record<string, unknown> | null;
+  extraction_json: Record<string, unknown> | null;
 };
 
 export type WorkspaceMatch = {
@@ -331,6 +335,9 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
             "contact_notes",
             "created_at",
             "updated_at",
+            "work_type",
+            "structured_json",
+            "extraction_json",
           ].join(",")
         )
         .eq("user_id", profile.id)

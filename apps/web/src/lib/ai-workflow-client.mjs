@@ -118,6 +118,37 @@ export async function runMatchAnalysis({
   }
 }
 
+export async function runQuickMatch({
+  apiBaseUrl,
+  jobId,
+  sessionToken,
+  fetchImpl = fetch,
+}) {
+  if (!jobId) {
+    return { ok: false, message: "A job is required.", retryable: false };
+  }
+
+  try {
+    const { workflowRun, result } = await runWorkflow({
+      apiBaseUrl,
+      path: `/api/jobs/${jobId}/quick-match`,
+      sessionToken,
+      fetchImpl,
+    });
+    return { ok: true, workflowRun, result };
+  } catch (error) {
+    if (error instanceof AIWorkflowError) {
+      return {
+        ok: false,
+        message: error.message,
+        code: error.code,
+        retryable: error.retryable,
+      };
+    }
+    return { ok: false, message: "The assistant request failed.", retryable: true };
+  }
+}
+
 export async function runMatchSubWorkflow({
   apiBaseUrl,
   matchId,
