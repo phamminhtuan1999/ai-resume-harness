@@ -53,16 +53,17 @@ test("display copy is the Period 11 wording", () => {
   assert.equal(DECISION_META.not_recommended.display, "Not Recommended Yet");
 });
 
-test("the verdict line carries exactly one percentage and the risk label", () => {
+test("the verdict line is qualitative — no raw percentage leads the header", () => {
   const line = formatVerdictLine(27, "high");
-  assert.equal(line, "27% match · High risk");
-  assert.equal((line.match(/%/g) || []).length, 1, "confidence must not be a second percentage");
+  assert.equal(line, "Weak match · High risk");
+  assert.ok(!line.includes("%"), "the numeric score belongs in the Score breakdown, not the header");
 });
 
-test("verdict line rounds the score and tolerates a missing risk", () => {
-  assert.equal(formatVerdictLine(82.4, "low"), "82% match · Low risk");
-  assert.equal(formatVerdictLine(0, "medium"), "0% match · Medium risk");
-  assert.equal(formatVerdictLine(50, "bogus"), "50% match");
+test("verdict line maps score bands to words and tolerates a missing risk", () => {
+  assert.equal(formatVerdictLine(82.4, "low"), "Strong match · Low risk");
+  assert.equal(formatVerdictLine(60, "medium"), "Good match · Medium risk");
+  assert.equal(formatVerdictLine(0, "medium"), "Weak match · Medium risk");
+  assert.equal(formatVerdictLine(50, "bogus"), "Partial match");
 });
 
 test("the delta renders only when the previous label differs", () => {

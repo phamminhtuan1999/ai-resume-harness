@@ -8,7 +8,13 @@ import { DecisionRecommendation } from "@/components/matches/decision-recommenda
 import { NextActionsPanel } from "@/components/matches/next-actions-panel";
 import { RoadmapEntryCard } from "@/components/matches/roadmap-entry-card";
 import { EmptyState } from "@/components/empty-state";
-import { getAnalysisPackage, getMatchAiWorkflowRuns, getMatchDetail } from "@/lib/data/server";
+import { hasEnoughCredits } from "@/lib/billing-ledger";
+import {
+  getAnalysisPackage,
+  getMatchAiWorkflowRuns,
+  getMatchDetail,
+  getWorkspaceProfile,
+} from "@/lib/data/server";
 import { roadmapEntryFromRuns } from "@/lib/analysis-package-view.mjs";
 import { isCoreChainRunning } from "@/lib/refresh-view.mjs";
 
@@ -18,15 +24,22 @@ type MatchDetailPageProps = {
 
 export default async function MatchDetailPage({ params }: MatchDetailPageProps) {
   const { matchId } = await params;
-  const [{ match }, aiWorkflow, packageResult] = await Promise.all([
+  const [{ match }, aiWorkflow, packageResult, { profile }] = await Promise.all([
     getMatchDetail(matchId),
     getMatchAiWorkflowRuns(matchId),
     getAnalysisPackage(matchId),
+    getWorkspaceProfile(),
   ]);
 
   const pkg = packageResult.ok ? packageResult.package : null;
   const coreChainRunning = isCoreChainRunning(aiWorkflow.runs);
   const roadmapEntry = roadmapEntryFromRuns(aiWorkflow.runs);
+
+  // Upfront credit disclosure (decision 0020): the spend controls show their
+  // price and disable with a reason; enforced=false hides cost vocabulary.
+  const refreshBilling = profile?.id
+    ? await hasEnoughCredits(profile.id, "job_analysis_refresh")
+    : { ok: true, cost: 0, balance: 0, enforced: false };
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
@@ -35,7 +48,12 @@ export default async function MatchDetailPage({ params }: MatchDetailPageProps) 
           workflow panel now lives behind the Advanced tab. */}
       {pkg && pkg.decision ? (
         <>
-          <DecisionHeader pkg={pkg} matchId={match.id} coreChainRunning={coreChainRunning} />
+          <DecisionHeader
+            pkg={pkg}
+            matchId={match.id}
+            coreChainRunning={coreChainRunning}
+            refreshBilling={refreshBilling}
+          />
           <AnalysisNotices pkg={pkg} matchId={match.id} />
           <DecisionRecommendation decision={pkg.decision} evidence={pkg.evidence} />
           {roadmapEntry ? (
@@ -48,13 +66,15 @@ export default async function MatchDetailPage({ params }: MatchDetailPageProps) 
           icon={Sparkles}
           title="This job hasn't been analyzed yet"
           description="Run the analysis to see whether to apply, why, and what to do next."
-          action={<RegenerateMatchForm matchId={match.id} />}
+          action={<RegenerateMatchForm matchId={match.id} label="Run analysis" />}
         />
       ) : (
         <EmptyState
           variant="error"
           title="We couldn't load the latest assessment"
-          description={packageResult.ok ? "No analysis is available yet." : packageResult.message}
+          // packageResult.message is API-authored; the main surface never
+          // shows technical detail (US-048) — Advanced keeps the raw story.
+          description="The assessment couldn't be loaded this time. Run the analysis again — your saved job and resume are unaffected."
           action={<RegenerateMatchForm matchId={match.id} />}
         />
       )}
@@ -68,7 +88,11 @@ export default async function MatchDetailPage({ params }: MatchDetailPageProps) 
             <DecisionEvidence pkg={pkg} matchId={match.id} />
           </div>
           <div className="order-1 lg:order-2">
-            <NextActionsPanel pkg={pkg} matchId={match.id} />
+            <NextActionsPanel
+              pkg={pkg}
+              matchId={match.id}
+              billingEnforced={refreshBilling.enforced}
+            />
           </div>
         </section>
       ) : null}

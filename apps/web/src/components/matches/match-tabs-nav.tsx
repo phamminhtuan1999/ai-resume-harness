@@ -38,6 +38,7 @@ export function MatchTabsNav({ matchId, label }: MatchTabsNavProps) {
             key={tab.key}
             href={matchTabHref(matchId, tab)}
             aria-current={isActive ? "page" : undefined}
+            title={emphasized ? "Suggested for this result" : undefined}
             className={cn(
               "relative flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors",
               isActive

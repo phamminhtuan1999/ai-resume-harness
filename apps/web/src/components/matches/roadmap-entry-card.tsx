@@ -32,7 +32,7 @@ export function RoadmapEntryCard({ matchId, generatedAt }: RoadmapEntryCardProps
           href={`/matches/${matchId}/roadmap`}
           className={buttonVariants({ variant: "outline", className: "shrink-0" })}
         >
-          View 4-Week Roadmap
+          View 4-week roadmap
         </Link>
       </CardContent>
     </Card>

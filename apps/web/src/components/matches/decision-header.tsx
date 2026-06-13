@@ -1,4 +1,12 @@
-import { Briefcase, Clock, FileText, MapPin, TrendingUp } from "lucide-react";
+import {
+  Briefcase,
+  Clock,
+  FileText,
+  MapPin,
+  MoveRight,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 
 import { RefreshAnalysisControl } from "@/components/matches/refresh-analysis-control";
 import { Badge } from "@/components/ui/badge";
@@ -16,15 +24,32 @@ type DecisionHeaderProps = {
   pkg: AnalysisPackage;
   matchId: string;
   coreChainRunning: boolean;
+  refreshBilling?: { enforced: boolean; cost: number; balance: number };
 };
 
-const APPLIED_BANNER: Record<string, (date: string | null) => string> = {
-  applied: (date) => (date ? `You applied on ${formatShortDate(date)}.` : "You applied to this role."),
-  interviewing: () => "You're interviewing for this role.",
-  offer: () => "You have an offer for this role.",
+// The delta icon must match the delta direction — a green up-arrow on a
+// downgrade is a visual claim the data contradicts (Truth Guard applies to
+// icons too). Down stays neutral: the verdict badge carries the news.
+const DELTA_ICONS = {
+  Up: { Icon: TrendingUp, className: "size-4 text-success" },
+  Down: { Icon: TrendingDown, className: "size-4 text-muted-foreground" },
+  Changed: { Icon: MoveRight, className: "size-4 text-muted-foreground" },
+} as const;
+
+// Rendered as a quiet chip beside the verdict, not a full-width banner — the
+// verdict stays the only block-level statement at the top of the page.
+const APPLIED_CHIP: Record<string, (date: string | null) => string> = {
+  applied: (date) => (date ? `Applied ${formatShortDate(date)}` : "Applied"),
+  interviewing: () => "Interviewing",
+  offer: () => "Offer received",
 };
 
-export function DecisionHeader({ pkg, matchId, coreChainRunning }: DecisionHeaderProps) {
+export function DecisionHeader({
+  pkg,
+  matchId,
+  coreChainRunning,
+  refreshBilling,
+}: DecisionHeaderProps) {
   const decision = pkg.decision;
   if (!decision) {
     return null;
@@ -35,7 +60,7 @@ export function DecisionHeader({ pkg, matchId, coreChainRunning }: DecisionHeade
   const delta = decision.previous ? decisionDelta(decision.previous.label, decision.label) : null;
   const appliedKind = pkg.application ? liveApplicationKind(pkg.application.status) : null;
   const appliedText = appliedKind
-    ? APPLIED_BANNER[appliedKind]?.(pkg.application?.applied_date ?? null)
+    ? APPLIED_CHIP[appliedKind]?.(pkg.application?.applied_date ?? null)
     : null;
 
   const jobFacts = [pkg.job.location, pkg.job.work_type].filter(Boolean).join(" · ");
@@ -43,24 +68,23 @@ export function DecisionHeader({ pkg, matchId, coreChainRunning }: DecisionHeade
   return (
     <Card>
       <CardContent className="flex flex-col gap-4 pt-6">
-        {appliedText ? (
-          <div className="rounded-lg border border-success/40 bg-success/10 px-4 py-2 text-sm font-medium">
-            {appliedText}
-          </div>
-        ) : null}
-
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-xl font-semibold tracking-tight">
+              <h1 className="font-display text-2xl font-semibold tracking-tight text-balance">
                 {pkg.job.title || "This role"}
               </h1>
               {meta ? <Badge variant={meta.variant}>{meta.display}</Badge> : null}
+              {appliedText ? <Badge variant="success">{appliedText}</Badge> : null}
             </div>
             <p className="text-sm font-medium text-muted-foreground">{verdictLine}</p>
             {delta ? (
               <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <TrendingUp data-icon="inline-start" className="size-4 text-success" />
+                {(() => {
+                  const { Icon, className } =
+                    DELTA_ICONS[delta.direction as keyof typeof DELTA_ICONS] ?? DELTA_ICONS.Changed;
+                  return <Icon data-icon="inline-start" className={className} />;
+                })()}
                 {delta.direction} from {delta.fromDisplay}
                 {decision.previous?.decided_at
                   ? ` · ${formatShortDate(decision.previous.decided_at)}`
@@ -73,12 +97,20 @@ export function DecisionHeader({ pkg, matchId, coreChainRunning }: DecisionHeade
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Clock className="size-4" />
               {pkg.analyzed_at ? `Last analyzed ${formatShortDate(pkg.analyzed_at)}` : "Not yet analyzed"}
-              {pkg.stale ? <Badge variant="warning">Out of date</Badge> : null}
+              {pkg.stale ? (
+                <Badge
+                  variant="warning"
+                  title="Your resume, the job, or your profile changed after this assessment. Refresh for a current read."
+                >
+                  Out of date
+                </Badge>
+              ) : null}
             </div>
             <RefreshAnalysisControl
               matchId={matchId}
               coreChainRunning={coreChainRunning}
               currentLabel={decision.label}
+              billing={refreshBilling}
             />
           </div>
         </div>
@@ -104,12 +136,6 @@ export function DecisionHeader({ pkg, matchId, coreChainRunning }: DecisionHeade
           ) : null}
         </div>
 
-        {pkg.stale ? (
-          <p className="text-sm text-muted-foreground">
-            Your resume, the job, or your profile changed after this assessment. Refresh for a
-            current read.
-          </p>
-        ) : null}
       </CardContent>
     </Card>
   );

@@ -87,6 +87,70 @@ export async function createCreditCheckoutSession({
   return { id: data.id, url: data.url };
 }
 
+// "paid" and "pending" are facts about a real session; "not_found" means
+// Stripe has no such session (bad/expired/garbage id); "unavailable" means we
+// couldn't ask (missing config, network failure). The success page must keep
+// these apart: collapsing not_found into pending turns a fake session id into
+// a permanent "finalizing your payment" promise.
+export type CheckoutSessionStatus = "paid" | "pending" | "not_found" | "unavailable";
+
+export type CheckoutSessionSummary = {
+  status: CheckoutSessionStatus;
+  packId: string | null;
+  credits: number | null;
+  amountTotalCents: number | null;
+};
+
+const NO_SESSION_FACTS = { packId: null, credits: null, amountTotalCents: null };
+
+// Read-only lookup so the success page can show facts instead of asserting
+// "Payment received" unconditionally. Display-only: credit grants still come
+// exclusively from the signed webhook (decision 0020).
+export async function getCheckoutSessionSummary(
+  sessionId: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<CheckoutSessionSummary> {
+  if (!sessionId || !sessionId.startsWith("cs_")) {
+    return { status: "not_found", ...NO_SESSION_FACTS };
+  }
+  const secretKey = serverEnv.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    return { status: "unavailable", ...NO_SESSION_FACTS };
+  }
+
+  try {
+    const response = await fetchImpl(
+      `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          "Stripe-Version": STRIPE_API_VERSION,
+        },
+      }
+    );
+    const data = await response.json().catch(() => null);
+    if (response.status === 404) {
+      return { status: "not_found", ...NO_SESSION_FACTS };
+    }
+    if (!response.ok || !data || typeof data !== "object") {
+      return { status: "unavailable", ...NO_SESSION_FACTS };
+    }
+
+    const metadata =
+      data.metadata && typeof data.metadata === "object" ? data.metadata : {};
+    const credits = Number(metadata.credits);
+
+    return {
+      status: data.payment_status === "paid" ? "paid" : "pending",
+      packId: typeof metadata.pack_id === "string" ? metadata.pack_id : null,
+      credits: Number.isInteger(credits) ? credits : null,
+      amountTotalCents: typeof data.amount_total === "number" ? data.amount_total : null,
+    };
+  } catch {
+    return { status: "unavailable", ...NO_SESSION_FACTS };
+  }
+}
+
 function parseStripeSignatureHeader(signatureHeader: string) {
   return signatureHeader.split(",").reduce(
     (parsed, part) => {

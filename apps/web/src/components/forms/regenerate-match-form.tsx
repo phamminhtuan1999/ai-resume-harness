@@ -11,9 +11,12 @@ import { regenerateMatchAction } from "@/lib/actions";
 
 type RegenerateMatchFormProps = {
   matchId: string;
+  // First-run empty states say "Run analysis" — "Regenerate" implies a prior
+  // run that never happened.
+  label?: string;
 };
 
-export function RegenerateMatchForm({ matchId }: RegenerateMatchFormProps) {
+export function RegenerateMatchForm({ matchId, label = "Regenerate analysis" }: RegenerateMatchFormProps) {
   const [state, formAction] = useActionState(regenerateMatchAction, idleActionState);
 
   return (
@@ -21,10 +24,9 @@ export function RegenerateMatchForm({ matchId }: RegenerateMatchFormProps) {
       <FormStatusMessage state={state} />
       <input name="match_id" type="hidden" value={matchId} />
       <FormFieldError error={state.fieldErrors?.match_id} />
-      <SubmitButton variant="outline" pendingLabel="Regenerating...">
-
+      <SubmitButton variant="outline" pendingLabel="Working on it…">
         <RefreshCw data-icon="inline-start" />
-        Regenerate analysis
+        {label}
       </SubmitButton>
     </form>
   );

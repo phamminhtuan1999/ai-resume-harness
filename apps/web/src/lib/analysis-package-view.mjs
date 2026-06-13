@@ -7,8 +7,10 @@
 // the matches list (US-053) both read this.
 export const DECISION_META = {
   strong_apply: { display: "Strong Apply Target", variant: "success" },
-  apply_with_improvements: { display: "Apply With Improvements", variant: "info" },
-  learning_target: { display: "Learning Target", variant: "warning" },
+  // Amber: apply, but something needs attention first (DESIGN.md verdict canon).
+  apply_with_improvements: { display: "Apply With Improvements", variant: "warning" },
+  // Blue: aspirational, not hazardous — a goal to build toward, never a caution.
+  learning_target: { display: "Learning Target", variant: "info" },
   // Muted, not alarming: the verdict recommends, it never closes the door.
   not_recommended: { display: "Not Recommended Yet", variant: "secondary" },
 };
@@ -41,11 +43,21 @@ export function riskMeta(level) {
   return RISK_META[level] ?? null;
 }
 
-// "27% match · High risk" — one percentage only (confidence is qualitative).
+// "Weak match · High risk" — fully qualitative (owner decision 2026-06-12,
+// superseding the US-048 single-percentage header): no raw number leads the
+// screen; the exact score lives in the Score breakdown with its context.
+const MATCH_BANDS = [
+  [75, "Strong match"],
+  [60, "Good match"],
+  [40, "Partial match"],
+  [0, "Weak match"],
+];
+
 export function formatVerdictLine(matchScore, riskLevel) {
   const parts = [];
   if (typeof matchScore === "number" && Number.isFinite(matchScore)) {
-    parts.push(`${Math.round(matchScore)}% match`);
+    const band = MATCH_BANDS.find(([min]) => matchScore >= min);
+    parts.push(band ? band[1] : "Weak match");
   }
   const risk = RISK_META[riskLevel];
   if (risk) {

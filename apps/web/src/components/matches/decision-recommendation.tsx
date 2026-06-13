@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,9 +18,10 @@ export function DecisionRecommendation({ decision, evidence }: DecisionRecommend
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Sparkles data-icon="inline-start" className="size-4 text-brand" />
-          What ApplyWise recommends
+        {/* No decorative brand icon here — emerald is reserved for meaning
+            (Earned Emerald rule); the recommendation text carries the weight. */}
+        <CardTitle>
+          <h2 className="contents">What ApplyWise recommends</h2>
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -29,7 +29,7 @@ export function DecisionRecommendation({ decision, evidence }: DecisionRecommend
           <p className="text-sm leading-6">{decision.summary}</p>
         ) : (
           <p className="text-sm leading-6 text-muted-foreground">
-            Your assessment is ready below.
+            Read the evidence below for the full picture.
           </p>
         )}
 

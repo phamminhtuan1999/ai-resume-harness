@@ -5,7 +5,29 @@
 // a render target and decides when the material guardrail's confirm is needed.
 // It never re-derives which tier an action belongs in.
 
+import { CREDIT_ACTION_COSTS } from "./billing-credits.mjs";
+
 const PLACEMENTS = ["primary", "secondary", "advanced"];
+
+// action type -> credit action id, for the upfront cost hint on paid actions
+// (decision 0020: credits are disclosed before the click, never discovered via
+// a post-hoc balance error). Types absent here are free.
+const ACTION_CREDIT_IDS = {
+  generate_draft_cv: "tailored_cv_generation",
+  generate_materials_anyway: "tailored_cv_generation",
+  generate_cover_letter: "cover_letter",
+  generate_roadmap: "roadmap",
+  prepare_interview: "interview_prep",
+};
+
+export function actionCreditCost(type) {
+  const creditActionId = ACTION_CREDIT_IDS[type];
+  if (!creditActionId) {
+    return null;
+  }
+  const item = CREDIT_ACTION_COSTS.find((cost) => cost.id === creditActionId);
+  return item ? item.credits : null;
+}
 
 // type -> where it routes and how it renders.
 //   scope: "match"   -> /matches/{id}{path}

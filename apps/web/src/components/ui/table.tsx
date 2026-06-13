@@ -70,7 +70,8 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "h-10 bg-muted/40 px-3 text-left align-middle text-xs font-medium uppercase tracking-normal text-muted-foreground whitespace-nowrap [&:has([role=checkbox])]:pr-0",
+        // Sentence case, never uppercase-tracked (DESIGN.md label rule).
+        "h-10 bg-muted/40 px-3 text-left align-middle text-xs font-medium text-muted-foreground whitespace-nowrap [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}

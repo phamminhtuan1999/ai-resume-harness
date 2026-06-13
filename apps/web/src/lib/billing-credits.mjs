@@ -32,7 +32,10 @@ export const CREDIT_ACTION_COSTS = [
 ];
 
 export function formatUsdFromCents(priceCents) {
-  return `$${(priceCents / 100).toFixed(0)}`;
+  const dollars = priceCents / 100;
+  // Whole-dollar packs stay terse ("$9"); anything else keeps its cents
+  // instead of silently rounding ("$19.50", never "$20").
+  return Number.isInteger(dollars) ? `$${dollars}` : `$${dollars.toFixed(2)}`;
 }
 
 export function getCreditPack(packId) {

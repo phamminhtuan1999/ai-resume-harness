@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 
 import { FormStatusMessage } from "@/components/forms/form-status-message";
 import { FormSuccessPopup } from "@/components/forms/form-success-popup";
@@ -21,13 +21,26 @@ export function LearningTargetAction({ jobId, matchId, label }: LearningTargetAc
   const [state, formAction] = useActionState(saveLearningTargetAction, idleActionState);
   const needsConfirm = state.status === "error" && state.requiresConfirm === true;
 
+  // The confirm box replaces the focused submit button; move focus onto it so
+  // keyboard and screen-reader users land on the question instead of <body>.
+  const confirmRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (needsConfirm) {
+      confirmRef.current?.focus();
+    }
+  }, [needsConfirm]);
+
   return (
     <form action={formAction} className="grid gap-2">
       <FormSuccessPopup redirectTo={state.redirectTo} state={state} title="Tracker updated" />
       <input type="hidden" name="job_id" value={jobId} />
       <input type="hidden" name="match_id" value={matchId} />
       {needsConfirm ? (
-        <div className="grid gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3">
+        <div
+          ref={confirmRef}
+          tabIndex={-1}
+          className="fade-in-up grid gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 outline-none"
+        >
           <p className="text-sm">{state.message}</p>
           <input type="hidden" name="confirm" value="true" />
           <SubmitButton variant="default">Yes, save as learning target</SubmitButton>

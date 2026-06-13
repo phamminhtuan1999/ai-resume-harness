@@ -56,7 +56,10 @@ export const LABEL_EMPHASIS = {
   strong_apply: ["materials", "interview"],
   apply_with_improvements: ["resume", "gaps"],
   learning_target: ["gaps"],
-  not_recommended: ["overview"],
+  // Gaps, not Overview: the user reading a "not recommended" verdict is already
+  // on Overview — the useful pointer is the evidence for why, which also leads
+  // to the roadmap.
+  not_recommended: ["gaps"],
 };
 
 export function emphasisForLabel(label) {

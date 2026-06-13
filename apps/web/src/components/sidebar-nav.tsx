@@ -26,7 +26,7 @@ export function SidebarNav() {
             )}
           >
             {isActive ? (
-              <span className="absolute top-1/2 left-0 h-5 w-1 -translate-y-1/2 rounded-r-full bg-brand" />
+              <span className="nav-bar-in absolute top-1/2 left-0 h-5 w-1 -translate-y-1/2 rounded-r-full bg-brand" />
             ) : null}
             <Icon
               className={cn(

@@ -83,7 +83,9 @@ test("emphasis maps each label to existing tab keys, varying by label", () => {
   assert.deepEqual(emphasisForLabel("strong_apply"), ["materials", "interview"]);
   assert.deepEqual(emphasisForLabel("apply_with_improvements"), ["resume", "gaps"]);
   assert.deepEqual(emphasisForLabel("learning_target"), ["gaps"]);
-  assert.deepEqual(emphasisForLabel("not_recommended"), ["overview"]);
+  // Gaps, not Overview — the user is already on Overview when they read the
+  // verdict; the pointer goes to the evidence and the roadmap path.
+  assert.deepEqual(emphasisForLabel("not_recommended"), ["gaps"]);
   assert.deepEqual(emphasisForLabel("nonsense"), []);
   // Every label has an entry.
   for (const label of ALL_LABELS) {

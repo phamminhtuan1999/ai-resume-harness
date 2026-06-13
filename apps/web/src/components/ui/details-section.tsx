@@ -35,7 +35,7 @@ export function DetailsSection({
           <span className="flex min-w-0 items-center gap-2">{summary}</span>
           <ChevronDown className="size-4 shrink-0 transition-transform group-open:rotate-180" />
         </summary>
-        <div className="pt-2">{children}</div>
+        <div className="details-content pt-2">{children}</div>
       </details>
     );
   }
@@ -49,7 +49,7 @@ export function DetailsSection({
         <span className="flex min-w-0 items-center gap-2">{summary}</span>
         <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
       </summary>
-      <div className="border-t px-4 py-4">{children}</div>
+      <div className="details-content border-t px-4 py-4">{children}</div>
     </details>
   );
 }

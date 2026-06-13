@@ -241,6 +241,26 @@
   .rise {
     animation: rise 0.7s var(--ease-out-expo) both;
   }
+  /* State-change feedback for small surfaces that appear in place (status
+     lines, result banners, inline confirms): quick and quiet, never page
+     choreography. */
+  .fade-in-up {
+    animation: fade-in-up 0.2s var(--ease-out-quint) both;
+  }
+  /* Progress fills grow to their value once on mount — the motion IS the
+     data. Value *changes* are covered by the indicator's own transition. */
+  [data-slot="progress-indicator"] {
+    animation: bar-grow 0.6s var(--ease-out-expo);
+    transform-origin: left;
+  }
+  /* Native <details> content slides in on expand (DetailsSection). */
+  details[open] > .details-content {
+    animation: fade-in-up 0.2s var(--ease-out-quint);
+  }
+  /* Sidebar active marker scales in when the route changes. */
+  .nav-bar-in {
+    animation: nav-bar-in 0.2s var(--ease-out-quint);
+  }
   .rise-d1 {
     animation-delay: 0.07s;
   }
@@ -271,5 +291,34 @@
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes nav-bar-in {
+  /* Preserves the marker's static -translate-y-1/2 centering. */
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scaleY(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) scaleY(1);
   }
 }

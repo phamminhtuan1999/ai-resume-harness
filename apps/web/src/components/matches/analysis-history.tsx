@@ -50,7 +50,7 @@ export function AnalysisHistory({ history }: AnalysisHistoryProps) {
       <CardContent>
         {entries.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            History starts with your first refreshed analysis. Run Refresh Analysis to record a
+            History starts with your first refreshed analysis. Run Refresh analysis to record a
             decision snapshot here.
           </p>
         ) : (
@@ -86,11 +86,11 @@ export function AnalysisHistory({ history }: AnalysisHistoryProps) {
                             <p className="mt-1 text-xs text-muted-foreground">{transition.text}</p>
                           ) : null}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="tabular-nums">
                           {typeof entry.match_score === "number" ? Math.round(entry.match_score) : "—"}
                         </TableCell>
                         <TableCell className="capitalize">{entry.risk_level ?? "—"}</TableCell>
-                        <TableCell>
+                        <TableCell className="tabular-nums">
                           {typeof entry.confidence === "number"
                             ? `${Math.round(entry.confidence * 100)}%`
                             : "—"}

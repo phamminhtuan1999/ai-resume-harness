@@ -6,7 +6,9 @@ import { LearningTargetAction } from "@/components/matches/learning-target-actio
 import { NextActionTrackerForm } from "@/components/matches/next-action-tracker-form";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DetailsSection } from "@/components/ui/details-section";
 import {
+  actionCreditCost,
   actionHref,
   actionScope,
   groupActions,
@@ -18,6 +20,7 @@ import type { AnalysisPackage } from "@/lib/data/server";
 type NextActionsPanelProps = {
   pkg: AnalysisPackage;
   matchId: string;
+  billingEnforced?: boolean;
 };
 
 type ActionContext = {
@@ -26,7 +29,18 @@ type ActionContext = {
   jobUrl: string | null;
   materialReadiness: AnalysisPackage["material_readiness"];
   missingSkills: string[];
+  billingEnforced: boolean;
 };
+
+// The upfront price chip on paid actions (decision 0020): rendered only when
+// billing is actually enforced, so unconfigured dev stays free of cost noise.
+function CostChip({ credits }: { credits: number }) {
+  return (
+    <span className="ml-auto pl-3 text-xs font-normal opacity-75 tabular-nums">
+      {credits} {credits === 1 ? "credit" : "credits"}
+    </span>
+  );
+}
 
 type NextAction = AnalysisPackage["next_actions"][number];
 
@@ -57,6 +71,7 @@ function ActionItem({
   }
 
   const scope = actionScope(type);
+  const credits = ctx.billingEnforced ? actionCreditCost(type) : null;
 
   // Tracker mutations (Save to Tracker / Keep for reference / Save as Learning
   // Target) render as forms posting to server actions.
@@ -84,7 +99,12 @@ function ActionItem({
   // before reaching the (unchanged) generation surface.
   if (href && needsConfirm(type, ctx.materialReadiness)) {
     return (
-      <GenerateAnywayAction href={href} label={label} warning={materialWarning(ctx.missingSkills)} />
+      <GenerateAnywayAction
+        href={href}
+        label={label}
+        warning={materialWarning(ctx.missingSkills)}
+        credits={credits}
+      />
     );
   }
 
@@ -113,6 +133,7 @@ function ActionItem({
   return (
     <Link href={href} className={className}>
       {label}
+      {credits ? <CostChip credits={credits} /> : null}
     </Link>
   );
 }
@@ -138,7 +159,7 @@ function ActionGroup({
   );
 }
 
-export function NextActionsPanel({ pkg, matchId }: NextActionsPanelProps) {
+export function NextActionsPanel({ pkg, matchId, billingEnforced = false }: NextActionsPanelProps) {
   const groups = groupActions(pkg.next_actions);
   const ctx: ActionContext = {
     matchId,
@@ -146,12 +167,15 @@ export function NextActionsPanel({ pkg, matchId }: NextActionsPanelProps) {
     jobUrl: pkg.job.job_url,
     materialReadiness: pkg.material_readiness,
     missingSkills: pkg.evidence.missing,
+    billingEnforced,
   };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Recommended next actions</CardTitle>
+        <CardTitle>
+          <h2 className="contents">Recommended next actions</h2>
+        </CardTitle>
         <CardDescription>What to do about this role, in priority order.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -159,22 +183,15 @@ export function NextActionsPanel({ pkg, matchId }: NextActionsPanelProps) {
 
         {groups.secondary.length > 0 ? (
           <div className="flex flex-col gap-2 border-t pt-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Also useful
-            </p>
+            <p className="text-xs font-medium text-muted-foreground">Also useful</p>
             <ActionGroup actions={groups.secondary} ctx={ctx} tier="secondary" />
           </div>
         ) : null}
 
         {groups.advanced.length > 0 ? (
-          <details className="border-t pt-4">
-            <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Advanced actions
-            </summary>
-            <div className="mt-3">
-              <ActionGroup actions={groups.advanced} ctx={ctx} tier="advanced" />
-            </div>
-          </details>
+          <DetailsSection variant="ghost" summary="Advanced actions" className="border-t pt-3">
+            <ActionGroup actions={groups.advanced} ctx={ctx} tier="advanced" />
+          </DetailsSection>
         ) : null}
       </CardContent>
     </Card>

@@ -46,7 +46,9 @@ async function requireBillingUserProfile(): Promise<
 export async function startCreditCheckoutAction(formData: FormData) {
   const context = await requireBillingUserProfile();
   if (!context.ok) {
-    redirect("/sign-in");
+    // Send the buyer back to pricing after auth so the purchase context
+    // (and their pack choice) is one click away instead of lost.
+    redirect("/sign-in?redirect_url=%2Fpricing");
   }
 
   const packId = String(formData.get("pack_id") || "");

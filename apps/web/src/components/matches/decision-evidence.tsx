@@ -23,7 +23,21 @@ const SCORE_ROWS: [keyof AnalysisPackage["scores"], string][] = [
   ["seniority", "Seniority"],
 ];
 
-function AddToProfileLink({ matchId }: { matchId: string }) {
+// The affordance must match the gap type (Truth Guard): a skill the user
+// genuinely lacks routes to the gap plan — inviting "I have this" on a true
+// gap nudges people to claim skills without evidence. Only proof/wording gaps
+// link back to the profile.
+function GapActionLink({ gap, matchId }: { gap: { gap_type?: string }; matchId: string }) {
+  if (gap.gap_type === "true_gap") {
+    return (
+      <Link
+        href={`/matches/${matchId}/gaps`}
+        className="mt-1 inline-block text-sm font-medium text-brand underline-offset-4 hover:underline"
+      >
+        See how to close this
+      </Link>
+    );
+  }
   return (
     <Link
       href={`/profile?recheck=${matchId}`}
@@ -57,7 +71,9 @@ export function DecisionEvidence({ pkg, matchId }: DecisionEvidenceProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Why ApplyWise thinks this</CardTitle>
+        <CardTitle>
+          <h2 className="contents">Why ApplyWise thinks this</h2>
+        </CardTitle>
         <CardDescription>The evidence behind the recommendation.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
@@ -92,7 +108,7 @@ export function DecisionEvidence({ pkg, matchId }: DecisionEvidenceProps) {
           <div>
             <div className="mb-2 flex items-center justify-between text-sm">
               <span className="font-medium">Overall match</span>
-              <span className="font-semibold">{pkg.scores.overall}/100</span>
+              <span className="font-semibold tabular-nums">{pkg.scores.overall}/100</span>
             </div>
             <Progress value={pkg.scores.overall} />
           </div>
@@ -101,7 +117,7 @@ export function DecisionEvidence({ pkg, matchId }: DecisionEvidenceProps) {
               <div key={key} className="rounded-lg border p-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">{label}</span>
-                  <span>{pkg.scores[key]}</span>
+                  <span className="tabular-nums">{pkg.scores[key]}</span>
                 </div>
                 <Progress value={Number(pkg.scores[key]) || 0} className="mt-2" />
               </div>
@@ -150,7 +166,7 @@ export function DecisionEvidence({ pkg, matchId }: DecisionEvidenceProps) {
                   {gap.why_it_matters ? (
                     <p className="mt-1 text-sm leading-6 text-muted-foreground">{gap.why_it_matters}</p>
                   ) : null}
-                  <AddToProfileLink matchId={matchId} />
+                  <GapActionLink gap={gap} matchId={matchId} />
                 </li>
               ))}
             </ul>
