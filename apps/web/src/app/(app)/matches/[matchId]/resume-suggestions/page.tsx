@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { ArrowLeft, ShieldCheck } from "lucide-react";
 
 import { ResumeSuggestionsForm } from "@/components/forms/resume-suggestions-form";
 import { SuggestionReviewForm } from "@/components/forms/suggestion-review-form";
@@ -115,14 +114,6 @@ export default async function ResumeSuggestionsPage({ params }: ResumeSuggestion
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
-      <Link
-        href={`/matches/${match.id}`}
-        className={buttonVariants({ variant: "ghost", className: "w-fit" })}
-      >
-        <ArrowLeft data-icon="inline-start" />
-        Match report
-      </Link>
-
       <TailoringStepper
         matchId={match.id}
         suggestionCount={rows.length}
@@ -134,18 +125,11 @@ export default async function ResumeSuggestionsPage({ params }: ResumeSuggestion
       <section className="grid gap-5 lg:grid-cols-[1fr_320px]">
         <Card>
           <CardHeader>
-            <div className="flex items-start gap-3">
-              <div className="flex size-10 items-center justify-center rounded-lg bg-brand-muted text-[oklch(0.43_0.10_164)] dark:text-brand">
-                <ShieldCheck className="size-4" />
-              </div>
-              <div>
-                <CardTitle>Resume suggestions</CardTitle>
-                <CardDescription>
-                  {match.jobs?.company || "Unknown company"} -{" "}
-                  {match.jobs?.title || "Unknown role"} · {match.resumes?.title || "Resume"}
-                </CardDescription>
-              </div>
-            </div>
+            <CardTitle>Resume suggestions</CardTitle>
+            <CardDescription>
+              {match.jobs?.company || "Unknown company"} -{" "}
+              {match.jobs?.title || "Unknown role"} · {match.resumes?.title || "Resume"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm leading-6 text-muted-foreground">

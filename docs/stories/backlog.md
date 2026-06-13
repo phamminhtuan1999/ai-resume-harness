@@ -86,6 +86,22 @@ US-049; US-054 after US-047 + US-051).
 | Naming & States | Epics 11, 12 (Job Analysis naming, empty/error states, profile completeness) | US-053 |
 | Decision History | Epic 13 (snapshot history view) | US-054 |
 
+## Period 15 Epic (AI Model Tiers, Run Reuse, and Quota Control)
+
+Maps the AI Model Gateway & Gemini Quota Optimization document
+(`applywise_ai_model_gateway_quota_optimization_tasks.md`) to stories. See
+`docs/stories/period-15/README.md` for the codebase verification: doc epics
+1/3/6/7/8 were already implemented by US-027 and US-047..US-051 and get no new
+stories (intake #50). Sequencing: US-066 first (tiers), then US-067 (reuse);
+US-068 depends on both; US-069 is independent.
+
+| Epic | Doc area | Stories |
+| --- | --- | --- |
+| Model Tiers | Epic 2 (task-based routing, fast/default/heavy env config) | US-066 |
+| Run Reuse | Epics 4, 8 (input-hash + prompt-version reuse, cache observability) | US-067 |
+| Listing Pre-Score & Quick Match | Epic 5 (new feature: deterministic fit hint, capped opt-in AI preview) | US-068 |
+| Provider Readiness | Epic 9 (AI_PROVIDER switch, adapter contract) | US-069 |
+
 ## Sliced Stories
 
 | Story | Title | Lane | Status |
@@ -155,6 +171,10 @@ US-049; US-054 after US-047 + US-051).
 | US-063 | Cover letter generated from the final Tailored CV | normal | implemented |
 | US-064 | Check and finalize the pricing page | normal | implemented |
 | US-065 | Integrate credit payment processing | high-risk | implemented |
+| US-066 | Task-based model routing with fast/default/heavy tiers | normal | planned |
+| US-067 | Version-keyed AI run reuse (skip model calls when inputs unchanged) | normal | planned |
+| US-068 | Job listing local pre-score and capped opt-in AI quick match | normal | planned |
+| US-069 | Provider switch readiness (AI_PROVIDER config and adapter contract) | normal | planned |
 
 All Period 8 stories now have full packets under `docs/stories/period-8/`
 (high-risk folders for US-027/US-028/US-031/US-033; flat files otherwise) plus

@@ -1,7 +1,5 @@
 import Link from "next/link";
 import {
-  ArrowLeft,
-  FileText,
   LayoutTemplate,
   ShieldAlert,
   ShieldCheck,
@@ -120,14 +118,6 @@ export default async function DraftCvPage({ params }: DraftCvPageProps) {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
-      <Link
-        href={`/matches/${match.id}`}
-        className={buttonVariants({ variant: "ghost", className: "w-fit" })}
-      >
-        <ArrowLeft data-icon="inline-start" />
-        Match report
-      </Link>
-
       <TailoringStepper
         matchId={match.id}
         suggestionCount={suggestions.length}
@@ -139,17 +129,10 @@ export default async function DraftCvPage({ params }: DraftCvPageProps) {
       <section className="grid gap-5 lg:grid-cols-[1fr_320px]">
         <Card>
           <CardHeader>
-            <div className="flex items-start gap-3">
-              <div className="flex size-10 items-center justify-center rounded-lg bg-brand-muted text-[oklch(0.43_0.10_164)] dark:text-brand">
-                <FileText className="size-4" />
-              </div>
-              <div>
-                <CardTitle>Draft CV</CardTitle>
-                <CardDescription>
-                  {company} - {role}
-                </CardDescription>
-              </div>
-            </div>
+            <CardTitle>Draft CV</CardTitle>
+            <CardDescription>
+              {company} - {role}
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             {draft ? (

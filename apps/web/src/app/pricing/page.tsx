@@ -167,14 +167,19 @@ export default async function PricingPage({
                           {pack.credits} credits
                         </Badge>
                         {recommended ? (
-                          <Badge className="bg-accent text-accent-foreground">
-                            Where most searches start
-                          </Badge>
+                          <Badge className="bg-accent text-accent-foreground">Recommended</Badge>
                         ) : null}
                       </div>
                       <p className="mt-1 text-sm leading-6 text-muted-foreground">
                         {packOutcomes[pack.id] ?? pack.description}
                       </p>
+                      {recommended ? (
+                        // Verifiable reason, not an unsourced "most popular": the
+                        // claim follows directly from the outcome line above.
+                        <p className="mt-1 text-sm leading-6 text-accent-foreground">
+                          Enough for a full multi-week search without topping up mid-hunt.
+                        </p>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap items-center gap-3 sm:flex-col sm:items-end sm:gap-1.5">
                       <p className="text-xl font-semibold tabular-nums">

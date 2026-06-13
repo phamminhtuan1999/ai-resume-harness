@@ -1,9 +1,6 @@
-import Link from "next/link";
-import { ArrowLeft, Target } from "lucide-react";
 
 import { MissingSkillsForm } from "@/components/forms/missing-skills-form";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -114,29 +111,14 @@ export default async function GapsPage({ params }: GapsPageProps) {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
-      <Link
-        href={`/matches/${match.id}`}
-        className={buttonVariants({ variant: "ghost", className: "w-fit" })}
-      >
-        <ArrowLeft data-icon="inline-start" />
-        Match report
-      </Link>
-
       <section className="grid gap-5 lg:grid-cols-[1fr_320px]">
         <Card>
           <CardHeader>
-            <div className="flex items-start gap-3">
-              <div className="flex size-10 items-center justify-center rounded-lg bg-brand-muted text-[oklch(0.43_0.10_164)] dark:text-brand">
-                <Target className="size-4" />
-              </div>
-              <div>
-                <CardTitle>Skill gap analysis</CardTitle>
-                <CardDescription>
-                  {match.jobs?.company || "Unknown company"} -{" "}
-                  {match.jobs?.title || "Unknown role"} · {match.resumes?.title || "Resume"}
-                </CardDescription>
-              </div>
-            </div>
+            <CardTitle>Skill gap analysis</CardTitle>
+            <CardDescription>
+              {match.jobs?.company || "Unknown company"} -{" "}
+              {match.jobs?.title || "Unknown role"} · {match.resumes?.title || "Resume"}
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 text-sm leading-6 text-muted-foreground">
             <p>

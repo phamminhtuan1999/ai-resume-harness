@@ -77,7 +77,12 @@ export function DecisionHeader({
               {meta ? <Badge variant={meta.variant}>{meta.display}</Badge> : null}
               {appliedText ? <Badge variant="success">{appliedText}</Badge> : null}
             </div>
-            <p className="text-sm font-medium text-muted-foreground">{verdictLine}</p>
+            {/* Never render an empty verdict line: a missing score and an
+                unmapped risk would otherwise leave a blank paragraph at the
+                most important spot on the page. */}
+            {verdictLine ? (
+              <p className="text-sm font-medium text-muted-foreground">{verdictLine}</p>
+            ) : null}
             {delta ? (
               <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
                 {(() => {
@@ -97,15 +102,17 @@ export function DecisionHeader({
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Clock className="size-4" />
               {pkg.analyzed_at ? `Last analyzed ${formatShortDate(pkg.analyzed_at)}` : "Not yet analyzed"}
-              {pkg.stale ? (
-                <Badge
-                  variant="warning"
-                  title="Your resume, the job, or your profile changed after this assessment. Refresh for a current read."
-                >
-                  Out of date
-                </Badge>
-              ) : null}
+              {pkg.stale ? <Badge variant="warning">Out of date</Badge> : null}
             </div>
+            {/* The stale explanation is visible text, not a hover-only title:
+                keyboard, screen-reader, and touch users get the reassurance
+                the badge alone can't carry. */}
+            {pkg.stale ? (
+              <p className="max-w-xs text-xs leading-5 text-muted-foreground md:text-right">
+                Your resume, the job, or your profile changed after this assessment — refresh for a
+                current read.
+              </p>
+            ) : null}
             <RefreshAnalysisControl
               matchId={matchId}
               coreChainRunning={coreChainRunning}

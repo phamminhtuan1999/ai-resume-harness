@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2, Coins, Database, UserRound } from "lucide-react";
+import { Coins, Database, UserRound } from "lucide-react";
 
 import { DangerZoneCard } from "@/components/settings/danger-zone-card";
 import { PageHeader } from "@/components/page-header";
