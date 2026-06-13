@@ -21,6 +21,7 @@ type RefreshAnalysisControlProps = {
   coreChainRunning: boolean;
   currentLabel: string;
   billing?: RefreshBilling;
+  stale?: boolean;
 };
 
 // The single Refresh Analysis utility (US-050, decision 0015 §4): it is the only
@@ -32,6 +33,7 @@ export function RefreshAnalysisControl({
   coreChainRunning,
   currentLabel,
   billing,
+  stale = false,
 }: RefreshAnalysisControlProps) {
   const [state, formAction, isPending] = useActionState(refreshAnalysisAction, idleActionState);
   const [banner, setBanner] = useState<{ kind: string; message: string } | null>(null);
@@ -80,7 +82,7 @@ export function RefreshAnalysisControl({
 
   return (
     <div className="flex flex-col items-start gap-2 md:items-end">
-      <form action={formAction}>
+      <form action={formAction} className="flex flex-col items-start gap-1 md:items-end">
         <input type="hidden" name="match_id" value={matchId} />
         <Button type="submit" variant="ghost" size="sm" disabled={running || insufficient}>
           <RefreshCw data-icon="inline-start" className={running ? "animate-spin" : undefined} />
@@ -90,6 +92,23 @@ export function RefreshAnalysisControl({
               ? `Refresh analysis · ${cost} ${creditNoun}`
               : "Refresh analysis"}
         </Button>
+        {/* US-067: when nothing changed, a normal refresh reuses the prior
+            result cheaply; this secondary submit forces a true re-run. When the
+            analysis is stale, the primary refresh already re-runs, so the force
+            path stays hidden to keep one primary action. */}
+        {!stale && !running ? (
+          <Button
+            type="submit"
+            name="force_refresh"
+            value="true"
+            variant="link"
+            size="sm"
+            className="h-auto p-0 text-xs text-muted-foreground"
+            disabled={insufficient}
+          >
+            Analyze again anyway
+          </Button>
+        ) : null}
       </form>
 
       {insufficient && !running ? (

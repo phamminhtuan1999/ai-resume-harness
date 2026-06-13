@@ -56,6 +56,17 @@ class AssistantInsightWorkflow(BaseAIWorkflow):
         bundle["user_profile_id"] = user_profile_id
         return bundle
 
+    def reuse_identity(self, context: dict[str, Any], data: Any) -> dict[str, Any]:
+        # US-067: the insight is determined by the saved match analysis and the
+        # missing-skills analysis it summarizes — both reused unchanged when
+        # their upstream steps reuse, so the insight reuses in lockstep.
+        analysis = data.match_analysis or {}
+        missing = data.missing_skills or {}
+        return {
+            "analysis": f"{analysis.get('id')}:{analysis.get('updated_at')}",
+            "missing": f"{missing.get('id')}:{missing.get('updated_at')}",
+        }
+
     def load_input(self, context: dict[str, Any]) -> InsightInput:
         analysis = self.data.get_saved_match_analysis(
             match_id=str(context["match"]["id"]),

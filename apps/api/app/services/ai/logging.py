@@ -63,11 +63,13 @@ class WorkflowLogger:
         model_provider: str | None = None,
         latency_ms: int | None = None,
         error_code: str | None = None,
+        cached: bool = False,
     ) -> str:
         """Log and return the canonical per-run line.
 
         Only the fields listed here are ever emitted; there is no path for raw
-        content to enter the line.
+        content to enter the line. ``cached`` marks a run served from a prior
+        result (US-067) — reuse is observable without any payload.
         """
         line = json.dumps(
             {
@@ -80,6 +82,7 @@ class WorkflowLogger:
                 "model_provider": model_provider,
                 "latency_ms": latency_ms,
                 "error_code": error_code,
+                "cached": cached,
             }
         )
         logger.info(line)

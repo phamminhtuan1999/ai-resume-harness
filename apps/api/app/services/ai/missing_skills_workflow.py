@@ -54,6 +54,23 @@ class MissingSkillsWorkflow(BaseAIWorkflow):
         bundle["user_profile_id"] = user_profile_id
         return bundle
 
+    def reuse_identity(self, context: dict[str, Any], data: Any) -> dict[str, Any]:
+        # US-067: gaps are determined by the saved match analysis plus the
+        # resume, job, and profile. When match analysis is reused unchanged its
+        # row is untouched, so this hash holds and the gap step reuses too.
+        profile = (
+            self.data.get_candidate_profile(user_profile_id=context["user_profile_id"]) or {}
+        )
+        resume = context.get("resume") or {}
+        job = context.get("job") or {}
+        analysis = data.match_analysis or {}
+        return {
+            "analysis": f"{analysis.get('id')}:{analysis.get('updated_at')}",
+            "resume": f"{resume.get('id')}:{resume.get('updated_at')}",
+            "job": f"{job.get('id')}:{job.get('updated_at')}",
+            "profile": f"{profile.get('id')}:{profile.get('updated_at')}",
+        }
+
     def load_input(self, context: dict[str, Any]) -> MissingSkillsInput:
         analysis = self.data.get_saved_match_analysis(
             match_id=str(context["match"]["id"]),

@@ -118,6 +118,7 @@ export function DecisionHeader({
               coreChainRunning={coreChainRunning}
               currentLabel={decision.label}
               billing={refreshBilling}
+              stale={pkg.stale}
             />
           </div>
         </div>

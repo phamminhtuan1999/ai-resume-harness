@@ -52,6 +52,9 @@ class WorkflowRunEnvelope(BaseModel):
     latency_ms: int | None = None
     confidence_score: float | None = None
     error_message: str | None = None
+    # True when this run was served from a prior persisted result without a
+    # model call (US-067 reuse). Additive; defaults false for every prior caller.
+    cached: bool = False
 
 
 class WorkflowResponse(BaseModel):

@@ -756,6 +756,26 @@ class FakeData:
 
     def update_workflow_run(self, *, run_id, **fields):
         self.run_updates.append((run_id, fields))
+        # Merge into the stored run so its final state (status, input_hash,
+        # snapshot) is visible to a later reuse lookup (US-067).
+        for run in self.runs:
+            if run["id"] == run_id:
+                run.update(fields)
+                break
+
+    def get_latest_run_for_reuse(
+        self, *, user_profile_id, subject_type, subject_id, workflow_type
+    ):
+        matches = [
+            run
+            for run in self.runs
+            if run.get("user_id") == user_profile_id
+            and run.get("subject_type") == subject_type
+            and run.get("subject_id") == subject_id
+            and run.get("workflow_type") == workflow_type
+            and run.get("status") in ("completed", "needs_review")
+        ]
+        return matches[-1] if matches else None
 
     def insert_activity(self, **kwargs):
         self.activities.append(kwargs)

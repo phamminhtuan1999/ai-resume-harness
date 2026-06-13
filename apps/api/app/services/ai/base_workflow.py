@@ -48,6 +48,7 @@ from app.services.ai.errors import (
 )
 from app.services.ai.logging import WorkflowLogger
 from app.services.ai.model_routing import resolve_model
+from app.services.ai.run_reuse import compute_identity_hash, is_reusable
 from app.services.ai.providers import (
     DeterministicFallbackProvider,
     GeminiProvider,
@@ -89,6 +90,10 @@ class BaseAIWorkflow(ABC):
     # Defaults to the foundation constant; a workflow may raise the bar (US-031
     # uses 0.6) without affecting any other workflow.
     low_confidence_threshold: float = LOW_CONFIDENCE_THRESHOLD
+    # US-067 run reuse: bump this when a workflow's prompt changes so prior runs
+    # stop matching and the next run genuinely re-calls the model. Per-workflow,
+    # so a bump invalidates reuse for that type only.
+    prompt_version: str = "v1"
 
     def __init__(
         self,
@@ -153,6 +158,18 @@ class BaseAIWorkflow(ABC):
         """Optional reconciliation step (e.g. recompute weighted scores)."""
         return output
 
+    def reuse_identity(self, context: Any, data: Any) -> dict[str, Any] | None:
+        """The identity of the inputs that determine this run's result (US-067).
+
+        Return a mapping of input key -> a value built ONLY from row ids and
+        ``updated_at`` stamps — never raw text. When the identity is unchanged
+        (and the prompt version and resolved model match the latest run), the
+        run is served from the prior result with no model call. Return ``None``
+        (the default) to opt out of reuse, in which case the workflow always
+        calls the provider as before.
+        """
+        return None
+
     # --- the standard flow ---------------------------------------------------
 
     def run(
@@ -162,6 +179,7 @@ class BaseAIWorkflow(ABC):
         user_profile_id: str,
         regenerate: bool = False,
         request_id: str | None = None,
+        force_refresh: bool = False,
     ) -> dict:
         started = time.monotonic()
 
@@ -181,6 +199,34 @@ class BaseAIWorkflow(ABC):
 
         try:
             data = self.load_input(context)
+
+            # US-067 reuse: when the inputs, prompt version, and resolved model
+            # all match the latest successful run, serve that result with no
+            # model call. Only attempted when a model would otherwise run (a key
+            # is configured) — deterministic runs cost no quota to repeat.
+            input_hash = compute_identity_hash(self.reuse_identity(context, data))
+            if not force_refresh and input_hash is not None and self.settings.gemini_api_key:
+                prior = self.data.get_latest_run_for_reuse(
+                    user_profile_id=user_profile_id,
+                    subject_type=self.subject_type,
+                    subject_id=subject_id,
+                    workflow_type=self.workflow_type,
+                )
+                if is_reusable(
+                    prior,
+                    input_hash=input_hash,
+                    prompt_version=self.prompt_version,
+                    model_name=resolve_model(self.workflow_type, self.settings),
+                ):
+                    return self._serve_cached(
+                        run_id=run_id,
+                        prior=prior,
+                        input_hash=input_hash,
+                        started=started,
+                        user_profile_id=user_profile_id,
+                        request_id=request_id,
+                    )
+
             output, provider_name, model_name = self._generate(data)
             output = self.postprocess(output, data)
             status: WorkflowStatus = (
@@ -208,6 +254,9 @@ class BaseAIWorkflow(ABC):
                 confidence_score=output.confidence_score,
                 model_provider=provider_name,
                 model_name=model_name,
+                # Record the run's reuse identity so the next run can match it.
+                input_hash=input_hash,
+                prompt_version=self.prompt_version,
                 output_snapshot_json=output.model_dump(mode="json"),
             )
             self._write_activity(
@@ -264,6 +313,62 @@ class BaseAIWorkflow(ABC):
             raise wrapped from exc
 
     # --- internals -----------------------------------------------------------
+
+    def _serve_cached(
+        self,
+        *,
+        run_id: str,
+        prior: dict[str, Any],
+        input_hash: str,
+        started: float,
+        user_profile_id: str,
+        request_id: str | None,
+    ) -> dict:
+        """Finalize this run from a prior result (US-067) — no provider call and
+        no domain write. The prior persisted output already stands; we only
+        stamp this run so the panel and the "analyzed at" signal reflect that an
+        (instant) run occurred, and mark the log/envelope ``cached``."""
+        status = prior.get("status")
+        provider_name = prior.get("model_provider")
+        model_name = prior.get("model_name")
+        snapshot = prior.get("output_snapshot_json") or {}
+        confidence = snapshot.get("confidence_score")
+        latency_ms = self._latency_ms(started)
+
+        self.data.update_workflow_run(
+            run_id=run_id,
+            status=status,
+            completed_at=_now_iso(),
+            latency_ms=latency_ms,
+            confidence_score=confidence,
+            model_provider=provider_name,
+            model_name=model_name,
+            input_hash=input_hash,
+            prompt_version=self.prompt_version,
+            output_snapshot_json=snapshot,
+        )
+        self.log.emit_run(
+            request_id=request_id,
+            user_id=user_profile_id,
+            workflow_type=self.workflow_type,
+            subject_type=self.subject_type,
+            status=status,
+            model_provider=provider_name,
+            latency_ms=latency_ms,
+            cached=True,
+        )
+        envelope = WorkflowRunEnvelope(
+            id=run_id,
+            workflow_type=self.workflow_type,
+            status=status,  # type: ignore[arg-type]
+            model_provider=provider_name,
+            model_name=model_name,
+            latency_ms=latency_ms,
+            confidence_score=confidence,
+            error_message=None,
+            cached=True,
+        )
+        return WorkflowResponse(workflow_run=envelope, result=snapshot).model_dump()
 
     def _generate(self, data: Any) -> tuple[AIOutputBase, str, str]:
         prompt = self.build_prompt(data)

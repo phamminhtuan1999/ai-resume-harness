@@ -62,6 +62,23 @@ class MatchAnalysisWorkflow(BaseAIWorkflow):
         bundle["user_profile_id"] = user_profile_id
         return bundle
 
+    def reuse_identity(self, context: dict[str, Any], data: Any) -> dict[str, Any]:
+        # US-067: the analysis is determined by the resume, job, and profile —
+        # row ids + updated_at only (never the text), so an edit to any of them
+        # flips the hash and forces a real re-run.
+        profile = (
+            self.data.get_candidate_profile(user_profile_id=context["user_profile_id"]) or {}
+        )
+        resume = context.get("resume") or {}
+        job = context.get("job") or {}
+        match = context.get("match") or {}
+        return {
+            "match": match.get("id"),
+            "resume": f"{resume.get('id')}:{resume.get('updated_at')}",
+            "job": f"{job.get('id')}:{job.get('updated_at')}",
+            "profile": f"{profile.get('id')}:{profile.get('updated_at')}",
+        }
+
     def load_input(self, context: dict[str, Any]) -> MatchInput:
         profile = self.data.get_candidate_profile(
             user_profile_id=context["user_profile_id"]

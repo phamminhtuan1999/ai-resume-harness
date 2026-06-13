@@ -95,6 +95,7 @@ class RunFullOrchestrator:
         match_id: str,
         user_profile_id: str,
         force: bool = False,
+        force_refresh: bool = False,
         request_id: str | None = None,
     ) -> dict:
         # Ownership is asserted once up front; an unauthorized call writes nothing.
@@ -155,6 +156,9 @@ class RunFullOrchestrator:
                     user_profile_id=user_profile_id,
                     regenerate=force,
                     request_id=request_id,
+                    # force_refresh bypasses US-067 reuse; force (regenerate)
+                    # only bypasses the coarse "already done" skip above.
+                    force_refresh=force_refresh,
                 )
                 outcomes[workflow_type] = "completed"
             except AIWorkflowError as exc:

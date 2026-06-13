@@ -2,7 +2,7 @@
 
 ## Status
 
-planned
+implemented
 
 ## Lane
 
@@ -86,4 +86,41 @@ since it changes accepted Refresh Analysis behavior (decision 0015 §6).
 
 ## Evidence
 
-Add commands, reports, screenshots, or links after validation exists.
+Implemented 2026-06-13.
+
+- Migration `apps/web/supabase/migrations/0027_period15_ai_run_reuse.sql` adds
+  nullable `input_hash` + `prompt_version` to `ai_workflow_runs` and a reuse
+  lookup index. Applied to live Supabase (additive, idempotent); both columns
+  verified nullable.
+- `app/services/ai/run_reuse.py`: `compute_identity_hash` (redaction-safe
+  row-id+`updated_at` sha256, mirrors `analysis_package._compute_inputs_hash`)
+  and `is_reusable` (same hash + prompt version + resolved model + success
+  status; null prior hash never matches).
+- `BaseAIWorkflow`: `prompt_version` constant (`v1`), `reuse_identity` hook
+  (default `None` = opt out), and a `run()` reuse path that records the identity
+  on every run and serves the prior `output_snapshot_json` with no provider or
+  domain write on a hit. `WorkflowRunEnvelope` + `WorkflowLogger` gain a
+  `cached` field.
+- `force_refresh` threaded through `RunFullOrchestrator.run`, `run_refresh`, and
+  the refresh endpoint (distinct from the coarse `force` skip).
+- Core chain opted in: `match_analysis`, `missing_skills`, `assistant_insight`
+  each implement `reuse_identity` (resume/job/profile/analysis row ids +
+  `updated_at`).
+- Web: `refreshAnalysisPackage` sends `force_refresh`; `refreshAnalysisAction`
+  reads it; the match surface shows "Analyze again anyway" only when not stale.
+- Decision `docs/decisions/0022-ai-run-reuse.md` (reuse key = input hash +
+  prompt version + model policy; changes accepted Refresh Analysis behavior,
+  decision 0015 §6).
+- Unit: `tests/test_run_reuse.py` — identity hash composition (any input change
+  flips it; order-independent), reuse decision matrix (status/hash/version/model
+  mismatches, null-hash historical rows), prompt-version bump.
+- Integration: an unchanged re-run is `cached` with zero provider calls and
+  serves the prior output; a resume change and `force_refresh` each force a real
+  re-run; no reuse is attempted without a model key.
+- `.venv/bin/python -m pytest -q` → 475 passed; `ruff check` clean. Web:
+  `tsc --noEmit` clean, 255 web tests pass, ESLint clean.
+
+Pending:
+
+- E2E (analyze twice without edits → second pass fast; edit resume → new run)
+  is left for a manual/Playwright pass; durable proof here is unit + integration.

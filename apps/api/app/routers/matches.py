@@ -533,7 +533,7 @@ def _refresh_error(status_code: int, code: str, message: str, *, retryable: bool
 
 
 @router.post("/{match_id}/analysis-package/refresh")
-def refresh_analysis_package(
+async def refresh_analysis_package(
     match_id: str,
     request: Request,
     background_tasks: BackgroundTasks,
@@ -546,7 +546,16 @@ def refresh_analysis_package(
     the existing run-status polling and refetches the package on completion. A
     second refresh while one is in flight is rejected server-side with 409.
     Downstream artifacts are never regenerated (decision 0015 §6).
+
+    The optional body flag ``force_refresh`` bypasses US-067 run reuse ("Analyze
+    again anyway"); the default reuses the prior result when inputs are unchanged.
     """
+    try:
+        body = await request.json()
+    except Exception:
+        body = None
+    force_refresh = bool((body or {}).get("force_refresh")) if isinstance(body, dict) else False
+
     data_client = _data_client()
     settings = get_settings()
     try:
@@ -596,6 +605,7 @@ def refresh_analysis_package(
         match_id=match_id,
         request_id=request.headers.get("x-request-id"),
         marker_run_id=str(marker["id"]),
+        force_refresh=force_refresh,
     )
     return JSONResponse(status_code=202, content={"status": "refreshing", "match_id": match_id})
 

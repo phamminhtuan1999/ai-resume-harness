@@ -414,6 +414,7 @@ export async function refreshAnalysisPackage({
   apiBaseUrl,
   matchId,
   sessionToken,
+  forceRefresh = false,
   fetchImpl = fetch,
 }) {
   if (!apiBaseUrl) {
@@ -432,7 +433,13 @@ export async function refreshAnalysisPackage({
       `${apiBaseUrl}/api/matches/${matchId}/analysis-package/refresh`,
       {
         method: "POST",
-        headers: { Authorization: `Bearer ${sessionToken}` },
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+          "Content-Type": "application/json",
+        },
+        // US-067: "Analyze again anyway" bypasses run reuse; the default reuses
+        // an unchanged prior result.
+        body: JSON.stringify({ force_refresh: forceRefresh }),
       }
     );
   } catch {

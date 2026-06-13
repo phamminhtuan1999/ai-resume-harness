@@ -94,6 +94,7 @@ def run_refresh(
     match_id: str,
     request_id: str | None = None,
     marker_run_id: str | None = None,
+    force_refresh: bool = False,
 ) -> dict[str, Any]:
     """Execute one refresh: conditional extraction → core chain → recompute.
 
@@ -125,6 +126,9 @@ def run_refresh(
         match_id=match_id,
         user_profile_id=user_profile_id,
         force=True,
+        # Unchanged inputs reuse the prior result (cheap repeat refresh);
+        # "Analyze again anyway" sets force_refresh to bypass reuse end-to-end.
+        force_refresh=force_refresh,
         request_id=request_id,
     )
 

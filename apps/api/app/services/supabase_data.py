@@ -379,6 +379,32 @@ class SupabaseDataClient:
         rows = response.json()
         return rows[0] if rows else None
 
+    def get_latest_run_for_reuse(
+        self, *, user_profile_id: str, subject_type: str, subject_id: str, workflow_type: str
+    ) -> dict[str, Any] | None:
+        """The latest *successful* run for a subject+type, with its reuse keys
+        (US-067). Filtered to completed/needs_review so the in-flight run that
+        triggered this lookup is never returned as its own reuse source."""
+        response = self._request(
+            "GET",
+            "/ai_workflow_runs",
+            params={
+                "select": (
+                    "id,status,model_provider,model_name,input_hash,prompt_version,"
+                    "output_snapshot_json,created_at"
+                ),
+                "user_id": f"eq.{user_profile_id}",
+                "subject_type": f"eq.{subject_type}",
+                "subject_id": f"eq.{subject_id}",
+                "workflow_type": f"eq.{workflow_type}",
+                "status": "in.(completed,needs_review)",
+                "order": "created_at.desc",
+                "limit": "1",
+            },
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
     def get_saved_match_analysis(
         self, *, match_id: str, user_profile_id: str
     ) -> dict[str, Any] | None:

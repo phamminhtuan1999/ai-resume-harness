@@ -1362,6 +1362,8 @@ export async function refreshAnalysisAction(
   if (typeof matchId !== "string" || !matchId) {
     return failure("A match is required.");
   }
+  // "Analyze again anyway" (US-067): bypass run reuse on unchanged inputs.
+  const forceRefresh = formData.get("force_refresh") === "true";
 
   const sessionToken = await getCurrentSessionToken();
   const creditCheck = await hasEnoughCredits(context.userProfileId, "job_analysis_refresh");
@@ -1375,6 +1377,7 @@ export async function refreshAnalysisAction(
     apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
     matchId,
     sessionToken,
+    forceRefresh,
   });
 
   if (!result.ok) {
