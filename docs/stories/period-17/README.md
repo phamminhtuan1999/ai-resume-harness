@@ -29,7 +29,10 @@ Confirmed before slicing:
 
 Conclusion: the diff needs **no backend** (versions already client-side); the
 PDF preview needs **one read-only endpoint** that reuses the export render
-pipeline without the export stamp.
+pipeline without the export stamp. The preview must render the same PDF
+configuration the user would export at that moment: current draft version,
+selected page count, selected font profile, and the same server render
+pipeline.
 
 ## Stories
 
@@ -41,7 +44,8 @@ pipeline without the export stamp.
 ## Scope Summary
 
 In scope: read-only `GET /api/draft-cvs/{id}/preview/pdf`; "Preview PDF" button +
-inline `<iframe>` viewer; client-side `version-diff.mjs` (Words/Lines + char
-stats); `draftCvToText` serializer; the Version Diff panel (FROM/TO any two CV
+inline `<iframe>` viewer; preview/export option parity for selected `pages` and
+`font`; client-side `version-diff.mjs` (Words/Lines + char stats);
+`draftCvToText` serializer; the Version Diff panel (FROM/TO any two CV
 versions). Out of scope: a standalone resume analyzer page, score cards, visual
 PDF pixel diff, diffing against the original imported resume.

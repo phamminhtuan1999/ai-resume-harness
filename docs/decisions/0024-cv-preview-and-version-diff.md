@@ -33,8 +33,10 @@ export render pipeline (`_resolve_render` → `build_render_model` →
 with `Content-Disposition: inline` and **does not** call `_stamp_export` — no
 status flip, no timestamp, no activity row. The web client fetches it, makes a
 blob URL, and embeds it in an `<iframe>` behind a "Preview PDF" button
-(on-demand, so a render only happens when asked). Reusing the same pipeline
-guarantees the preview is byte-for-byte what Export would produce.
+(on-demand, so a render only happens when asked). The preview must use the same
+export configuration the user has selected at that moment — page count and font
+profile included — so it is byte-for-byte what Export would produce for that
+same draft version and option set.
 
 **2. Version Diff runs entirely client-side.** `getDraftCvDetail` already loads
 `cv_json` for every version on the page, so no backend call, endpoint, or
@@ -72,13 +74,17 @@ Positive:
 
 - Previewing the rendered CV has zero side effects (no premature "exported").
 - Version Diff costs nothing server-side and needs no migration.
-- One render pipeline backs both Export and Preview, so they can never drift.
+- One render pipeline and one selected render configuration back both Export and
+  Preview, so they can never drift.
 - The diff text is exactly the preview content (renderable gating reused).
 
 Tradeoffs:
 
 - The preview endpoint duplicates the PDF branch of `_export` (minus the stamp);
   the two must stay in sync if the render pipeline changes.
+- The web preview and export controls must share page-count/font state. If they
+  do not, the preview becomes only a default/recommended sample and violates the
+  trust contract for this feature.
 - Headless browsers without a PDF plugin show a blank `<iframe>`; real browsers
   render it. (Functionally proven by the route test asserting `%PDF-` bytes.)
 - `draftCvToText` is a second serializer alongside the backend Markdown/render
@@ -88,3 +94,17 @@ Tradeoffs:
 
 - US-078 implements the preview endpoint + web viewer.
 - US-079 implements the diff util, serializer, and the Version Diff panel.
+
+## Amendment I - Selected Export Options Are Part Of Preview
+
+Date: 2026-06-15
+
+BA review clarified that "Preview PDF" must mean the PDF the user is about to
+download, not a generic recommended render. Page count and font profile are
+material rendering choices, so the preview request must pass the same selected
+`pages` and `font` options used by Export.
+
+Current implementation status after review: the backend endpoint accepts
+`pages` and `font`, but the web preview component does not yet pass the selected
+export controls. US-078 remains accepted, with a follow-up required to wire
+shared page/font state into Preview.
