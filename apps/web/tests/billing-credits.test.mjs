@@ -67,12 +67,16 @@ test("paid credit checkout session builds a ledger grant", () => {
       pack_id: "builder",
       credits: "60",
       user_id: "7b190da1-58ac-411f-8e39-a6936f092ad4",
+      clerk_user_id: "user_2abc",
+      email: "buyer@example.com",
     },
   });
 
   assert.equal(result.ok, true);
   assert.deepEqual(result.grant, {
     userId: "7b190da1-58ac-411f-8e39-a6936f092ad4",
+    clerkUserId: "user_2abc",
+    email: "buyer@example.com",
     packId: "builder",
     credits: 60,
     amountTotal: 1900,
@@ -80,6 +84,46 @@ test("paid credit checkout session builds a ledger grant", () => {
     checkoutSessionId: "cs_test_123",
     paymentIntentId: "pi_test_123",
   });
+});
+
+test("grant carries self-heal identity, falling back across metadata and session", () => {
+  // Brand-new buyer: the webhook needs clerk_user_id + email to upsert a
+  // not-yet-visible user_profiles row instead of failing the ledger FK.
+  const fromCustomerEmail = buildCreditGrantFromCheckoutSession({
+    id: "cs_test_456",
+    mode: "payment",
+    payment_status: "paid",
+    amount_total: 900,
+    currency: "usd",
+    customer_email: "fallback@example.com",
+    metadata: {
+      billing_kind: "credit_pack",
+      pack_id: "starter",
+      credits: "20",
+      user_id: "u-1",
+      clerk_user_id: "user_new",
+    },
+  });
+  assert.equal(fromCustomerEmail.grant.clerkUserId, "user_new");
+  assert.equal(fromCustomerEmail.grant.email, "fallback@example.com");
+
+  // Older in-flight session predating the metadata keys: identity stays empty
+  // so the webhook keeps the existing user_id path.
+  const legacy = buildCreditGrantFromCheckoutSession({
+    id: "cs_test_789",
+    mode: "payment",
+    payment_status: "paid",
+    amount_total: 900,
+    currency: "usd",
+    metadata: {
+      billing_kind: "credit_pack",
+      pack_id: "starter",
+      credits: "20",
+      user_id: "u-2",
+    },
+  });
+  assert.equal(legacy.grant.clerkUserId, "");
+  assert.equal(legacy.grant.email, "");
 });
 
 test("stranded webhook events stay retryable so credits are not lost", () => {

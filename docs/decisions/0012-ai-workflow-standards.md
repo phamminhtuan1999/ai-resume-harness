@@ -77,6 +77,19 @@ Gemini stays the provider for MVP (already configured). OpenAI/Claude are
 post-MVP provider options behind the same abstraction. LangGraph orchestration
 and Browserbase/Stagehand remain post-MVP.
 
+**Update (US-069):** provider selection is now configuration-driven. An
+`AI_PROVIDER` setting (default `gemini`) chooses the adapter, and construction
+is centralized in a registry/factory in
+`apps/api/app/services/ai/providers.py` (`build_primary_provider` /
+`register_provider`). The adapter contract — `name`, `model_name`,
+`generate() -> dict`, typed `ProviderError` classification, shared JSON
+validation + one repair retry — is documented on the `AIProvider` protocol.
+The selection rule (primary when configured, else deterministic fallback;
+fallback also on terminal failure) still lives in `BaseAIWorkflow`; no workflow
+subclass, router, or extractor names a concrete adapter. `model_provider` on
+`ai_workflow_runs` is no longer a closed enum (migration 0029) so a new adapter
+records its own name without a schema change.
+
 ## Alternatives Considered
 
 1. **Keep AI in Next.js server actions, swap deterministic for inline Gemini.**

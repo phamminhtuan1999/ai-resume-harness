@@ -50,9 +50,10 @@ from app.services.ai.logging import WorkflowLogger
 from app.services.ai.model_routing import resolve_model
 from app.services.ai.run_reuse import compute_identity_hash, is_reusable
 from app.services.ai.providers import (
+    AIProvider,
     DeterministicFallbackProvider,
-    GeminiProvider,
     ProviderError,
+    build_primary_provider,
 )
 from app.settings import Settings
 
@@ -373,11 +374,14 @@ class BaseAIWorkflow(ABC):
     def _generate(self, data: Any) -> tuple[AIOutputBase, str, str]:
         prompt = self.build_prompt(data)
 
-        gemini = self._build_gemini_provider(prompt)
-        if gemini is not None:
+        primary = self._build_primary_provider(prompt)
+        if primary is not None:
             try:
-                raw = gemini.generate()
-                return self._validate(raw), "gemini", gemini.model_name
+                raw = primary.generate()
+                # The run records the adapter's own name (US-069), so swapping
+                # AI_PROVIDER swaps the recorded model_provider with no other
+                # change. 'gemini' deployments are unaffected.
+                return self._validate(raw), primary.name, primary.model_name
             except ProviderError as exc:
                 self.log.emit_fallback(
                     workflow_type=self.workflow_type, reason_code=exc.reason_code
@@ -390,14 +394,14 @@ class BaseAIWorkflow(ABC):
             raise self._map_provider_error(exc) from exc
         return self._validate(raw), "deterministic", fallback.model_name
 
-    def _build_gemini_provider(self, prompt: str) -> GeminiProvider | None:
-        if not self.settings.gemini_api_key:
-            return None
-        return GeminiProvider(
+    def _build_primary_provider(self, prompt: str) -> AIProvider | None:
+        # US-069: provider selection is centralized in the factory; this method
+        # only supplies the per-run inputs. The tier-resolved model (US-066) is
+        # passed so the recorded model_name reflects the task's tier.
+        return build_primary_provider(
             prompt=prompt,
             output_model=self.output_model,
             settings=self.settings,
-            # Tier resolution keyed by this workflow's type (US-066).
             model=resolve_model(self.workflow_type, self.settings),
             client=self._gemini_client,
         )

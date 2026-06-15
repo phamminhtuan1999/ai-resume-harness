@@ -24,6 +24,8 @@ def make_settings(
     gemini_fast_model: str = "",
     gemini_heavy_model: str = "",
     ai_use_heavy_model_for_draft_cv: bool = False,
+    # US-069: which provider adapter to build. Default 'gemini' matches prod.
+    ai_provider: str = "gemini",
 ) -> SimpleNamespace:
     return SimpleNamespace(
         gemini_api_key=gemini_api_key,
@@ -33,6 +35,7 @@ def make_settings(
         gemini_fast_model=gemini_fast_model,
         gemini_heavy_model=gemini_heavy_model,
         ai_use_heavy_model_for_draft_cv=ai_use_heavy_model_for_draft_cv,
+        ai_provider=ai_provider,
     )
 
 

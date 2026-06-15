@@ -24,6 +24,7 @@ export class StripeProviderError extends Error {
 type CreateCreditCheckoutSessionInput = {
   packId: string;
   userProfileId: string;
+  clerkUserId: string;
   email: string;
   origin?: string | null;
   fetchImpl?: typeof fetch;
@@ -36,6 +37,7 @@ function getAppOrigin(origin?: string | null) {
 export async function createCreditCheckoutSession({
   packId,
   userProfileId,
+  clerkUserId,
   email,
   origin,
   fetchImpl = fetch,
@@ -66,6 +68,12 @@ export async function createCreditCheckoutSession({
   params.set("metadata[pack_id]", pack.id);
   params.set("metadata[credits]", String(pack.credits));
   params.set("metadata[user_id]", userProfileId);
+  // Carry the buyer's Clerk identity + email so the webhook can self-heal the
+  // user_profiles row if it isn't durably visible yet (a brand-new buyer whose
+  // profile was created in the very same checkout action). Without these the
+  // ledger FK to user_profiles can fail and a first purchase is lost for good.
+  params.set("metadata[clerk_user_id]", clerkUserId);
+  params.set("metadata[email]", email);
 
   const response = await fetchImpl("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",

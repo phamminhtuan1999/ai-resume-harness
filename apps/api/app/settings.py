@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     supabase_url: str = Field(default="", alias="SUPABASE_URL")
     supabase_service_role_key: str = Field(default="", alias="SUPABASE_SERVICE_ROLE_KEY")
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
+    # US-069: selects which provider adapter the workflow foundation builds.
+    # Default 'gemini' keeps every existing deployment byte-for-byte unchanged.
+    # An unknown name fails fast at first use with a clear configuration error.
+    ai_provider: str = Field(default="gemini", alias="AI_PROVIDER")
     # The default tier (US-066). Fast/heavy tiers fall back to this when unset,
     # so a deployment with only GEMINI_MODEL keeps its current model on every task.
     gemini_model: str = Field(default="gemini-3.5-flash", alias="GEMINI_MODEL")

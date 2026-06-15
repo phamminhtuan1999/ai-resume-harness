@@ -1,4 +1,4 @@
-import { TextCursorInput } from "lucide-react";
+import { Coins, TextCursorInput } from "lucide-react";
 
 import { ResumeForm } from "@/components/forms/resume-form";
 import { PageHeader } from "@/components/page-header";
@@ -12,15 +12,33 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-export default function NewResumePage() {
+export default async function NewResumePage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ from?: string }>;
+}) {
+  const params = await searchParams;
+  const fromBuyCredits = params?.from === "buy-credits";
+
   return (
-    
+
       <div className="mx-auto grid w-full max-w-6xl gap-5 xl:grid-cols-[1fr_360px]">
         <section className="flex flex-col gap-5">
           <PageHeader
             description="Paste Markdown or plain text, or import a resume file for conversion."
             title="Add resume"
           />
+          {fromBuyCredits ? (
+            <Alert>
+              <Coins />
+              <AlertTitle>Add a resume first</AlertTitle>
+              <AlertDescription>
+                Credits are spent analyzing your resume against jobs, so there is nothing to
+                use them on yet. Import a resume here — it also sets up your profile — then
+                head back to pricing to buy credits.
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <SetupNotice />
           <Card>
             <CardHeader>

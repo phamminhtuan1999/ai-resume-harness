@@ -88,10 +88,23 @@ export function buildCreditGrantFromCheckoutSession(session) {
     return { ok: false, reason: "credit_mismatch" };
   }
 
+  // Identity the webhook can use to self-heal a not-yet-visible profile row.
+  // Older in-flight sessions predate these metadata keys, so they stay empty
+  // and the grant falls back to the existing user_id path.
+  const clerkUserId = String(metadata.clerk_user_id || "");
+  const email = String(
+    metadata.email ||
+      session.customer_email ||
+      (session.customer_details && session.customer_details.email) ||
+      ""
+  );
+
   return {
     ok: true,
     grant: {
       userId,
+      clerkUserId,
+      email,
       packId: pack.id,
       credits,
       amountTotal: typeof session.amount_total === "number" ? session.amount_total : pack.priceCents,

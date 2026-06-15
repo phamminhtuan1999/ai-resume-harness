@@ -13,7 +13,7 @@ import { hasSupabaseEnv } from "@/lib/env";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 
 async function requireBillingUserProfile(): Promise<
-  | { ok: true; userProfileId: string; email: string }
+  | { ok: true; userProfileId: string; clerkUserId: string; email: string; hasResume: boolean }
   | { ok: false }
 > {
   const appUser = await getCurrentAppUser();
@@ -40,7 +40,21 @@ async function requireBillingUserProfile(): Promise<
     return { ok: false };
   }
 
-  return { ok: true, userProfileId: data.id, email: appUser.email };
+  // Credits are only spendable on resume × job workflows, so a buyer with no
+  // resume yet has nothing to spend on. We surface that as a gate below rather
+  // than taking a payment for an unusable balance.
+  const { count: resumeCount } = await supabase
+    .from("resumes")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", data.id);
+
+  return {
+    ok: true,
+    userProfileId: data.id,
+    clerkUserId: appUser.clerkUserId,
+    email: appUser.email,
+    hasResume: (resumeCount ?? 0) > 0,
+  };
 }
 
 export async function startCreditCheckoutAction(formData: FormData) {
@@ -51,6 +65,14 @@ export async function startCreditCheckoutAction(formData: FormData) {
     redirect("/sign-in?redirect_url=%2Fpricing");
   }
 
+  if (!context.hasResume) {
+    // A brand-new buyer with no resume has nothing to spend credits on yet, and
+    // their profile row is only just created. Route them into the resume import
+    // flow (which also completes their profile) before any payment, instead of
+    // selling an unusable balance.
+    redirect("/resumes/new?from=buy-credits");
+  }
+
   const packId = String(formData.get("pack_id") || "");
   const requestHeaders = await headers();
 
@@ -58,6 +80,7 @@ export async function startCreditCheckoutAction(formData: FormData) {
     const checkout = await createCreditCheckoutSession({
       packId,
       userProfileId: context.userProfileId,
+      clerkUserId: context.clerkUserId,
       email: context.email,
       origin: requestHeaders.get("origin"),
     });

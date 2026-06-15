@@ -67,11 +67,34 @@ class ProviderInvalidOutputError(ProviderError):
     reason_code = "invalid_json"
 
 
+class ProviderConfigurationError(RuntimeError):
+    """``AI_PROVIDER`` names an adapter that is not registered (US-069).
+
+    Deliberately NOT a ``ProviderError``: a misconfigured provider name is a
+    deployment bug to surface loudly (fail fast), not a transient model failure
+    to silently absorb via the deterministic fallback."""
+
+
 @runtime_checkable
 class AIProvider(Protocol):
-    """Minimal contract: produce a schema-shaped dict, or raise ``ProviderError``."""
+    """The provider adapter contract (US-069). Every adapter:
+
+    - exposes ``name`` (recorded as ``model_provider`` on the run row) and
+      ``model_name`` (the tier-resolved model, US-066);
+    - implements ``generate() -> dict`` returning output validated against the
+      workflow's Pydantic model, or raising a typed ``ProviderError``
+      (rate limit / timeout / unavailable / invalid output) so the existing
+      fallback and friendly-error behavior is inherited unchanged.
+
+    JSON validation + one repair retry live in shared gateway code
+    (``generate_structured``), so an adapter without native structured output
+    still returns schema-valid dicts or raises ``ProviderInvalidOutputError``.
+    The selection rule (primary when configured, else deterministic fallback;
+    fallback also on terminal failure) stays in ``BaseAIWorkflow``; adapters
+    never decide fallback."""
 
     name: str
+    model_name: str
 
     def generate(self) -> dict: ...
 
@@ -243,3 +266,78 @@ class DeterministicFallbackProvider:
             raise ProviderInvalidOutputError(
                 "The fallback generator failed to produce output."
             ) from exc
+
+
+# --- provider registry + factory (US-069) ---------------------------------------
+#
+# Provider construction is centralized here so no workflow subclass, router, or
+# extractor names a concrete adapter. ``AI_PROVIDER`` selects the builder; each
+# builder returns a ready ``AIProvider`` or ``None`` when that provider is not
+# configured (so the base workflow falls back to deterministic, exactly as the
+# Gemini-with-no-key path does today). Registering a new adapter is the entire
+# cost of switching providers.
+
+ProviderBuilder = Callable[..., "AIProvider | None"]
+
+
+def _build_gemini_provider(
+    *,
+    prompt: str,
+    output_model: type[BaseModel],
+    settings: Settings,
+    model: str,
+    client: Any | None = None,
+) -> AIProvider | None:
+    if not settings.gemini_api_key:
+        return None  # not configured → deterministic fallback (unchanged behavior)
+    return GeminiProvider(
+        prompt=prompt,
+        output_model=output_model,
+        settings=settings,
+        model=model,
+        client=client,
+    )
+
+
+_PROVIDER_BUILDERS: dict[str, ProviderBuilder] = {"gemini": _build_gemini_provider}
+
+
+def register_provider(name: str, builder: ProviderBuilder) -> None:
+    """Register an adapter builder under ``name`` (the value of ``AI_PROVIDER``).
+
+    This is the only integration point a new provider needs; nothing in the
+    workflow layer changes. Tests use it to prove a second adapter swaps in."""
+    _PROVIDER_BUILDERS[name] = builder
+
+
+def registered_providers() -> list[str]:
+    return sorted(_PROVIDER_BUILDERS)
+
+
+def build_primary_provider(
+    *,
+    prompt: str,
+    output_model: type[BaseModel],
+    settings: Settings,
+    model: str,
+    client: Any | None = None,
+) -> AIProvider | None:
+    """Build the primary provider selected by ``settings.ai_provider`` (US-069).
+
+    Returns ``None`` when the selected provider is not configured (the base
+    workflow then uses the deterministic fallback). Raises
+    ``ProviderConfigurationError`` — fail fast — when the name is unknown."""
+    name = getattr(settings, "ai_provider", "gemini") or "gemini"
+    builder = _PROVIDER_BUILDERS.get(name)
+    if builder is None:
+        raise ProviderConfigurationError(
+            f"AI_PROVIDER='{name}' is not a registered provider. "
+            f"Configured providers: {registered_providers()}."
+        )
+    return builder(
+        prompt=prompt,
+        output_model=output_model,
+        settings=settings,
+        model=model,
+        client=client,
+    )

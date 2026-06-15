@@ -28,7 +28,10 @@ WorkflowType = Literal[
 ]
 WorkflowStatus = Literal["queued", "running", "completed", "needs_review", "failed"]
 SubjectType = Literal["match", "resume", "job", "dashboard"]
-ModelProvider = Literal["gemini", "deterministic"]
+# US-069: provider names are open-ended — adapters register by name, so this is
+# a free string, not a closed enum. 'gemini' and 'deterministic' ship today; a
+# new adapter records its own name with no schema change.
+ModelProvider = str
 Importance = Literal["low", "medium", "high"]
 
 

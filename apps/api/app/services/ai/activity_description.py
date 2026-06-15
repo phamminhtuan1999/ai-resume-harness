@@ -21,7 +21,7 @@ from pydantic import BaseModel
 
 from app.services.ai.model_routing import resolve_model
 from app.services.ai.prompting import with_preamble
-from app.services.ai.providers import GeminiProvider
+from app.services.ai.providers import build_primary_provider
 
 Importance = Literal["low", "medium", "high"]
 
@@ -107,13 +107,12 @@ class ActivityDescriptionHelper:
     ) -> ActivityDescription:
         """Enrich via Gemini when configured; otherwise (or on ANY failure)
         return ``fallback`` unchanged."""
-        if not getattr(self._settings, "gemini_api_key", ""):
-            return fallback
-
         prompt = with_preamble(
             _ACTIVITY_DESCRIPTION_TASK + json.dumps(event_context, default=str)
         )
-        provider = GeminiProvider(
+        # US-069: build whichever provider AI_PROVIDER selects; None means it is
+        # not configured, so we keep the deterministic fallback text.
+        provider = build_primary_provider(
             prompt=prompt,
             output_model=ActivityDescriptionOutput,
             settings=self._settings,
@@ -121,6 +120,8 @@ class ActivityDescriptionHelper:
             model=resolve_model("activity_description", self._settings),
             client=self._gemini_client,
         )
+        if provider is None:
+            return fallback
         try:
             raw = provider.generate()
             output = ActivityDescriptionOutput.model_validate(raw)
@@ -132,6 +133,6 @@ class ActivityDescriptionHelper:
             assistant_description=_clean_text(output.assistant_description)
             or fallback.assistant_description,
             importance=output.importance,
-            provider="gemini",
+            provider=provider.name,
             model_name=provider.model_name,
         )

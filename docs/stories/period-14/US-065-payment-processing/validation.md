@@ -102,6 +102,38 @@ Completed 2026-06-12 (payment-flow recheck session):
   inserted a posted +20 starter ledger row ($9.00) attributed to the owner's
   profile; derived balance moved 210 -> 230.
 
+Completed 2026-06-14 (first-purchase credit-loss fix):
+
+- Fixed a brand-new buyer's first purchase not crediting. The ledger
+  `user_id` FK requires a `user_profiles` row, but a new buyer's profile is
+  created in the very same `startCreditCheckoutAction` that launches the
+  payment, so it can be absent or not yet visible to the webhook's pooled
+  connection when the event fires. The ledger insert then failed `23503`, the
+  event was marked `failed`, and Stripe's retry could not recover because the
+  webhook only had the profile UUID — not the `clerk_user_id`/`email` needed to
+  recreate the row. Net effect: a first purchase was lost while later ones (once
+  the profile was solidly present) worked.
+- Front-door gate (primary fix): a buyer with no resume can no longer reach
+  Stripe. `startCreditCheckoutAction` now checks the resume count and redirects
+  to `/resumes/new?from=buy-credits` (the import flow, which also completes the
+  profile) instead of selling an unusable balance — credits are only spendable
+  on resume × job workflows. The import page shows a short "add a resume first"
+  notice when arrived from this gate. This keeps brand-new users out of the
+  fragile create-profile-then-immediately-pay path entirely.
+- Webhook self-heal (safety net for races/retries): checkout now carries
+  `metadata.clerk_user_id` and `metadata.email` (`billing-stripe.ts`,
+  `billing-actions.ts`); the grant parser surfaces both (`billing-credits.mjs`);
+  and the webhook self-heals the profile via an upsert by `clerk_user_id` before
+  the ledger insert, granting against the canonical id it returns
+  (`billing-ledger.ts` `resolveGrantUserId`). Idempotent under retries; older
+  in-flight sessions without the new metadata keep the prior `user_id` path
+  unchanged. No schema change.
+- `npm run test --workspace apps/web` passed 268 tests (new grant-identity
+  coverage) on Node 24; lint and tsc clean. (Note: the repo's tests/lint need
+  Node 18+; a Node 16 shell fails 6 unrelated File/structuredClone tests.)
+
 Still pending:
 
 - Stripe go-live checklist review before production activation.
+- Live recheck of a genuinely new account (no resume/jobs) completing a first
+  purchase end-to-end against Supabase.
