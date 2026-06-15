@@ -66,6 +66,106 @@ export function buildDraftCvView(cvJson) {
   };
 }
 
+/* True when a built view (buildDraftCvView output) has anything the user can
+   actually review or export: a summary, skills, education, or at least one
+   renderable work/project bullet. A draft can be saved with none of these — the
+   offline fallback yields an empty CV when the structured profile is empty — and
+   the page must say so honestly instead of showing a blank preview with live
+   Export buttons over a contentless document. */
+export function hasRenderableContent(view) {
+  if (!view || typeof view !== "object") return false;
+  if ((view.professionalSummary || "").trim()) return true;
+  if (Array.isArray(view.skills) && view.skills.length) return true;
+  if (Array.isArray(view.education) && view.education.length) return true;
+  const hasBullets = (entries) =>
+    (Array.isArray(entries) ? entries : []).some(
+      (entry) => Array.isArray(entry?.bullets) && entry.bullets.length > 0
+    );
+  return hasBullets(view.workExperience) || hasBullets(view.projects);
+}
+
+/* Serialize a draft CV version into deterministic plain text (one logical line
+   per field/bullet) for the Version Diff panel. Mirrors the on-screen preview
+   ordering and only includes renderable content (via buildDraftCvView), so the
+   diff reflects exactly what changed in the CV the user sees, not internal JSON.
+   Two versions serialized this way diff cleanly line- and word-wise. */
+export function draftCvToText(cvJson) {
+  const v = buildDraftCvView(cvJson);
+  const lines = [];
+  const push = (value) => {
+    if (value != null && String(value).trim() !== "") lines.push(String(value));
+  };
+  const section = (title) => {
+    if (lines.length) lines.push("");
+    push(title);
+  };
+
+  push(v.contact.full_name);
+  const contactBits = [
+    v.contact.email,
+    v.contact.phone,
+    v.contact.location,
+    v.contact.linkedin_url,
+    v.contact.github_url,
+    v.contact.portfolio_url,
+  ].filter(Boolean);
+  if (contactBits.length) push(contactBits.join(" | "));
+
+  if (v.professionalSummary) {
+    section("Professional Summary");
+    push(v.professionalSummary);
+  }
+
+  if (v.skills.length) {
+    section("Skills");
+    for (const group of v.skills) {
+      push(`${group.category}: ${(group.items || []).join(", ")}`);
+    }
+  }
+
+  const experience = v.workExperience.filter((entry) => entry.bullets.length);
+  if (experience.length) {
+    section("Work Experience");
+    for (const entry of experience) {
+      push([entry.company, entry.title].filter(Boolean).join(" — "));
+      push([entry.start_date, entry.end_date].filter(Boolean).join(" – "));
+      for (const bullet of entry.bullets) push(`• ${bullet.text}`);
+    }
+  }
+
+  const projects = v.projects.filter((entry) => entry.bullets.length);
+  if (projects.length) {
+    section("Projects");
+    for (const project of projects) {
+      push(project.name);
+      if (Array.isArray(project.tech_stack) && project.tech_stack.length) {
+        push(project.tech_stack.join(", "));
+      }
+      for (const bullet of project.bullets) push(`• ${bullet.text}`);
+    }
+  }
+
+  if (v.education.length) {
+    section("Education");
+    for (const entry of v.education) {
+      push([entry.school, entry.degree, entry.field].filter(Boolean).join(", "));
+    }
+  }
+
+  if (v.certifications.length) {
+    section("Certifications");
+    for (const cert of v.certifications) {
+      push(
+        typeof cert === "string"
+          ? cert
+          : [cert.name, cert.issuer].filter(Boolean).join(", ")
+      );
+    }
+  }
+
+  return lines.join("\n");
+}
+
 export function collectReviewBullets(cvJson) {
   const cv = cvJson && typeof cvJson === "object" ? cvJson : {};
   const pending = [];

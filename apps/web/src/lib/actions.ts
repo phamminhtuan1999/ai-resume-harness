@@ -1347,6 +1347,44 @@ export async function regenerateWorkflowStepAction(
   return success("Step regenerated.");
 }
 
+export async function acknowledgeWorkflowStepAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  // Let the user clear a low-confidence "Needs review" step without
+  // regenerating — a manual acknowledgement that flips it to Completed. Status
+  // is otherwise confidence-driven; a later regenerate recomputes it.
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const matchId = formData.get("match_id");
+  const step = formData.get("step");
+  if (typeof matchId !== "string" || !matchId || typeof step !== "string" || !step) {
+    return failure("A match and step are required.");
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase
+    .from("ai_workflow_runs")
+    .update({ status: "completed", updated_at: new Date().toISOString() })
+    .eq("user_id", context.userProfileId)
+    .eq("subject_type", "match")
+    .eq("subject_id", matchId)
+    .eq("workflow_type", step)
+    .eq("status", "needs_review");
+
+  if (error) {
+    return failure("Could not mark this step reviewed. Please try again.");
+  }
+
+  // Layout scope: the status drives the roadmap page, the Overview entry card,
+  // and the AI steps panel — all under the match shell — so refresh them all.
+  revalidatePath(`/matches/${matchId}`, "layout");
+  return success("Marked reviewed.");
+}
+
 export async function refreshAnalysisAction(
   _previousState: ActionState,
   formData: FormData

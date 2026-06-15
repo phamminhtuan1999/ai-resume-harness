@@ -13,6 +13,7 @@ test("protected route policy covers authenticated app sections", () => {
   for (const pathname of [
     "/dashboard",
     "/dashboard/activity",
+    "/insights",
     "/profile",
     "/resumes",
     "/resumes/abc",
@@ -57,6 +58,7 @@ test("pricing is public for reads but uses Clerk proxy for checkout actions", ()
 test("proxy exports Clerk-compatible protected route patterns", () => {
   assert.deepEqual(protectedRoutePatterns, [
     "/dashboard(.*)",
+    "/insights(.*)",
     "/profile(.*)",
     "/resumes(.*)",
     "/jobs(.*)",

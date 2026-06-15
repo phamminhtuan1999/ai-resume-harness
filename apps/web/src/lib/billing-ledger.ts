@@ -76,6 +76,42 @@ export async function getCreditBalanceForUser(userProfileId: string): Promise<nu
   return calculateCreditBalance(data ?? []);
 }
 
+// Has the signed webhook actually posted the grant for this checkout session?
+// The success page renders from the Stripe session (it lives outside the Clerk
+// proxy), so it asks by the session's own id — `stripe_checkout_session_id` is
+// UNIQUE on the ledger, so at most one posted row matches. A `paid` session with
+// no posted row here is still confirming, not done; once the row exists we also
+// return the buyer's resulting balance so the page can show a real number
+// instead of an unverifiable promise.
+export async function getCheckoutGrantStatus(checkoutSessionId: string): Promise<{
+  posted: boolean;
+  credits: number | null;
+  balance: number | null;
+}> {
+  if (!checkoutSessionId) {
+    return { posted: false, credits: null, balance: null };
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("billing_credit_ledger")
+    .select("user_id,credits_delta")
+    .eq("stripe_checkout_session_id", checkoutSessionId)
+    .eq("status", "posted")
+    .maybeSingle();
+
+  if (error || !data?.user_id) {
+    return { posted: false, credits: null, balance: null };
+  }
+
+  const balance = await getCreditBalanceForUser(data.user_id);
+  return {
+    posted: true,
+    credits: Number.isInteger(data.credits_delta) ? data.credits_delta : null,
+    balance,
+  };
+}
+
 export function getCreditCost(actionId: string): number {
   return CREDIT_ACTION_COSTS.find((item) => item.id === actionId)?.credits ?? 0;
 }

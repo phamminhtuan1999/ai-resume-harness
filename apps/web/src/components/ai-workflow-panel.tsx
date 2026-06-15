@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  ArrowRight,
   Check,
   CircleCheck,
   Loader2,
@@ -9,9 +10,11 @@ import {
 } from "lucide-react";
 
 import { AutoRefresh } from "@/components/auto-refresh";
+import { MarkReviewedButton } from "@/components/forms/mark-reviewed-button";
 import { RegenerateStepButton } from "@/components/forms/regenerate-step-button";
 import { RunFullWorkflowForm } from "@/components/forms/run-full-workflow-form";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -365,6 +368,23 @@ export function AiWorkflowPanel({
                           step={row.workflow_type}
                           label="Regenerate"
                         />
+                      ) : null}
+                      {/* The roadmap has no tab in the six-tab shell (by design),
+                          so give its step row a direct link like the tabbed steps. */}
+                      {row.workflow_type === "roadmap" &&
+                      (row.status === "completed" || row.status === "needs_review") ? (
+                        <Link
+                          href={`/matches/${matchId}/roadmap`}
+                          className={buttonVariants({ variant: "outline", size: "sm" })}
+                        >
+                          View 4-week roadmap
+                          <ArrowRight data-icon="inline-end" />
+                        </Link>
+                      ) : null}
+                      {/* Confidence-driven "Needs review" can be cleared manually
+                          without spending a regenerate. */}
+                      {row.status === "needs_review" ? (
+                        <MarkReviewedButton matchId={matchId} step={row.workflow_type} />
                       ) : null}
                     </div>
                   ) : null}

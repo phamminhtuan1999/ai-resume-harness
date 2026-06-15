@@ -132,6 +132,30 @@ Completed 2026-06-14 (first-purchase credit-loss fix):
   coverage) on Node 24; lint and tsc clean. (Note: the repo's tests/lint need
   Node 18+; a Node 16 shell fails 6 unrelated File/structuredClone tests.)
 
+Follow-up 2026-06-14 (silent-failure on a delayed/undelivered webhook):
+
+- Root cause of a fresh "paid but no credits" report was operational, not code:
+  the local `stripe listen` forwarder was not running, so a real paid
+  `checkout.session.completed` (`evt_1TiT2Y…`, Starter/20cr, user `ddbf78aa…`)
+  never reached the webhook. Confirmed via Stripe + DB (no `billing_events`
+  that day; session `paid` with full metadata). Backfilled by replaying the
+  event through the real webhook path (idempotent) — ledger now has the +20
+  posted row, balance 20. The gate also proved out: profile created 22:53 →
+  redirected to add a resume 23:39 → then checkout.
+- Prevention: added `npm run dev:stripe`
+  (`stripe listen --forward-to localhost:3000/api/billing/stripe/webhook`) so
+  the forwarder is one obvious command alongside `dev:web`.
+- Success-page honesty: the page previously trusted only the Stripe session
+  status, so a `paid` session whose grant had not posted still claimed credits
+  were "being added" with no detection or refresh. It now also verifies the
+  ledger grant by `stripe_checkout_session_id` (`getCheckoutGrantStatus` in
+  `billing-ledger.ts`) and derives the view via `resolveCheckoutView`
+  (`billing-credits.mjs`, unit-tested): `paid` + posted → "granted" (shows the
+  real balance); `paid` + not-yet-posted → "confirming" (polls until the row
+  appears). Web suite 277 passed; tsc + lint clean (Node 24). Live-verified in
+  the preview: granted shows "You now have 20 credits"; a fake session still
+  shows the honest "couldn't find" copy.
+
 Still pending:
 
 - Stripe go-live checklist review before production activation.

@@ -110,6 +110,10 @@ class DraftCvWorkflow(BaseAIWorkflow):
         # US-061: the Respond step is the official curation gate — only feedback
         # the user explicitly accepted shapes the generation (the page states
         # "N approved responses shape this CV", so N must be exactly this list).
+        # Truth Guard: a "Do not use yet" suggestion would add experience the
+        # resume can't support, so it never shapes the CV even if the user
+        # accepted it (accepting only marks it reviewed). This keeps the page's
+        # "only accepted, supported suggestions shape the Tailored CV" promise.
         accepted_feedback = [
             {
                 "id": str(row.get("id") or ""),
@@ -119,6 +123,7 @@ class DraftCvWorkflow(BaseAIWorkflow):
             for row in suggestions or []
             if isinstance(row, dict)
             and row.get("user_action") == "accepted"
+            and not _is_do_not_use(row.get("truth_guard_status"))
             and (row.get("suggested_text") or "").strip()
         ]
 
@@ -227,6 +232,7 @@ Canonical resume text:
             source_url=data.source_url,
             job_keywords=data.job_keywords,
             page_policy=data.page_policy,
+            resume_text=data.resume_text,
         )
 
     def postprocess(self, output: DraftCvOutput, data: DraftCvInput) -> DraftCvOutput:
@@ -378,6 +384,16 @@ def _job_keywords(structured_json: Any) -> list[str]:
                 keywords.append(value.strip())
     # de-dupe, preserve order
     return list(dict.fromkeys(keywords))
+
+
+def _is_do_not_use(truth_guard_status: object) -> bool:
+    """True for the "Do not use yet" Truth Guard tier.
+
+    Tolerant of both the stored display form ("Do not use yet") and the internal
+    snake_case ("do_not_use_yet") so the exclusion holds regardless of source.
+    """
+    normalized = str(truth_guard_status or "").strip().lower().replace(" ", "_")
+    return normalized in {"do_not_use_yet", "do_not_use"}
 
 
 def _build_corpus(

@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
 
 import { ResumeSuggestionsForm } from "@/components/forms/resume-suggestions-form";
-import { SuggestionReviewForm } from "@/components/forms/suggestion-review-form";
+import { SuggestionCard } from "@/components/suggestions/suggestion-card";
 import { TailoringStepper } from "@/components/tailoring-stepper";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -12,8 +13,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { CREDIT_ACTION_COSTS } from "@/lib/billing-credits.mjs";
 import { getResumeSuggestionsDetail } from "@/lib/data/server";
-import { hasWordDiff, wordDiff } from "@/lib/word-diff.mjs";
+import { hasStripeBillingEnv } from "@/lib/env";
+import { cn } from "@/lib/utils";
 
 type ResumeSuggestionsPageProps = {
   params: Promise<{ matchId: string }>;
@@ -32,62 +35,39 @@ type SuggestionRow = {
   user_edited?: boolean | null;
 };
 
-type DiffSegment = { type: "same" | "removed" | "added"; text: string };
-
-// Word-level diff vs the base resume text (US-061): removed words struck
-// through, added words highlighted, so the user can judge a suggestion at a
-// glance before accepting, editing, or rejecting it.
-function SuggestionDiff({ original, suggested }: { original: string; suggested: string }) {
-  const segments = wordDiff(original, suggested) as DiffSegment[];
-  if (!hasWordDiff(segments)) {
-    return null;
-  }
-  return (
-    <p className="mt-2 rounded-md bg-muted/40 p-3 text-sm leading-6">
-      {segments.map((segment, index) => (
-        <span
-          key={index}
-          className={
-            segment.type === "removed"
-              ? "text-muted-foreground line-through decoration-destructive/60"
-              : segment.type === "added"
-                ? "rounded-sm bg-brand-muted px-0.5 font-medium"
-                : undefined
-          }
-        >
-          {segment.text}
-          {index < segments.length - 1 ? " " : ""}
-        </span>
-      ))}
-    </p>
-  );
-}
+type TruthVariant = "success" | "warning" | "destructive";
 
 const TRUTH_SECTIONS: {
   status: string;
   title: string;
   description: string;
-  variant: "success" | "warning" | "destructive";
+  variant: TruthVariant;
 }[] = [
   {
     status: "Safe to use",
     title: "Safe to use",
-    description: "Supported by evidence already in your resume.",
+    description: "Backed by evidence already in your resume.",
     variant: "success",
   },
   {
     status: "Needs confirmation",
     title: "Needs confirmation",
-    description: "Possibly true, but confirm before claiming it.",
+    description: "Possibly true — confirm before claiming it.",
     variant: "warning",
   },
   {
     status: "Do not use yet",
     title: "Do not use yet",
-    description: "Would add experience the resume does not support — build proof first.",
+    description: "Adds experience the resume can't support — build proof first.",
     variant: "destructive",
   },
 ];
+
+const sectionDot: Record<TruthVariant, string> = {
+  success: "bg-success",
+  warning: "bg-warning",
+  destructive: "bg-destructive",
+};
 
 export default async function ResumeSuggestionsPage({ params }: ResumeSuggestionsPageProps) {
   const { matchId } = await params;
@@ -95,6 +75,11 @@ export default async function ResumeSuggestionsPage({ params }: ResumeSuggestion
     await getResumeSuggestionsDetail(matchId);
   const rows = (suggestions ?? []) as unknown as SuggestionRow[];
   const respondedCount = rows.filter((row) => (row.user_action ?? "pending") !== "pending").length;
+  const acceptedCount = rows.filter((row) => row.user_action === "accepted").length;
+  const allResponded = rows.length > 0 && respondedCount === rows.length;
+  const progressPct = rows.length > 0 ? Math.round((respondedCount / rows.length) * 100) : 0;
+  const cvCost = CREDIT_ACTION_COSTS.find((a) => a.id === "tailored_cv_generation")?.credits ?? 3;
+  const showCreditCost = hasStripeBillingEnv();
 
   const strategy = typeof snapshot?.resume_strategy === "string" ? snapshot.resume_strategy : "";
   const assistantSummary =
@@ -112,8 +97,17 @@ export default async function ResumeSuggestionsPage({ params }: ResumeSuggestion
     unsupported: "destructive",
   };
 
+  // Group by Truth Guard status, numbering suggestions continuously across groups.
+  let runningIndex = 0;
+  const groups = TRUTH_SECTIONS.map((section) => {
+    const items = rows
+      .filter((row) => row.truth_guard_status === section.status)
+      .map((row) => ({ row, index: (runningIndex += 1) }));
+    return { section, items };
+  }).filter((group) => group.items.length > 0);
+
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       <TailoringStepper
         matchId={match.id}
         suggestionCount={rows.length}
@@ -122,47 +116,93 @@ export default async function ResumeSuggestionsPage({ params }: ResumeSuggestion
         draftStatus={draftSummary?.status ?? null}
       />
 
-      <section className="grid gap-5 lg:grid-cols-[1fr_320px]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Resume suggestions</CardTitle>
-            <CardDescription>
-              {match.jobs?.company || "Unknown company"} -{" "}
-              {match.jobs?.title || "Unknown role"} · {match.resumes?.title || "Resume"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Each suggestion carries a Truth Guard label so unsupported claims stay separate from
-              wording already backed by resume evidence. Edit the text, then Accept or Reject — only
-              accepted, supported suggestions shape the Tailored CV.
+      {/* Header */}
+      <header className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0 space-y-1">
+            <h1 className="font-heading text-xl font-semibold tracking-tight">AI resume rewrites</h1>
+            <p className="text-sm text-muted-foreground">
+              {match.jobs?.company || "Unknown company"}
+              <span className="px-1.5 text-border" aria-hidden>·</span>
+              {match.jobs?.title || "Unknown role"}
+              <span className="px-1.5 text-border" aria-hidden>·</span>
+              {match.resumes?.title || "Resume"}
             </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Generator</CardTitle>
-            <CardDescription>
-              {rows.length > 0
-                ? `${rows.length} suggestion${rows.length === 1 ? "" : "s"} saved`
-                : "Create the first suggestion set."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-3">
-              <ResumeSuggestionsForm matchId={match.id} />
+          </div>
+          <div className="flex shrink-0 flex-wrap items-start gap-2">
+            <ResumeSuggestionsForm
+              matchId={match.id}
+              label={rows.length > 0 ? "Suggest more" : "Generate suggestions"}
+              variant={rows.length > 0 ? "outline" : "default"}
+            />
+            {/* When every rewrite is reviewed, the "ready to build" banner below
+                owns the Tailored CV CTA (it also shows the credit cost), so the
+                header link is hidden to avoid a duplicate. */}
+            {!allResponded ? (
               <Link
                 href={`/matches/${match.id}/draft-cv`}
-                className={buttonVariants({ variant: "outline" })}
+                className={buttonVariants({ variant: rows.length > 0 ? "default" : "outline" })}
               >
                 Open Tailored CV
+                <ArrowRight data-icon="inline-end" />
               </Link>
+            ) : null}
+          </div>
+        </div>
+
+        <p className="max-w-prose text-sm leading-6 text-muted-foreground">
+          Each rewrite carries a Truth Guard label, so unsupported claims stay separate from
+          wording your resume already backs. Edit the text, then Accept or Reject — only accepted,
+          supported rewrites shape your Tailored CV.
+        </p>
+
+        {/* Review progress */}
+        {rows.length > 0 ? (
+          <div className="flex items-center gap-3 rounded-lg bg-card px-4 py-3 ring-1 ring-border">
+            <p className="text-sm whitespace-nowrap">
+              <span className="font-semibold tabular-nums">{respondedCount}</span>
+              <span className="text-muted-foreground"> of {rows.length} reviewed</span>
+              {acceptedCount > 0 ? (
+                <span className="text-muted-foreground">
+                  <span className="px-1.5 text-border" aria-hidden>·</span>
+                  <span className="font-medium text-success tabular-nums">{acceptedCount}</span> accepted
+                </span>
+              ) : null}
+            </p>
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-brand transition-[width] duration-500"
+                style={{ width: `${progressPct}%` }}
+              />
             </div>
+            <span className="font-mono text-xs tabular-nums text-muted-foreground">{progressPct}%</span>
+          </div>
+        ) : null}
+      </header>
+
+      {/* All-reviewed banner */}
+      {allResponded ? (
+        <Card className="rise border-success/30 bg-success/[0.04]">
+          <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 className="size-5 shrink-0 text-success" />
+              <p className="text-sm font-medium">
+                You&apos;ve reviewed all {rows.length} rewrite{rows.length === 1 ? "" : "s"}. Ready to
+                build your Tailored CV.
+              </p>
+            </div>
+            <Link href={`/matches/${match.id}/draft-cv`} className={buttonVariants({ size: "sm" })}>
+              {draftSummary
+                ? "Open Tailored CV"
+                : showCreditCost
+                  ? `Generate Tailored CV · ${cvCost} credits`
+                  : "Generate Tailored CV"}
+            </Link>
           </CardContent>
         </Card>
-      </section>
+      ) : null}
 
+      {/* AI strategy */}
       {strategy || assistantSummary ? (
         <Card>
           <CardHeader>
@@ -175,78 +215,55 @@ export default async function ResumeSuggestionsPage({ params }: ResumeSuggestion
         </Card>
       ) : null}
 
+      {/* Suggestions */}
       {rows.length > 0 ? (
-        <section className="grid gap-5">
-          {TRUTH_SECTIONS.map((section) => {
-            const items = rows.filter((row) => row.truth_guard_status === section.status);
-            if (items.length === 0) {
-              return null;
-            }
-            return (
-              <Card key={section.status}>
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={section.variant}>{section.title}</Badge>
-                    <CardTitle className="text-base">
-                      {items.length} {items.length === 1 ? "suggestion" : "suggestions"}
-                    </CardTitle>
-                  </div>
-                  <CardDescription>{section.description}</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-4">
-                  {items.map((row) => (
-                    <div key={row.id} className="rounded-lg border p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-medium">
-                          {row.related_job_requirement || "Resume positioning"}
-                        </p>
-                        <div className="flex items-center gap-1.5">
-                          {row.user_edited ? (
-                            <Badge variant="secondary">Edited by you</Badge>
-                          ) : null}
-                          <Badge variant="outline">{row.suggestion_type || "suggestion"}</Badge>
-                        </div>
-                      </div>
-                      {row.reason ? (
-                        <p className="mt-1 text-sm leading-6 text-muted-foreground">{row.reason}</p>
-                      ) : null}
-                      {row.evidence ? (
-                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                          <span className="font-medium text-foreground">Evidence:</span> {row.evidence}
-                        </p>
-                      ) : null}
-                      {row.original_text ? (
-                        <SuggestionDiff
-                          original={row.original_text}
-                          suggested={row.suggested_text ?? ""}
-                        />
-                      ) : null}
-                      <div className="mt-3">
-                        <SuggestionReviewForm
-                          matchId={match.id}
-                          suggestionId={row.id}
-                          suggestedText={row.suggested_text ?? ""}
-                          userAction={String(row.user_action ?? "pending")}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </section>
+        <div className="flex flex-col gap-8">
+          {groups.map(({ section, items }) => (
+            <section key={section.status} className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className={cn("size-2 rounded-full", sectionDot[section.variant])} aria-hidden />
+                <h2 className="font-heading text-sm font-semibold">{section.title}</h2>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
+                  {items.length}
+                </span>
+                <span className="text-xs text-muted-foreground">— {section.description}</span>
+              </div>
+              <div className="flex flex-col gap-3">
+                {items.map(({ row, index }) => (
+                  <SuggestionCard
+                    key={row.id}
+                    matchId={match.id}
+                    resumeId={match.resume_id ?? undefined}
+                    suggestionId={row.id}
+                    index={index}
+                    suggestionType={row.suggestion_type || "suggestion"}
+                    jobRequirement={row.related_job_requirement || "Resume positioning"}
+                    truthLabel={section.title}
+                    truthVariant={section.variant}
+                    original={row.original_text ?? ""}
+                    suggested={row.suggested_text ?? ""}
+                    reason={row.reason ?? ""}
+                    evidence={row.evidence ?? ""}
+                    userAction={String(row.user_action ?? "pending")}
+                    userEdited={Boolean(row.user_edited)}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>No suggestions yet</CardTitle>
+            <CardTitle>No rewrites yet</CardTitle>
             <CardDescription>
-              Generate suggestions after reviewing the match score and missing skills.
+              Generate rewrites after reviewing the match score and missing skills.
             </CardDescription>
           </CardHeader>
         </Card>
       )}
 
+      {/* Keywords / claims */}
       {keywords.length > 0 || doNotClaim.length > 0 ? (
         <section className="grid gap-5 md:grid-cols-2">
           <Card>

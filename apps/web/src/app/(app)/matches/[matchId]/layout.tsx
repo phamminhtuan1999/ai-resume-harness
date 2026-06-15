@@ -1,7 +1,6 @@
+import { MatchBreadcrumb } from "@/components/matches/match-breadcrumb";
 import { MatchTabsNav } from "@/components/matches/match-tabs-nav";
-import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { getAnalysisPackage } from "@/lib/data/server";
-import { jobAnalysisBreadcrumb } from "@/lib/matches-list-view.mjs";
 
 type MatchLayoutProps = {
   children: React.ReactNode;
@@ -22,7 +21,7 @@ export default async function MatchLayout({ children, params }: MatchLayoutProps
   return (
     <div className="flex w-full flex-col gap-5">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-3">
-        <Breadcrumb items={jobAnalysisBreadcrumb()} />
+        <MatchBreadcrumb matchId={matchId} />
         <MatchTabsNav matchId={matchId} label={label} />
       </div>
       {children}

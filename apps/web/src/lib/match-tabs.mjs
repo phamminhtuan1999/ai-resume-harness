@@ -21,8 +21,9 @@ export const MATCH_TABS = [
 
 // Sub-routes that belong to a tab but aren't its primary segment. Opening any
 // of these still lights up the owning tab (spatial consistency). The roadmap
-// route maps to NO tab on purpose — it's reached through Learning Target
-// actions and Skill Gaps, not a seventh tab (US-051 AC).
+// route maps to NO tab on purpose — it's a sub-page reached from Skill Gaps /
+// Learning Target actions, not a seventh tab (US-051 AC). Its orientation comes
+// from the breadcrumb (it reads "… › 4-week roadmap"), not a hijacked tab.
 // "resume-draft" is gone on purpose: the route was retired by US-059 (decision
 // 0019) and old links redirect to draft-cv in next.config.ts.
 const SEGMENT_TO_TAB = {
@@ -47,6 +48,23 @@ export function tabForPathname(pathname, matchId) {
   if (!pathname.startsWith(`${base}/`)) return null;
   const segment = pathname.slice(base.length + 1).split("/")[0];
   return SEGMENT_TO_TAB[segment] ?? null;
+}
+
+// No-tab sub-pages (reached from a tab or a learning-target action, not the
+// six-tab shell). They earn a trailing breadcrumb crumb so the page is *named*
+// in the breadcrumb ("… › 4-week roadmap") instead of hijacking a tab.
+const SUBPAGE_LABELS = {
+  roadmap: "4-week roadmap",
+};
+
+// The breadcrumb label for a no-tab sub-page, or null for tabbed routes /
+// non-match routes (those are oriented by the active tab, not the breadcrumb).
+export function subPageLabelForPathname(pathname, matchId) {
+  if (typeof pathname !== "string" || !matchId) return null;
+  const base = `/matches/${matchId}`;
+  if (!pathname.startsWith(`${base}/`)) return null;
+  const segment = pathname.slice(base.length + 1).split("/")[0];
+  return SUBPAGE_LABELS[segment] ?? null;
 }
 
 // Tab emphasis per decision label (US-051 AC). A visual hint only: the same six

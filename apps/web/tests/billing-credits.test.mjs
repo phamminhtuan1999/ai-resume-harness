@@ -9,6 +9,7 @@ import {
   formatUsdFromCents,
   getCreditPack,
   isRetryableBillingEventResult,
+  resolveCheckoutView,
 } from "../src/lib/billing-credits.mjs";
 
 test("credit packs expose accepted starter, builder, and pro prices", () => {
@@ -137,6 +138,19 @@ test("stranded webhook events stay retryable so credits are not lost", () => {
   assert.equal(isRetryableBillingEventResult("ignored"), false);
   assert.equal(isRetryableBillingEventResult("duplicate"), false);
   assert.equal(isRetryableBillingEventResult(undefined), false);
+});
+
+test("a paid session is only 'granted' once the ledger grant has posted", () => {
+  // The silent-failure case: Stripe says paid, but the webhook hasn't posted
+  // the grant (delayed, or the local forwarder is down). This must read as
+  // 'confirming' so the page keeps polling instead of claiming success.
+  assert.equal(resolveCheckoutView("paid", false), "confirming");
+  assert.equal(resolveCheckoutView("paid", true), "granted");
+
+  // Non-paid Stripe states never depend on the ledger and carry through as-is.
+  assert.equal(resolveCheckoutView("pending", false), "pending");
+  assert.equal(resolveCheckoutView("not_found", false), "not_found");
+  assert.equal(resolveCheckoutView("unavailable", false), "unavailable");
 });
 
 test("checkout grant parser rejects non-credit or mismatched sessions", () => {

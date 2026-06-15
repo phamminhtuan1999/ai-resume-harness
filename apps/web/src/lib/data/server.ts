@@ -1668,3 +1668,293 @@ export function formatShortDate(value: string) {
 export function getContactLabel(job: Pick<WorkspaceJob, "contact_name" | "contact_email">) {
   return job.contact_name || job.contact_email || "No contact";
 }
+
+// --- Insights data ---
+
+export type InsightsTrendPoint = {
+  label: string;
+  score: number;
+  date: string;
+};
+
+export type ResumeInsightRow = {
+  resumeId: string;
+  resumeTitle: string;
+  latestScore: number;
+  bestScore: number;
+  improvement: number;
+  analysisCount: number;
+};
+
+export type MissingKeyword = {
+  keyword: string;
+  count: number;
+};
+
+export type InsightsData = {
+  totalAnalyses: number;
+  averageScore: number;
+  bestScore: number;
+  bestScoreResumeTitle: string;
+  scoreTrend: InsightsTrendPoint[];
+  avgSkillScore: number;
+  avgExperienceScore: number;
+  avgAiReadinessScore: number;
+  avgAtsKeywordScore: number;
+  avgSeniorityScore: number;
+  byResume: ResumeInsightRow[];
+  missingKeywords: MissingKeyword[];
+};
+
+function avg(values: number[]): number {
+  if (values.length === 0) return 0;
+  return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+}
+
+function extractSkillNames(missingSkillsJson: unknown): string[] {
+  if (!Array.isArray(missingSkillsJson)) return [];
+  return missingSkillsJson
+    .filter((item): item is { skill: string } => item && typeof item === "object" && typeof item.skill === "string")
+    .map((item) => item.skill.trim())
+    .filter(Boolean);
+}
+
+type RawInsightsMatch = {
+  id: string;
+  overall_score: number;
+  skill_score: number;
+  experience_score: number;
+  ai_readiness_score: number;
+  ats_keyword_score: number;
+  seniority_score: number;
+  missing_skills_json: unknown;
+  analyzed_at: string | null;
+  created_at: string;
+  resume_id: string;
+  resumes: { id: string; title: string } | null;
+  jobs: { id: string; company: string; title: string } | null;
+};
+
+export async function getInsightsData(): Promise<InsightsData> {
+  const { profile } = await getWorkspaceProfile();
+
+  if (!profile) {
+    return {
+      totalAnalyses: 0,
+      averageScore: 0,
+      bestScore: 0,
+      bestScoreResumeTitle: "",
+      scoreTrend: [],
+      avgSkillScore: 0,
+      avgExperienceScore: 0,
+      avgAiReadinessScore: 0,
+      avgAtsKeywordScore: 0,
+      avgSeniorityScore: 0,
+      byResume: [],
+      missingKeywords: [],
+    };
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("matches")
+    .select(
+      [
+        "id",
+        "resume_id",
+        "overall_score",
+        "skill_score",
+        "experience_score",
+        "ai_readiness_score",
+        "ats_keyword_score",
+        "seniority_score",
+        "missing_skills_json",
+        "analyzed_at",
+        "created_at",
+        "resumes(id,title)",
+        "jobs(id,company,title)",
+      ].join(",")
+    )
+    .eq("user_id", profile.id)
+    .not("overall_score", "is", null)
+    .order("analyzed_at", { ascending: true, nullsFirst: false });
+
+  if (error) {
+    console.warn("[ApplyWise data skipped] Unable to load insights data.");
+  }
+
+  // Sort chronologically in JS, not via SQL: `analyzed_at` can be null on some
+  // matches (e.g. imported/seeded rows), and a SQL `nulls last` order leaves
+  // those rows in arbitrary positions — which corrupts "first"/"latest" (and so
+  // the per-resume Improvement). Fall back to `created_at` for a stable order.
+  const matchTime = (m: RawInsightsMatch) =>
+    new Date(m.analyzed_at ?? m.created_at ?? 0).getTime();
+  const matches = ((data ?? []) as unknown as RawInsightsMatch[])
+    .filter((m) => typeof m.overall_score === "number")
+    .sort((a, b) => matchTime(a) - matchTime(b));
+
+  const totalAnalyses = matches.length;
+
+  if (totalAnalyses === 0) {
+    return {
+      totalAnalyses: 0,
+      averageScore: 0,
+      bestScore: 0,
+      bestScoreResumeTitle: "",
+      scoreTrend: [],
+      avgSkillScore: 0,
+      avgExperienceScore: 0,
+      avgAiReadinessScore: 0,
+      avgAtsKeywordScore: 0,
+      avgSeniorityScore: 0,
+      byResume: [],
+      missingKeywords: [],
+    };
+  }
+
+  const averageScore = avg(matches.map((m) => m.overall_score));
+
+  const bestMatch = matches.reduce((best, m) =>
+    m.overall_score > best.overall_score ? m : best
+  );
+  const bestScore = bestMatch.overall_score;
+  const bestScoreResumeTitle = bestMatch.resumes?.title ?? "Unknown resume";
+
+  // Score trend: chronological, labeled by sequence number
+  const scoreTrend: InsightsTrendPoint[] = matches.map((m, i) => ({
+    label: `#${i + 1}`,
+    score: m.overall_score,
+    date: m.analyzed_at ?? m.created_at,
+  }));
+
+  // Category averages
+  const avgSkillScore = avg(matches.map((m) => m.skill_score ?? 0).filter((v) => v > 0));
+  const avgExperienceScore = avg(matches.map((m) => m.experience_score ?? 0).filter((v) => v > 0));
+  const avgAiReadinessScore = avg(matches.map((m) => m.ai_readiness_score ?? 0).filter((v) => v > 0));
+  const avgAtsKeywordScore = avg(matches.map((m) => m.ats_keyword_score ?? 0).filter((v) => v > 0));
+  const avgSeniorityScore = avg(matches.map((m) => m.seniority_score ?? 0).filter((v) => v > 0));
+
+  // By-resume breakdown
+  const resumeMap = new Map<string, { title: string; scores: number[] }>();
+  for (const m of matches) {
+    const key = m.resume_id;
+    const title = m.resumes?.title ?? "Unknown resume";
+    if (!resumeMap.has(key)) {
+      resumeMap.set(key, { title, scores: [] });
+    }
+    resumeMap.get(key)!.scores.push(m.overall_score);
+  }
+
+  const byResume: ResumeInsightRow[] = Array.from(resumeMap.entries()).map(
+    ([resumeId, { title, scores }]) => {
+      const latestScore = scores[scores.length - 1];
+      const bestScore = Math.max(...scores);
+      const improvement = scores.length > 1 ? latestScore - scores[0] : 0;
+      return {
+        resumeId,
+        resumeTitle: title,
+        latestScore,
+        bestScore,
+        improvement,
+        analysisCount: scores.length,
+      };
+    }
+  );
+
+  // Missing keywords: frequency count across all matches
+  const keywordCounts = new Map<string, number>();
+  for (const m of matches) {
+    for (const skill of extractSkillNames(m.missing_skills_json)) {
+      keywordCounts.set(skill, (keywordCounts.get(skill) ?? 0) + 1);
+    }
+  }
+  const missingKeywords: MissingKeyword[] = Array.from(keywordCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 20)
+    .map(([keyword, count]) => ({ keyword, count }));
+
+  return {
+    totalAnalyses,
+    averageScore,
+    bestScore,
+    bestScoreResumeTitle,
+    scoreTrend,
+    avgSkillScore,
+    avgExperienceScore,
+    avgAiReadinessScore,
+    avgAtsKeywordScore,
+    avgSeniorityScore,
+    byResume,
+    missingKeywords,
+  };
+}
+
+export type ResumeMatchPoint = {
+  id: string;
+  jobCompany: string;
+  jobTitle: string;
+  overallScore: number;
+  skillScore: number;
+  experienceScore: number;
+  aiReadinessScore: number;
+  atsKeywordScore: number;
+  seniorityScore: number;
+  analyzedAt: string;
+};
+
+export async function getResumeMatchHistory(resumeId: string): Promise<ResumeMatchPoint[]> {
+  const { profile } = await getWorkspaceProfile();
+
+  if (!profile) return [];
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("matches")
+    .select(
+      [
+        "id",
+        "overall_score",
+        "skill_score",
+        "experience_score",
+        "ai_readiness_score",
+        "ats_keyword_score",
+        "seniority_score",
+        "analyzed_at",
+        "created_at",
+        "jobs(id,company,title)",
+      ].join(",")
+    )
+    .eq("user_id", profile.id)
+    .eq("resume_id", resumeId)
+    .not("overall_score", "is", null)
+    .order("analyzed_at", { ascending: true, nullsFirst: false });
+
+  if (error) {
+    console.warn("[ApplyWise data skipped] Unable to load resume match history.");
+    return [];
+  }
+
+  return ((data ?? []) as unknown as Array<{
+    id: string;
+    overall_score: number;
+    skill_score: number;
+    experience_score: number;
+    ai_readiness_score: number;
+    ats_keyword_score: number;
+    seniority_score: number;
+    analyzed_at: string | null;
+    created_at: string;
+    jobs: { id: string; company: string; title: string } | null;
+  }>).map((m) => ({
+    id: m.id,
+    jobCompany: m.jobs?.company ?? "Unknown",
+    jobTitle: m.jobs?.title ?? "Unknown",
+    overallScore: m.overall_score,
+    skillScore: m.skill_score ?? 0,
+    experienceScore: m.experience_score ?? 0,
+    aiReadinessScore: m.ai_readiness_score ?? 0,
+    atsKeywordScore: m.ats_keyword_score ?? 0,
+    seniorityScore: m.seniority_score ?? 0,
+    analyzedAt: m.analyzed_at ?? m.created_at,
+  }));
+}

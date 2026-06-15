@@ -7,6 +7,7 @@
   ],
   "scripts": {
     "dev:web": "npm --workspace apps/web run dev",
+    "dev:stripe": "stripe listen --forward-to localhost:3000/api/billing/stripe/webhook",
     "build:web": "npm --workspace apps/web run build",
     "lint:web": "npm --workspace apps/web run lint",
     "test:web": "npm --workspace apps/web run test",

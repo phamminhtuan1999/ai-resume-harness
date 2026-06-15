@@ -1,5 +1,6 @@
 export const protectedRoutePatterns = [
   "/dashboard(.*)",
+  "/insights(.*)",
   "/profile(.*)",
   "/resumes(.*)",
   "/jobs(.*)",
@@ -11,6 +12,7 @@ export const protectedRoutePatterns = [
 
 const protectedPathPrefixes = [
   "/dashboard",
+  "/insights",
   "/profile",
   "/resumes",
   "/jobs",

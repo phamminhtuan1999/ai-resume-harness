@@ -13,6 +13,7 @@ import {
   exportFileName,
   exportUrl,
   fontOptions,
+  hasRenderableContent,
   isRenderable,
   overrideWarning,
   pageOptions,
@@ -158,6 +159,38 @@ test("handles missing/empty cv json without throwing", () => {
   assert.deepEqual(view.skills, []);
   assert.deepEqual(view.workExperience, []);
   assert.equal(pendingReviewCount(undefined), 0);
+});
+
+test("hasRenderableContent is false for an empty offline-fallback CV", () => {
+  // An empty profile yields a draft with no summary, skills, education, or
+  // renderable bullets — the page must treat this as 'nothing to review'.
+  assert.equal(hasRenderableContent(buildDraftCvView(null)), false);
+  assert.equal(
+    hasRenderableContent(
+      buildDraftCvView({
+        candidate: { full_name: "Dana Engineer" },
+        professional_summary: "",
+        skills: [{ category: "Empty", items: [] }],
+        work_experience: [{ company: "Acme", title: "Eng", bullets: [] }],
+        projects: [],
+        education: [],
+      })
+    ),
+    false
+  );
+});
+
+test("hasRenderableContent is true once any section has content", () => {
+  // The standard fixture has a summary, a non-empty skill group, education,
+  // and renderable bullets.
+  assert.equal(hasRenderableContent(buildDraftCvView(cvJson())), true);
+  // A pending-only bullet is not renderable, but a real summary still counts.
+  assert.equal(
+    hasRenderableContent(
+      buildDraftCvView({ professional_summary: "A summary.", skills: [] })
+    ),
+    true
+  );
 });
 
 // --- US-046 rendering recommendation + override --------------------------------

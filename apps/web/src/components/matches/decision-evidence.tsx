@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
 
+import { RadarChart } from "@/components/charts/radar-chart";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -68,6 +69,13 @@ export function DecisionEvidence({ pkg, matchId }: DecisionEvidenceProps) {
       }));
   const risks = pkg.evidence.risks;
 
+  // Same five categories the dashboard radar uses, so the breakdown reads
+  // consistently across the app. Radar needs >=3 axes; fall back to bars below.
+  const categoryBars = SCORE_ROWS.map(([key, label]) => ({
+    label,
+    value: Number(pkg.scores[key]) || 0,
+  })).filter((b) => b.value > 0);
+
   return (
     <Card>
       <CardHeader>
@@ -103,7 +111,7 @@ export function DecisionEvidence({ pkg, matchId }: DecisionEvidenceProps) {
 
         {/* Breakdown first: the at-a-glance summary of the "why"; the matched
             and missing lists below are its detail. */}
-        <section className="flex flex-col gap-3">
+        <section className="flex flex-col gap-4">
           <h3 className="text-sm font-semibold">Score breakdown</h3>
           <div>
             <div className="mb-2 flex items-center justify-between text-sm">
@@ -112,17 +120,23 @@ export function DecisionEvidence({ pkg, matchId }: DecisionEvidenceProps) {
             </div>
             <Progress value={pkg.scores.overall} />
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            {SCORE_ROWS.map(([key, label]) => (
-              <div key={key} className="rounded-lg border p-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">{label}</span>
-                  <span className="tabular-nums">{pkg.scores[key]}</span>
+          {categoryBars.length >= 3 ? (
+            <div className="rounded-lg border bg-muted/20 py-2">
+              <RadarChart data={categoryBars} />
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {SCORE_ROWS.map(([key, label]) => (
+                <div key={key} className="rounded-lg border p-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{label}</span>
+                    <span className="tabular-nums">{pkg.scores[key]}</span>
+                  </div>
+                  <Progress value={Number(pkg.scores[key]) || 0} className="mt-2" />
                 </div>
-                <Progress value={Number(pkg.scores[key]) || 0} className="mt-2" />
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="flex flex-col gap-3">

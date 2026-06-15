@@ -343,6 +343,71 @@ def test_export_empty_cv_is_422(
     assert data.draft_cv_updates == []
 
 
+# --- inline PDF preview (read-only render, no export stamp) ----------------------
+
+
+def test_preview_pdf_renders_inline_without_stamping(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _authenticate()
+    data = FakeData()
+    _seed_draft(
+        data, status="ready_to_export", bullets=[_bullet("Built Approvedalpha.", "safe_to_use")]
+    )
+    _wire(monkeypatch, data)
+
+    response = client.get("/api/draft-cvs/draftcv_1/preview/pdf")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    # Inline (not attachment) so the browser embeds it in an <iframe>.
+    assert "inline" in response.headers["content-disposition"]
+    assert response.content[:5] == b"%PDF-"
+    # Previewing is a read: no stamp, no status flip to 'exported', no activity.
+    assert data.draft_cv_updates == []
+    assert data.draft_cvs[-1]["status"] == "ready_to_export"
+    assert all(a["activity_type"] != "draft_cv.exported" for a in data.activities)
+
+
+def test_preview_pdf_not_found_is_404(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _authenticate()
+    data = FakeData()
+    _wire(monkeypatch, data)
+
+    response = client.get("/api/draft-cvs/missing_1/preview/pdf")
+    assert response.status_code == 404
+
+
+def test_preview_pdf_empty_cv_is_422(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _authenticate()
+    data = FakeData()
+    cv_json = _seed_cv_json([_bullet("Improved Forbidden throughput.", "do_not_use_yet")])
+    cv_json["professional_summary"] = ""
+    data.insert_draft_cv(
+        user_profile_id="profile_1",
+        match_id="match_1",
+        job_id="job_1",
+        resume_id="resume_1",
+        title="t",
+        status="needs_review",
+        cv_json=cv_json,
+        cv_strategy_json={},
+        quality_notes_json=[],
+        confidence_score=0.8,
+        provider="gemini",
+        model_name="m",
+    )
+    _wire(monkeypatch, data)
+
+    response = client.get("/api/draft-cvs/draftcv_1/preview/pdf")
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "empty_cv"
+    assert data.draft_cv_updates == []
+
+
 # --- US-045 page override + rendering block -------------------------------------
 
 

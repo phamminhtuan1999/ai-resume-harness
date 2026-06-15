@@ -7,6 +7,7 @@ import {
   emphasisForLabel,
   isTabEmphasized,
   matchTabHref,
+  subPageLabelForPathname,
   tabForPathname,
 } from "../src/lib/match-tabs.mjs";
 import { roadmapEntryFromRuns } from "../src/lib/analysis-package-view.mjs";
@@ -67,8 +68,20 @@ test("tabForPathname resolves the active tab, including secondary sub-routes", (
   assert.equal(tabForPathname("/matches/m1/advanced", "m1"), "advanced");
 });
 
-test("the roadmap route maps to no tab — it has no tab of its own", () => {
+test("the roadmap route maps to no tab — it's a sub-page, oriented by breadcrumb", () => {
   assert.equal(tabForPathname("/matches/m1/roadmap", "m1"), null);
+});
+
+test("no-tab sub-pages get a breadcrumb label; tabbed/other routes do not", () => {
+  // The roadmap is named in the breadcrumb instead of claiming a tab.
+  assert.equal(subPageLabelForPathname("/matches/m1/roadmap", "m1"), "4-week roadmap");
+  // Tabbed routes are oriented by the active tab, so no trailing crumb.
+  assert.equal(subPageLabelForPathname("/matches/m1/gaps", "m1"), null);
+  assert.equal(subPageLabelForPathname("/matches/m1", "m1"), null);
+  // Other matches / non-match routes / bad input.
+  assert.equal(subPageLabelForPathname("/matches/other/roadmap", "m1"), null);
+  assert.equal(subPageLabelForPathname("/profile", "m1"), null);
+  assert.equal(subPageLabelForPathname(undefined, "m1"), null);
 });
 
 test("tabForPathname ignores routes for other matches or other surfaces", () => {
@@ -100,13 +113,21 @@ test("isTabEmphasized answers per (label, tab)", () => {
   assert.equal(isTabEmphasized(null, "gaps"), false);
 });
 
-test("roadmapEntryFromRuns surfaces the newest completed roadmap, else null", () => {
+test("roadmapEntryFromRuns surfaces the newest generated roadmap, else null", () => {
   assert.equal(roadmapEntryFromRuns([]), null);
   assert.equal(roadmapEntryFromRuns(undefined), null);
   // A queued/running roadmap run is not yet a generated artifact.
   assert.equal(
     roadmapEntryFromRuns([{ workflow_type: "roadmap", status: "running", completed_at: null }]),
     null
+  );
+  // A low-confidence ("needs_review") roadmap IS a generated artifact — the
+  // Overview card must surface it so the user can get back to it.
+  assert.deepEqual(
+    roadmapEntryFromRuns([
+      { workflow_type: "roadmap", status: "needs_review", completed_at: "2026-06-15" },
+    ]),
+    { generatedAt: "2026-06-15" }
   );
   // Other completed steps don't count.
   assert.equal(

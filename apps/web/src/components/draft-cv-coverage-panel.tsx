@@ -23,21 +23,21 @@ type CoverageReport = {
 // same data the page already loads; review/edit actions revalidate the page,
 // so the numbers move without a browser reload. Explicitly NOT the match
 // score — the decision label stays computed on the base resume.
-export function DraftCvCoveragePanel({ report }: { report: CoverageReport }) {
+export function DraftCvCoveragePanel({
+  report,
+  bare = false,
+}: {
+  report: CoverageReport;
+  // When embedded inside an existing container (e.g. a collapsible details
+  // section), skip the Card chrome so it doesn't read as a box-in-box.
+  bare?: boolean;
+}) {
   if (!report.claimableCount && !report.notClaimable.length) {
     return null;
   }
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Tailoring coverage</CardTitle>
-        <CardDescription>
-          How many of the job&apos;s keywords your exportable CV content covers. This is
-          tailoring progress — not your match score, which stays based on your base resume.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3 text-sm">
+  const inner = (
+    <>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-muted-foreground">
             Base resume <span className="font-semibold text-foreground">{report.basePercent}%</span>
@@ -99,7 +99,23 @@ export function DraftCvCoveragePanel({ report }: { report: CoverageReport }) {
             </div>
           </div>
         ) : null}
-      </CardContent>
+    </>
+  );
+
+  if (bare) {
+    return <div className="flex flex-col gap-3 text-sm">{inner}</div>;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Tailoring coverage</CardTitle>
+        <CardDescription>
+          How many of the job&apos;s keywords your exportable CV content covers. This is
+          tailoring progress — not your match score, which stays based on your base resume.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3 text-sm">{inner}</CardContent>
     </Card>
   );
 }

@@ -12,7 +12,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getCreditPack, formatUsdFromCents } from "@/lib/billing-credits.mjs";
+import {
+  getCreditPack,
+  formatUsdFromCents,
+  resolveCheckoutView,
+} from "@/lib/billing-credits.mjs";
+import { getCheckoutGrantStatus } from "@/lib/billing-ledger";
 import { getCheckoutSessionSummary } from "@/lib/billing-stripe";
 
 // This route stays outside the Clerk proxy (route-policy contract), so it
@@ -32,14 +37,38 @@ export default async function BillingSuccessPage({
   const session = await getCheckoutSessionSummary(sessionId);
   const pack = session.packId ? getCreditPack(session.packId) : null;
 
+  // A paid Stripe session is only half the story: the page must also confirm
+  // the signed webhook has actually posted the grant to the ledger. Until it
+  // has, the purchase is still "confirming", not done — so the page polls
+  // instead of falsely claiming credits were added.
+  const grant =
+    session.status === "paid"
+      ? await getCheckoutGrantStatus(sessionId)
+      : { posted: false, credits: null, balance: null };
+  const view = resolveCheckoutView(session.status, grant.posted) as
+    | "granted"
+    | "confirming"
+    | "pending"
+    | "not_found"
+    | "unavailable";
+
+  const grantedCredits = grant.credits ?? session.credits;
+  const isAutoRefreshing = view === "pending" || view === "confirming";
+
   const copy = {
-    paid: {
+    granted: {
       title: "Payment received",
-      description: session.credits
-        ? `Your ${session.credits} ${pack?.name ?? ""} credits${
-            session.amountTotalCents ? ` (${formatUsdFromCents(session.amountTotalCents)})` : ""
-          } are being added to your balance now — Stripe's confirmation usually lands within a few seconds.`
-        : "Your credits are being added to your balance now — Stripe's confirmation usually lands within a few seconds.",
+      description: `${grantedCredits ? `Your ${grantedCredits} ${pack?.name ?? ""} ` : "Your "}credits${
+        session.amountTotalCents ? ` (${formatUsdFromCents(session.amountTotalCents)})` : ""
+      } are in your balance.${
+        grant.balance !== null ? ` You now have ${grant.balance} credits.` : ""
+      }`,
+    },
+    confirming: {
+      title: "Payment received — adding your credits…",
+      description: `Stripe confirmed your payment${
+        grantedCredits ? ` for ${grantedCredits} ${pack?.name ?? ""} credits` : ""
+      }. We're posting them to your balance now; this page updates automatically the moment they land.`,
     },
     pending: {
       title: "Finalizing your payment…",
@@ -56,7 +85,7 @@ export default async function BillingSuccessPage({
       description:
         "The payment itself isn't affected — credits are granted by Stripe's confirmation, not by this page. Check your balance in a moment, or keep your Stripe receipt as proof of purchase.",
     },
-  }[session.status];
+  }[view];
 
   return (
     <main className="flex min-h-[100dvh] flex-col bg-background text-foreground">
@@ -69,13 +98,13 @@ export default async function BillingSuccessPage({
         </div>
       </header>
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-10">
-        {session.status === "pending" ? <PendingPaymentRefresh /> : null}
+        {isAutoRefreshing ? <PendingPaymentRefresh /> : null}
         <Card className="rise">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              {session.status === "paid" ? (
+              {view === "granted" ? (
                 <CheckCircle2 className="size-5 text-success" />
-              ) : session.status === "pending" ? (
+              ) : isAutoRefreshing ? (
                 <Clock className="size-5 text-muted-foreground" />
               ) : (
                 <HelpCircle className="size-5 text-muted-foreground" />
@@ -84,7 +113,7 @@ export default async function BillingSuccessPage({
             </CardTitle>
             <CardDescription>{copy.description}</CardDescription>
           </CardHeader>
-          {session.status === "pending" ? (
+          {isAutoRefreshing ? (
             <CardContent>
               <p className="text-sm text-muted-foreground">
                 Still waiting after a minute? You can close this page — credits land in your
@@ -95,7 +124,7 @@ export default async function BillingSuccessPage({
           ) : null}
         </Card>
         <div className="rise rise-d1 flex flex-wrap gap-2">
-          {session.status === "paid" ? (
+          {view === "granted" ? (
             <>
               <Link href="/settings" className={buttonVariants()}>
                 See your new balance

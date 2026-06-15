@@ -59,6 +59,22 @@ export function isRetryableBillingEventResult(processingResult) {
   return processingResult === "received" || processingResult === "failed";
 }
 
+// The success page knows two independent facts: whether Stripe says the session
+// is paid, and whether the signed webhook has actually posted the credit grant
+// to the ledger. A paid session whose grant has NOT posted yet is not "done" —
+// it is still confirming (the webhook may be delayed or, in local dev, the
+// `stripe listen` forwarder may be down). Collapsing that into "granted" is
+// exactly what made a stuck webhook look successful: the page promised credits
+// that never arrived. Keep the two facts apart so the page can poll until the
+// ledger row appears, then show the real balance.
+export function resolveCheckoutView(sessionStatus, grantPosted) {
+  if (sessionStatus === "paid") {
+    return grantPosted ? "granted" : "confirming";
+  }
+  // pending / not_found / unavailable carry through unchanged.
+  return sessionStatus;
+}
+
 export function buildCreditGrantFromCheckoutSession(session) {
   if (!session || typeof session !== "object") {
     return { ok: false, reason: "missing_session" };

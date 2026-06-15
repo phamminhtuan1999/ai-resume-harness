@@ -228,7 +228,7 @@ class BaseAIWorkflow(ABC):
                         request_id=request_id,
                     )
 
-            output, provider_name, model_name = self._generate(data)
+            output, provider_name, model_name, fallback_reason = self._generate(data)
             output = self.postprocess(output, data)
             status: WorkflowStatus = (
                 "needs_review"
@@ -259,6 +259,9 @@ class BaseAIWorkflow(ABC):
                 input_hash=input_hash,
                 prompt_version=self.prompt_version,
                 output_snapshot_json=output.model_dump(mode="json"),
+                # Preserve the primary-provider failure reason for diagnostics.
+                # None on AI success; a reason_code string on deterministic fallback.
+                **({"error_code": fallback_reason} if fallback_reason else {}),
             )
             self._write_activity(
                 user_profile_id=user_profile_id,
@@ -285,7 +288,7 @@ class BaseAIWorkflow(ABC):
                 model_name=model_name,
                 latency_ms=latency_ms,
                 confidence_score=output.confidence_score,
-                error_message=None,
+                error_message=fallback_reason,
             )
             return WorkflowResponse(
                 workflow_run=envelope, result=output.model_dump(mode="json")
@@ -371,8 +374,9 @@ class BaseAIWorkflow(ABC):
         )
         return WorkflowResponse(workflow_run=envelope, result=snapshot).model_dump()
 
-    def _generate(self, data: Any) -> tuple[AIOutputBase, str, str]:
+    def _generate(self, data: Any) -> tuple[AIOutputBase, str, str, str | None]:
         prompt = self.build_prompt(data)
+        fallback_reason: str | None = None
 
         primary = self._build_primary_provider(prompt)
         if primary is not None:
@@ -381,8 +385,9 @@ class BaseAIWorkflow(ABC):
                 # The run records the adapter's own name (US-069), so swapping
                 # AI_PROVIDER swaps the recorded model_provider with no other
                 # change. 'gemini' deployments are unaffected.
-                return self._validate(raw), primary.name, primary.model_name
+                return self._validate(raw), primary.name, primary.model_name, None
             except ProviderError as exc:
+                fallback_reason = exc.reason_code
                 self.log.emit_fallback(
                     workflow_type=self.workflow_type, reason_code=exc.reason_code
                 )
@@ -392,7 +397,7 @@ class BaseAIWorkflow(ABC):
             raw = fallback.generate()
         except ProviderError as exc:
             raise self._map_provider_error(exc) from exc
-        return self._validate(raw), "deterministic", fallback.model_name
+        return self._validate(raw), "deterministic", fallback.model_name, fallback_reason
 
     def _build_primary_provider(self, prompt: str) -> AIProvider | None:
         # US-069: provider selection is centralized in the factory; this method

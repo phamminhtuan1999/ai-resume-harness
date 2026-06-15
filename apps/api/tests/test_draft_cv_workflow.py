@@ -120,6 +120,73 @@ def test_deterministic_fallback_copies_verbatim_safe() -> None:
     assert data.activities[-1]["activity_type"].startswith("draft_cv.")
 
 
+def test_deterministic_fallback_uses_resume_when_profile_empty() -> None:
+    # A user who imported a résumé but has no structured profile yet would
+    # otherwise get a blank offline CV (the structured fallback reads only the
+    # profile). The fallback copies résumé lines verbatim so there is something
+    # to review, edit, and export while the model is unavailable.
+    resume = {
+        "id": "resume_1",
+        "title": "R",
+        "raw_text": (
+            "Led a team of engineers on a payments platform.\n"
+            "Built FastAPI services backed by Postgres on AWS.\n"
+            "Shipped a CI pipeline that cut deploy time substantially.\n"
+        ),
+        "structured_json": None,
+    }
+    data = _data(profile=profile_with_cv({}), resume=resume)
+    _wf(data, key="").run(subject_id="match_1", user_profile_id="profile_1")
+
+    row = data.draft_cvs[-1]
+    assert row["provider"] == "deterministic"
+    bullets = _saved_bullets(data)
+    assert bullets, "an empty profile with a résumé must still yield bullets"
+    texts = " ".join(b["text"] for b in bullets)
+    assert "payments platform" in texts
+    assert all(b["truth_guard_status"] == "safe_to_use" for b in bullets)
+
+
+def test_deterministic_fallback_prefers_structured_profile_over_resume() -> None:
+    # With a real structured profile, the résumé copy must NOT kick in — the
+    # structured content is authoritative and the raw résumé text (incl. its
+    # secret) never gets copied verbatim into the CV.
+    data = _data()
+    _wf(data, key="").run(subject_id="match_1", user_profile_id="profile_1")
+
+    cv = data.draft_cvs[-1]["cv_json"]
+    # Structured entries carry their real company; the résumé-fallback entry has
+    # an empty company. None of the structured entries should be the fallback.
+    assert all(entry.get("company") for entry in cv.get("work_experience", []))
+    assert RESUME_SECRET not in json.dumps(cv)
+
+
+# --- fallback reason persistence ------------------------------------------------
+
+
+def test_provider_failure_reason_persisted_to_run_row() -> None:
+    # When the primary provider fails, the reason_code must be written to the run
+    # row's error_code column so "was it a quota error?" is answerable from the DB.
+    # Three RESOURCE_EXHAUSTED errors exhaust the default retry budget (3 attempts).
+    rate_limit_exc = RuntimeError("RESOURCE_EXHAUSTED")
+    client = FakeGeminiClient([rate_limit_exc, rate_limit_exc, rate_limit_exc])
+    data = _data()
+    _wf(data, key="key", client=client).run(subject_id="match_1", user_profile_id="profile_1")
+
+    assert data.final_update.get("error_code") == "provider_rate_limit"
+    # Run still completes via the deterministic fallback — not a failure.
+    assert data.last_status == "needs_review"
+    assert data.draft_cvs, "fallback must still produce a draft"
+
+
+def test_successful_ai_run_has_no_error_code() -> None:
+    data = _data()
+    client = FakeGeminiClient([gemini_valid_draft_cv()])
+    _wf(data, key="key", client=client).run(subject_id="match_1", user_profile_id="profile_1")
+
+    assert "error_code" not in data.final_update
+
+
 # --- gemini path + server overrides ---------------------------------------------
 
 
@@ -473,13 +540,20 @@ def test_default_resume_corpus_supports_fixture_skills() -> None:
 # --- US-061 tier-1 feedback: prompt contract + traceability ----------------------
 
 
-def _suggestion_row(sid: str, text: str, *, action: str = "accepted", edited: bool = False) -> dict:
+def _suggestion_row(
+    sid: str,
+    text: str,
+    *,
+    action: str = "accepted",
+    edited: bool = False,
+    status: str = "Safe to use",
+) -> dict:
     return {
         "id": sid,
         "suggested_text": text,
         "user_action": action,
         "user_edited": edited,
-        "truth_guard_status": "Safe to use",
+        "truth_guard_status": status,
     }
 
 
@@ -500,6 +574,30 @@ def test_load_input_takes_only_accepted_feedback() -> None:
     loaded = wf.load_input(context)
     assert [f["id"] for f in loaded.accepted_feedback] == ["s1", "s2"]
     assert loaded.accepted_feedback[1]["user_edited"] is True
+
+
+def test_do_not_use_yet_never_shapes_generation_even_when_accepted() -> None:
+    """Truth Guard: a "Do not use yet" suggestion would add experience the
+    resume can't support. Accepting it only marks it reviewed — it never shapes
+    the CV, so unsupported claims cannot leak into generation."""
+    data = _data(
+        resume_suggestions_rows=[
+            _suggestion_row("s1", "Supported, accepted.", action="accepted"),
+            _suggestion_row(
+                "s2", "Confirmed, accepted.", action="accepted", status="Needs confirmation"
+            ),
+            _suggestion_row(
+                "s3", "Unsupported, accepted.", action="accepted", status="Do not use yet"
+            ),
+        ]
+    )
+    wf = _wf(data)
+    context = wf.authorize(subject_id="match_1", user_profile_id="profile_1")
+    context["user_profile_id"] = "profile_1"
+    loaded = wf.load_input(context)
+    # s1 (safe) and s2 (needs confirmation, accepted = user confirmed) shape the
+    # CV; s3 (do not use yet) is excluded despite being accepted.
+    assert [f["id"] for f in loaded.accepted_feedback] == ["s1", "s2"]
 
 
 def test_prompt_marks_user_edited_feedback_as_authoritative() -> None:

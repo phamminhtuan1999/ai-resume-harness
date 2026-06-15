@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Lightbulb } from "lucide-react";
+import { ArrowLeft, Lightbulb } from "lucide-react";
 
+import { MarkReviewedButton } from "@/components/forms/mark-reviewed-button";
 import { RoadmapForm } from "@/components/forms/roadmap-form";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -67,6 +68,16 @@ export default async function RoadmapPage({ params }: RoadmapPageProps) {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+      {/* The roadmap is reached from Skill Gaps; give an explicit way back so the
+          gaps ⇄ roadmap loop is obvious (the breadcrumb only goes to Overview). */}
+      <Link
+        href={`/matches/${match.id}/gaps`}
+        className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" />
+        Back to Skill Gaps
+      </Link>
+
       <section className="grid gap-5 lg:grid-cols-[1fr_320px]">
         <Card>
           <CardHeader>
@@ -91,9 +102,13 @@ export default async function RoadmapPage({ params }: RoadmapPageProps) {
               {needsReview ? <Badge variant="warning">Needs review</Badge> : null}
             </div>
             {needsReview ? (
-              <p className="text-sm">
-                This roadmap may need a closer look before following it.
-              </p>
+              <div className="flex flex-col items-start gap-2 rounded-lg border bg-muted/30 p-3">
+                <p className="text-sm">
+                  This roadmap may need a closer look before following it. Mark it reviewed once
+                  you&apos;ve read it — it stays available from Skill Gaps and your Overview.
+                </p>
+                <MarkReviewedButton matchId={match.id} step="roadmap" />
+              </div>
             ) : null}
           </CardContent>
         </Card>

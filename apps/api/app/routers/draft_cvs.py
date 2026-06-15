@@ -678,6 +678,90 @@ def _stamp_export(
         pass
 
 
+def _preview_pdf(
+    draft_cv_id: str,
+    user: AuthenticatedUser,
+    *,
+    pages: int | None = None,
+    font: str | None = None,
+) -> Response:
+    """Render the draft CV to PDF for an in-app preview WITHOUT stamping it as
+    exported. Viewing the rendered CV is a read: it must not advance status to
+    'exported' or write an activity event — only an actual download does (see
+    ``_export`` / ``_stamp_export``). Same render pipeline, inline disposition."""
+    data_client = _data_client()
+    try:
+        _user_profile_id, row = _owned_draft(data_client, user, draft_cv_id)
+    except SupabaseConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=_MISCONFIGURED) from exc
+    except SupabaseDataError as exc:
+        raise HTTPException(status_code=503, detail=_UNAVAILABLE) from exc
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Draft CV not found.")
+
+    resolved, error = _resolve_render(row, pages, font)
+    if error is not None:
+        return JSONResponse(status_code=422, content={"error": error})
+    assert resolved is not None
+
+    cv_json = row.get("cv_json") or {}
+    render_model = build_render_model(cv_json)
+    if is_empty_cv(render_model):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": {
+                    "code": "empty_cv",
+                    "message": "This CV has no content to preview yet. Approve at least one item first.",
+                    "retryable": False,
+                }
+            },
+        )
+
+    options = resolved.options
+    try:
+        if options.page_target is not None:
+            from app.services.export.pdf_renderer import render_pdf_paged
+
+            content, _report, _model, _info = render_pdf_paged(cv_json, options)
+        else:
+            from app.services.export.pdf_renderer import render_pdf
+
+            content = render_pdf(render_model, options)
+    except RuntimeError:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": {
+                    "code": "render_failure",
+                    "message": "We could not render the preview. Please try again.",
+                    "retryable": True,
+                }
+            },
+        )
+
+    target_job = cv_json.get("target_job") or {}
+    slug = filename_slug(render_model, target_job)
+    # inline (not attachment) so the browser shows it in an <iframe>; no stamp.
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{slug}.pdf"'},
+    )
+
+
+@router.get("/draft-cvs/{draft_cv_id}/preview/pdf")
+def preview_pdf(
+    draft_cv_id: str,
+    pages: int | None = None,
+    font: str | None = None,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> Response:
+    """On-demand inline PDF render for the draft-cv preview (read-only)."""
+    return _preview_pdf(draft_cv_id, user, pages=pages, font=font)
+
+
 @router.post("/draft-cvs/{draft_cv_id}/export/pdf")
 def export_pdf(
     draft_cv_id: str,

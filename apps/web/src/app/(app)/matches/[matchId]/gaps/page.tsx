@@ -1,6 +1,9 @@
+import Link from "next/link";
+import { ArrowRight, Map } from "lucide-react";
 
 import { MissingSkillsForm } from "@/components/forms/missing-skills-form";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -189,6 +192,33 @@ export default async function GapsPage({ params }: GapsPageProps) {
           </CardHeader>
         </Card>
       )}
+
+      {/* The next step after seeing the gaps: turn them into a plan. This is the
+          canonical entry into the roadmap (it has no tab of its own). */}
+      {total > 0 ? (
+        <Card>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+            <div className="flex items-start gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-muted text-brand">
+                <Map className="size-4" />
+              </span>
+              <div>
+                <p className="text-sm font-medium">Turn these gaps into a plan</p>
+                <p className="text-sm text-muted-foreground">
+                  A 4-week roadmap closes your top gaps with weekly, portfolio-ready work.
+                </p>
+              </div>
+            </div>
+            <Link
+              href={`/matches/${match.id}/roadmap`}
+              className={buttonVariants({ variant: "outline" })}
+            >
+              View 4-week roadmap
+              <ArrowRight data-icon="inline-end" />
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

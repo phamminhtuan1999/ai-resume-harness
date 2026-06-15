@@ -128,16 +128,21 @@ export function pathForward(label, missingSkills) {
 }
 
 // US-051: the persistent roadmap entry card on Overview. The learning-target
-// persona's primary artifact needs a stable home without a seventh tab, so when
-// a roadmap has been generated for the match the Overview shows an entry card.
-// Returns the newest completed roadmap run's timestamp, or null when none exists.
+// persona's primary artifact needs a stable home without a seventh tab, so once
+// a roadmap is generated the Overview shows an entry card — the durable way back
+// to it after leaving. A low-confidence ("needs_review") roadmap is still a
+// generated artifact, so it counts here too; only queued/running/failed runs do
+// not. Returns the newest generated run's timestamp, or null when none exists.
 export function roadmapEntryFromRuns(runs) {
-  const completed = (Array.isArray(runs) ? runs : []).filter(
-    (r) => r && r.workflow_type === "roadmap" && r.status === "completed"
+  const generated = (Array.isArray(runs) ? runs : []).filter(
+    (r) =>
+      r &&
+      r.workflow_type === "roadmap" &&
+      (r.status === "completed" || r.status === "needs_review")
   );
-  if (completed.length === 0) return null;
-  let latest = completed[0];
-  for (const r of completed) {
+  if (generated.length === 0) return null;
+  let latest = generated[0];
+  for (const r of generated) {
     if ((r.completed_at ?? "") > (latest.completed_at ?? "")) latest = r;
   }
   return { generatedAt: latest.completed_at ?? null };

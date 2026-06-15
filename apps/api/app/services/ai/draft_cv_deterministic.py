@@ -46,6 +46,36 @@ def _bullet(text: str) -> dict[str, Any]:
     }
 
 
+# Lines below this length are almost always résumé noise (a lone date, a label,
+# a fragment of a contact line) rather than reviewable content.
+_RESUME_LINE_MIN_CHARS = 8
+# A degraded offline copy is for review, not a final document — cap it so a long
+# résumé cannot produce a runaway entry.
+_RESUME_FALLBACK_MAX_BULLETS = 40
+
+
+def _resume_fallback_bullets(resume_text: str | None) -> list[dict[str, Any]]:
+    """Verbatim résumé lines as ``safe_to_use`` bullets.
+
+    The structured fallback above reads only ``candidate_profile_json``. A user
+    who imported a résumé but has no structured profile yet (the profile parse
+    never ran, e.g. the model was down) would otherwise get a blank CV. This
+    keeps faith with the fallback's contract — copy the candidate's own content
+    verbatim — by sourcing reviewable bullets straight from the résumé text. The
+    server guards still run on these (the corpus includes the résumé), so nothing
+    unsupported survives.
+    """
+    bullets: list[dict[str, Any]] = []
+    for raw_line in (resume_text or "").splitlines():
+        line = raw_line.strip().lstrip("•-*").strip()
+        if len(line) < _RESUME_LINE_MIN_CHARS:
+            continue
+        bullets.append(_bullet(line))
+        if len(bullets) >= _RESUME_FALLBACK_MAX_BULLETS:
+            break
+    return bullets
+
+
 def build_draft_cv(
     *,
     candidate_profile: dict[str, Any] | None,
@@ -54,6 +84,7 @@ def build_draft_cv(
     source_url: str | None,
     job_keywords: list[str],
     page_policy: PagePolicy | None = None,
+    resume_text: str | None = None,
 ) -> dict[str, Any]:
     profile = candidate_profile or {}
     basic = profile.get("basic_info") or {}
@@ -146,6 +177,30 @@ def build_draft_cv(
         f"Tailored your existing experience to {job_title or 'the role'}"
         f"{f' at {company}' if company else ''} using only resume-backed content."
     )
+
+    # The structured profile produced nothing renderable (no parsed profile yet),
+    # but the candidate has a résumé on file. Rather than emit a blank CV, copy the
+    # résumé text in verbatim so there is something to review, edit, and export
+    # while the model is unavailable. Guards still run on these bullets downstream.
+    has_structured_content = (
+        any(entry["bullets"] for entry in work_experience)
+        or any(proj["bullets"] for proj in projects)
+        or bool(skill_groups)
+        or bool(professional_summary)
+    )
+    if not has_structured_content:
+        resume_bullets = _resume_fallback_bullets(resume_text)
+        if resume_bullets:
+            work_experience.append(
+                {
+                    "company": "",
+                    "title": "Experience",
+                    "location": None,
+                    "start_date": None,
+                    "end_date": None,
+                    "bullets": resume_bullets,
+                }
+            )
 
     return {
         # These resume-derived contact values are placeholders only: the
