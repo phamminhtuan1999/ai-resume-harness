@@ -10,6 +10,7 @@ const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: ["**/*.capture.ts"],
   // Auth + a shared live DB make parallel writes racy; keep it serial.
   fullyParallel: false,
   workers: 1,
@@ -40,7 +41,8 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: "cd ../api && .venv/bin/python -m uvicorn app.main:app --port 8000",
+      command:
+        "cd ../api && .venv/bin/python -m uvicorn app.main:app --port 8000",
       url: "http://localhost:8000/health",
       reuseExistingServer: true,
       timeout: 120_000,

@@ -479,6 +479,189 @@ export async function seedPreservationConflict(): Promise<void> {
   if (updateError) throw new Error(`Could not seed conflict: ${updateError.message}`);
 }
 
+// Seed the missing-skill analysis for the seeded match (US-029). One row per
+// match (UNIQUE match_id); upsert keeps it idempotent. Populates the Skill Gaps
+// page/tab instead of its empty "generate" state.
+export async function seedMissingSkills(profileId: string): Promise<void> {
+  const db = adminClient();
+  const { error } = await db.from("missing_skill_analyses").upsert(
+    {
+      user_id: profileId,
+      match_id: SEED.matchId,
+      summary: "RAG and embeddings are the priority gaps for this role.",
+      missing_skills_json: [
+        {
+          skill: "RAG pipelines",
+          importance: "critical",
+          gap_type: "true_gap",
+          evidence_status: "no_evidence",
+          resume_evidence: null,
+          job_requirement: "Build RAG pipelines for document retrieval.",
+          why_it_matters: "Central to the Applied AI Engineer role.",
+          how_to_fix: "Build a small RAG project over your own documents.",
+          suggested_project_task: "Index docs and answer questions over them.",
+          interview_risk: "Expect deep RAG design questions.",
+        },
+        {
+          skill: "Vector Embeddings",
+          importance: "critical",
+          gap_type: "true_gap",
+          evidence_status: "no_evidence",
+          resume_evidence: null,
+          job_requirement: "Use vector embeddings for retrieval.",
+          why_it_matters: "Essential for any RAG system.",
+          how_to_fix: "Learn pgvector with hands-on indexing work.",
+          suggested_project_task: "Add a pgvector store to the RAG project.",
+          interview_risk: "They will ask about embedding selection tradeoffs.",
+        },
+        {
+          skill: "Kubernetes",
+          importance: "medium",
+          gap_type: "wording_gap",
+          evidence_status: "weak_evidence",
+          resume_evidence: "Deployed services on AWS.",
+          job_requirement: "Operate workloads on Kubernetes.",
+          why_it_matters: "Listed as a preferred operational skill.",
+          how_to_fix: "Frame your AWS deployment work and add a k8s deploy.",
+          suggested_project_task: null,
+          interview_risk: "May be asked to compare ECS and Kubernetes.",
+        },
+      ],
+      top_3_priority_gaps_json: ["RAG pipelines", "Vector Embeddings", "Kubernetes"],
+      confidence_score: 0.81,
+      provider: "deterministic",
+      created_at: "2026-06-10T13:00:00Z",
+      updated_at: "2026-06-10T13:00:00Z",
+    },
+    { onConflict: "match_id" }
+  );
+  if (error) throw new Error(`Could not seed missing skills: ${error.message}`);
+}
+
+// Seed a 4-week roadmap for the seeded match. The roadmap page also requires a
+// missing-skill analysis row, so call seedMissingSkills first. Delete-then-insert
+// keeps it idempotent (multiple rows allowed per match; latest wins).
+export async function seedRoadmap(profileId: string): Promise<void> {
+  const db = adminClient();
+  await db.from("roadmaps").delete().eq("match_id", SEED.matchId);
+  const week = (
+    n: number,
+    goal: string,
+    skill: string,
+    bullet: string,
+    talkingPoint: string
+  ) => ({
+    week: n,
+    goal,
+    skills_covered: [skill],
+    tasks: [`Study ${skill} fundamentals.`, `Apply ${skill} in the portfolio project.`],
+    deliverables: [`Working ${skill} demo with tests.`],
+    project_feature: `${skill} capability on the multi-doc Q&A project.`,
+    resume_bullet_after_completion: bullet,
+    interview_talking_point: talkingPoint,
+  });
+  const { error } = await db.from("roadmaps").insert({
+    user_id: profileId,
+    match_id: SEED.matchId,
+    title: "4-week Applied AI Engineer improvement roadmap for Northwind AI",
+    roadmap_json: {
+      roadmap_summary: "Closes RAG, embeddings, evaluation, and deployment gaps in 4 weeks.",
+      recommended_project_theme: "Multi-document Q&A assistant with pgvector retrieval.",
+      weeks: [
+        week(
+          1,
+          "Close the RAG gap with a working demo.",
+          "RAG pipelines",
+          "Built a verified RAG capability into a portfolio project.",
+          "Can explain RAG design tradeoffs."
+        ),
+        week(
+          2,
+          "Close the embeddings gap with pgvector.",
+          "Vector Embeddings",
+          "Built a verified embeddings capability with pgvector.",
+          "Can explain embedding selection and tradeoffs."
+        ),
+        week(
+          3,
+          "Add an evaluation harness for the RAG outputs.",
+          "LLM Evaluation",
+          "Built a reproducible evaluation harness for an LLM system.",
+          "Can explain evaluation pipeline design."
+        ),
+        week(
+          4,
+          "Deploy the complete application to a public URL.",
+          "Deployment",
+          "Shipped a production RAG system with evaluation to a public URL.",
+          "Can discuss production AI deployment tradeoffs."
+        ),
+      ],
+      success_criteria: [
+        "A public demo URL exists.",
+        "The evaluation harness produces reproducible scores.",
+        "All code is on GitHub with clear documentation.",
+      ],
+      confidence_score: 0.82,
+    },
+    created_at: "2026-06-10T14:00:00Z",
+    updated_at: "2026-06-10T14:00:00Z",
+  });
+  if (error) throw new Error(`Could not seed roadmap: ${error.message}`);
+}
+
+// Seed interview prep for the seeded match (US-035). Delete-then-insert keeps it
+// idempotent. Populates the Interview Prep page instead of its empty state.
+export async function seedInterviewPrep(profileId: string): Promise<void> {
+  const db = adminClient();
+  await db.from("interview_preps").delete().eq("match_id", SEED.matchId);
+  const { error } = await db.from("interview_preps").insert({
+    user_id: profileId,
+    match_id: SEED.matchId,
+    questions_json: {
+      technical_questions: [
+        "How have you built FastAPI services in production?",
+        "What async patterns have you relied on, and when do they break down?",
+      ],
+      ai_llm_questions: [
+        "How would you design a RAG pipeline for document retrieval?",
+        "What vector database options have you evaluated, and how would you choose?",
+      ],
+      system_design_questions: [
+        "Design a scalable job-matching service backed by RAG.",
+        "How would you handle vector search at scale?",
+      ],
+      behavioral_questions: [
+        "Tell me about a time you learned a missing skill quickly.",
+        "How do you approach an unfamiliar AI framework under deadline?",
+      ],
+    },
+    weak_topics_json: ["RAG pipelines", "Vector embeddings", "LLM evaluation"],
+    study_plan_json: {
+      prep_summary:
+        "Expect deep RAG and LLM-evaluation questions. Lead with your FastAPI production experience; be honest where proof is missing and show learning agility.",
+    },
+    answer_guidance_json: [
+      {
+        question: "How have you built FastAPI services in production?",
+        recommended_angle: "Lead with the production services you built and scaled on AWS.",
+        resume_evidence_to_use:
+          "Backend engineer with 6 years building APIs in Python and FastAPI on AWS.",
+        warning: null,
+      },
+      {
+        question: "How would you design a RAG pipeline for document retrieval?",
+        recommended_angle: "Be honest that proof is limited; outline what you would build.",
+        resume_evidence_to_use: null,
+        warning: "No RAG pipeline evidence in the resume — build a working prototype first.",
+      },
+    ],
+    created_at: "2026-06-10T14:30:00Z",
+    updated_at: "2026-06-10T14:30:00Z",
+  });
+  if (error) throw new Error(`Could not seed interview prep: ${error.message}`);
+}
+
 // Remove everything the seed created for this profile (including any learning
 // target the test saved, and any resume/job deletion audit rows a US-055 test
 // wrote). Exact, so it never leaves residue in the live DB.
@@ -486,6 +669,9 @@ export async function teardownAnalyzedMatch(profileId: string): Promise<void> {
   const db = adminClient();
   await db.from("applications").delete().eq("user_id", profileId);
   await db.from("cover_letters").delete().eq("match_id", SEED.matchId);
+  await db.from("interview_preps").delete().eq("match_id", SEED.matchId);
+  await db.from("roadmaps").delete().eq("match_id", SEED.matchId);
+  await db.from("missing_skill_analyses").delete().eq("match_id", SEED.matchId);
   await db.from("draft_cvs").delete().eq("id", SEED.draftCvV2Id);
   await db.from("draft_cvs").delete().eq("id", SEED.draftCvId);
   await db.from("analysis_decisions").delete().eq("match_id", SEED.matchId);

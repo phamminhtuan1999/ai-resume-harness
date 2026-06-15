@@ -38,3 +38,6 @@ venv/
 # Local agent skills (not pushed).
 .agents/
 skills-lock.json
+
+# Portfolio generated assets (screenshots, AI-generated docs).
+portfolio/
