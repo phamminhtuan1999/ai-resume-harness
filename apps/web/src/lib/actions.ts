@@ -8,7 +8,6 @@ import type { ActionState } from "@/lib/action-state";
 import {
   getValidationFieldErrors,
   readForm,
-  validateJobInput,
   validateJobRenameInput,
   validateJobUrlInput,
   validateMatchIdInput,
@@ -310,45 +309,6 @@ export async function saveResumeAction(
   revalidatePath("/resumes");
   revalidatePath("/dashboard");
   return success("Resume saved.");
-}
-
-export async function saveJobAction(
-  _previousState: ActionState,
-  formData: FormData
-): Promise<ActionState> {
-  const context = await requireWritableContext();
-  if (!context.ok) {
-    return failure(context.message);
-  }
-
-  const parsed = validateJobInput(readForm(formData));
-  if (!parsed.success) {
-    return failure("Job fields are incomplete or invalid.", getValidationFieldErrors(parsed.error));
-  }
-
-  const clean = parsed.data;
-  const supabase = getSupabaseServiceClient();
-  const { error } = await supabase.from("jobs").insert({
-    user_id: context.userProfileId,
-    company: clean.company,
-    title: clean.title,
-    job_url: clean.job_url || null,
-    location: clean.location || null,
-    raw_description: clean.raw_description,
-    contact_name: clean.contact_name || null,
-    contact_email: clean.contact_email || null,
-    contact_linkedin_url: clean.contact_linkedin_url || null,
-    contact_notes: clean.contact_notes || null,
-  });
-
-  if (error) {
-    return failure("Job save failed.");
-  }
-
-  revalidatePath("/jobs");
-  revalidatePath("/tracker");
-  revalidatePath("/dashboard");
-  return success("Job saved.");
 }
 
 export async function importJobByUrlAction(
