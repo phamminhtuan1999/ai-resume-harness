@@ -28,7 +28,7 @@ submission-grade:
    and margins; no controlled font system, no density variants.
 4. **No compression.** Overflowing content simply spills to page 2+.
 
-The Period 10 brief (`docs/stories/period-10/brief.md`, verbatim user
+The Period 10 brief (verbatim user
 requirement 2026-06-09) asks for: an AI-recommended page count with a rules
 table keyed on years of experience, a LaTeX-style font-profile system
 (`modern_latex | ats_clean | classic_latex`), page-aware render configs, an
@@ -36,7 +36,7 @@ ordered compression strategy, DOCX font mapping, UI display of the
 recommendation, and a user page-count override.
 
 Several brief suggestions conflict with the system as built (full adversarial
-review: `docs/stories/period-10/README.md`). The load-bearing conflicts:
+review). The load-bearing conflicts:
 
 - **"The AI determines the page count"** vs. the brief's own deterministic
   rules table and decisions 0012/0013, which require protocol guarantees as
@@ -206,7 +206,7 @@ weights are taste parameters frozen by US-045 and tuned later; legacy
 - Stop conditions: font licenses failing review (block vendoring), the
   measure loop failing to converge deterministically, or any need to rewrite
   bullet text to fit — pause and update this decision.
-- Open questions flagged in `docs/stories/period-10/README.md`: modern_latex
+- Open questions flagged during review: modern_latex
   DOCX naming, compression aggressiveness defaults, recommendation panel
   visibility on `needs_review` drafts.
 - Post-MVP candidates: user-facing font picker, WYSIWYG paginated preview,

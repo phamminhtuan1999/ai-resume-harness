@@ -12,7 +12,7 @@ other part of this decision changes.)
 
 ## Context
 
-The Period 9 brief (`docs/stories/period-9/brief.md`) asks for an AI Draft CV
+The Period 9 brief asks for an AI Draft CV
 feature: generate a job-tailored, truth-guarded CV as structured JSON, let the
 user review/approve uncertain claims, and export PDF/DOCX in an ATS-safe
 "ApplyWise standard resume template". The brief suggests job-scoped endpoints
@@ -196,6 +196,6 @@ All four stories landed backend + web, 283 API tests + 130 web tests green:
   US-042 the DOCX export.
 - Flag for product owner: decide whether the Markdown tailored draft (US-032)
   is folded into Draft CV or kept as a separate lightweight artifact
-  (`docs/stories/period-9/README.md`, Open Questions).
+  (Open Questions).
 - Post-MVP candidates: manual bullet text editing (requires re-classification
   of edited claims), binary export archival, additional templates.

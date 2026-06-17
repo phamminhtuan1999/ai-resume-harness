@@ -44,3 +44,38 @@ skills-lock.json
 
 # Portfolio generated assets (screenshots, AI-generated docs).
 portfolio/
+
+# Product-only repo: keep agent/harness/development-phase material local, out of
+# the published product. These files stay on disk for ongoing development; they
+# are simply not tracked. (See also harness.db and scripts/bin above.)
+# Agent instructions.
+CLAUDE.md
+AGENTS.md
+apps/web/CLAUDE.md
+apps/web/AGENTS.md
+# Harness automation (the kill-ports dev script stays tracked).
+scripts/README.md
+scripts/schema/
+scripts/sync-backlog.sh
+# Harness operational docs.
+docs/HARNESS.md
+docs/HARNESS_BACKLOG.md
+docs/HARNESS_COMPONENTS.md
+docs/HARNESS_MATURITY.md
+docs/TRACE_SPEC.md
+docs/VALIDATION_PLAYBOOK.md
+docs/FEATURE_INTAKE.md
+docs/CONTEXT_RULES.md
+docs/TEST_MATRIX.md
+docs/GLOSSARY.md
+docs/README.md
+# Development-phase paper trail.
+docs/stories/
+docs/templates/
+# Harness/process decision records (product ADRs 0007+ stay tracked).
+docs/decisions/0001-harness-first-development.md
+docs/decisions/0002-post-spec-product-lifecycle.md
+docs/decisions/0003-generic-spec-intake-harness.md
+docs/decisions/0004-sqlite-durable-layer.md
+docs/decisions/0005-prebuilt-rust-harness-cli.md
+docs/decisions/0006-phase-4-benchmark-triage.md

@@ -1,7 +1,6 @@
 # ApplyWise Architecture Diagrams
 
-These diagrams describe **ApplyWise**, the application that lives under `apps/`
-(the repo's top-level README documents the *Harness* tooling, not the app).
+These diagrams describe **ApplyWise**, the application that lives under `apps/`.
 ApplyWise is an AI career copilot that imports a resume, analyzes its fit
 against a job, and generates tailored suggestions, drafts, roadmaps, interview
 prep, and an application tracker.

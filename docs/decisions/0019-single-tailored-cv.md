@@ -151,7 +151,7 @@ Tradeoffs:
 
 ## Follow-Up
 
-- Period 13 stories US-059..US-063 (`docs/stories/period-13/`), phases 1–4
+- Period 13 stories US-059..US-063, phases 1–4
   (execution order US-059 → US-061 → US-060 → US-062/063).
 - Candidate US-064 (deferred): user-directed rewrite controls (tone/length
   selection) on top of the tier-2 polish, same verification gate.

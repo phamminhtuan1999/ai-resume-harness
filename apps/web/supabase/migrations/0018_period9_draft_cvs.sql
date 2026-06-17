@@ -2,8 +2,7 @@
 -- Append-only, truth-guarded, exportable draft CV versions per match. Generation
 -- runs on the server (apps/api) under the Supabase service role after Clerk
 -- identity + ownership checks; browser clients must not write this table
--- directly. See docs/decisions/0013-draft-cv-export-architecture.md and
--- docs/stories/period-9/US-039-draft-cv-generation/.
+-- directly. See docs/decisions/0013-draft-cv-export-architecture.md.
 
 -- Extend the shared workflow_type enum with 'draft_cv'. The constraint was
 -- defined inline in 0010 (default name ai_workflow_runs_workflow_type_check);
