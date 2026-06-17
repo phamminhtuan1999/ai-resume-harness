@@ -17,6 +17,7 @@ import {
   validateResumeTitleInput,
   validateSaveApplicationInput,
   validateUpdateApplicationStatusInput,
+  validateUpdateInterviewScheduleInput,
 } from "@/lib/action-validation.mjs";
 import { getCurrentAppUser, getCurrentSessionToken } from "@/lib/auth/server";
 import {
@@ -70,6 +71,7 @@ import {
   getApplicationStatusLabel,
   learningTargetSavePlan,
 } from "@/lib/application-tracker.mjs";
+import { normalizeInterviewSchedule } from "@/lib/interview-schedule.mjs";
 
 async function requireWritableContext(): Promise<
   | { ok: true; userProfileId: string }
@@ -768,6 +770,57 @@ export async function updateApplicationStatusAction(
   }
 
   return success("Tracker status updated.");
+}
+
+// US-082: persist optional interview scheduling fields on an owned tracker row.
+// Additive and independent of status — saving interview details never changes
+// the tracker status or moves a Learning Target into the active pipeline. The
+// ownership filter (.eq("user_id", ...)) denies another user's row without
+// revealing whether it exists.
+export async function updateInterviewScheduleAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const parsed = validateUpdateInterviewScheduleInput(readForm(formData));
+  if (!parsed.success) {
+    return failure("Enter valid interview details.", getValidationFieldErrors(parsed.error));
+  }
+
+  const normalized = normalizeInterviewSchedule(parsed.data);
+  if (!normalized.ok) {
+    return failure("Enter valid interview details.", normalized.fieldErrors);
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data: application, error } = await supabase
+    .from("applications")
+    .update({
+      interview_date: normalized.value.interview_date,
+      interview_stage: normalized.value.interview_stage,
+      interview_notes: normalized.value.interview_notes,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", parsed.data.application_id)
+    .eq("user_id", context.userProfileId)
+    .select("id,job_id,match_id")
+    .single();
+
+  if (error || !application?.id) {
+    return failure("Interview update failed.");
+  }
+
+  revalidatePath("/tracker");
+  revalidatePath(`/jobs/${application.job_id}`);
+  if (application.match_id) {
+    revalidatePath(`/matches/${application.match_id}`);
+  }
+
+  return success("Interview details saved.");
 }
 
 export async function generateMatchAction(

@@ -137,6 +137,9 @@ export type ApplicationTrackerItem = {
   status: string;
   applied_date: string | null;
   notes: string | null;
+  interview_date: string | null;
+  interview_stage: string | null;
+  interview_notes: string | null;
   created_at: string;
   updated_at: string;
   jobs: {
@@ -760,6 +763,9 @@ export async function getTrackerData(): Promise<TrackerData> {
         "status",
         "applied_date",
         "notes",
+        "interview_date",
+        "interview_stage",
+        "interview_notes",
         "created_at",
         "updated_at",
         "jobs(id,company,title,job_url,location,contact_name,contact_email,contact_linkedin_url,contact_notes)",

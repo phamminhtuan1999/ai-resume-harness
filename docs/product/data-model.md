@@ -523,7 +523,20 @@ Required fields:
 - `status text not null default 'saved'`
 - `applied_date date`
 - `notes text`
+- `interview_date date` — US-082 (migration `0032`): optional interview event
+  date, distinct from `applied_date` (applying vs. interviewing are different
+  lifecycle events).
+- `interview_stage text` — US-082: optional interview stage. Free text at the DB
+  layer; the known-stage vocabulary lives in `interview-schedule.mjs`.
+- `interview_notes text` — US-082: optional scheduling notes (distinct from the
+  generated `interview_preps` content, which is keyed by match).
 - timestamps
+
+Interview scheduling fields (US-082) are optional and additive; they never
+change `status` semantics. A `learning_target` may carry interview fields and is
+still a Learning Target — never counted as an active application. Partial index
+`applications_user_interview_date_idx (user_id, interview_date) where
+interview_date is not null` supports the US-083 calendar query.
 
 Valid `status` storage values (decision 0009):
 
