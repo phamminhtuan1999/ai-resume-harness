@@ -144,6 +144,57 @@ class JobPreviewResponse(BaseModel):
     duplicate_job_id: str | None = None
 
 
+IntakeSource = Literal["discovered_api", "manual_url", "manual_paste"]
+
+
+class JobSaveExternalRequest(BaseModel):
+    """Persist a job from any intake mode (search / URL / paste) at Save (US-077).
+
+    The AI Role Relevance and Quick Match results are computed pre-save and held
+    in memory (decision 0026); they ride along here and are mirrored onto the
+    ``jobs`` denormalized columns at insert time. ``external_*`` identity is set
+    only for ``discovered_api`` (search) results; URL/paste carry ``source_url``
+    / ``normalized_url`` instead.
+    """
+
+    source: IntakeSource
+    title: str
+    company: str | None = None
+    location: str | None = None
+    work_type: WorkType = "unknown"
+    employment_type: EmploymentType = "unknown"
+    salary_range: str | None = None
+    raw_description: str
+    # URL / paste provenance
+    source_url: str | None = None
+    normalized_url: str | None = None
+    # External provider identity (search results only)
+    external_source: str | None = None
+    external_job_id: str | None = None
+    external_apply_url: str | None = None
+    external_raw_payload: dict | None = None
+    # Extraction detail (mirrored into extraction_json)
+    responsibilities: list[str] = Field(default_factory=list)
+    required_skills: list[str] = Field(default_factory=list)
+    preferred_skills: list[str] = Field(default_factory=list)
+    required_experience_years: str | None = None
+    ai_related_requirements: list[str] = Field(default_factory=list)
+    cloud_requirements: list[str] = Field(default_factory=list)
+    extraction_confidence: float = 0.0
+    # AI judgments (in-memory until save) — never conflated (Principle 2).
+    ai_relevance: AiRelevancePreview | None = None
+    quick_match: SearchQuickMatchPreview | None = None
+
+
+class JobSaveResponse(BaseModel):
+    """Result of a save: the persisted (or pre-existing) job's id + identity."""
+
+    job_id: str
+    duplicate: bool = False
+    title: str
+    company: str | None = None
+
+
 class JobImportUrlResponse(BaseModel):
     job_id: str
     duplicate: bool = False

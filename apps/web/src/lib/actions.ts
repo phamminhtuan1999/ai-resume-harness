@@ -8,7 +8,6 @@ import type { ActionState } from "@/lib/action-state";
 import {
   getValidationFieldErrors,
   readForm,
-  validateJobInput,
   validateJobRenameInput,
   validateJobUrlInput,
   validateMatchIdInput,
@@ -42,6 +41,11 @@ import {
   extractJobFromDescription,
   previewJobByUrl,
 } from "@/lib/job-preview-flow.mjs";
+import {
+  buildSaveRequestFromPreview,
+  buildSaveRequestFromSearchResult,
+  saveExternalJob,
+} from "@/lib/job-save-flow.mjs";
 import {
   AIWorkflowError,
   patchDraftCvBullet,
@@ -305,45 +309,6 @@ export async function saveResumeAction(
   revalidatePath("/resumes");
   revalidatePath("/dashboard");
   return success("Resume saved.");
-}
-
-export async function saveJobAction(
-  _previousState: ActionState,
-  formData: FormData
-): Promise<ActionState> {
-  const context = await requireWritableContext();
-  if (!context.ok) {
-    return failure(context.message);
-  }
-
-  const parsed = validateJobInput(readForm(formData));
-  if (!parsed.success) {
-    return failure("Job fields are incomplete or invalid.", getValidationFieldErrors(parsed.error));
-  }
-
-  const clean = parsed.data;
-  const supabase = getSupabaseServiceClient();
-  const { error } = await supabase.from("jobs").insert({
-    user_id: context.userProfileId,
-    company: clean.company,
-    title: clean.title,
-    job_url: clean.job_url || null,
-    location: clean.location || null,
-    raw_description: clean.raw_description,
-    contact_name: clean.contact_name || null,
-    contact_email: clean.contact_email || null,
-    contact_linkedin_url: clean.contact_linkedin_url || null,
-    contact_notes: clean.contact_notes || null,
-  });
-
-  if (error) {
-    return failure("Job save failed.");
-  }
-
-  revalidatePath("/jobs");
-  revalidatePath("/tracker");
-  revalidatePath("/dashboard");
-  return success("Job saved.");
 }
 
 export async function importJobByUrlAction(
@@ -1880,6 +1845,13 @@ export async function searchAiJobsAction(
     };
   }
 
+  // Intake activity (US-077): a low-importance breadcrumb that a search ran.
+  await recordIntakeActivity({
+    userProfileId: context.userProfileId,
+    activityType: "search.performed",
+    title: `Searched AI jobs for "${request.target_role}"`,
+  });
+
   return { status: "results", message: "", result: result.result as SearchAiResult };
 }
 
@@ -1939,6 +1911,13 @@ export async function previewJobUrlAction(
   if (!result.ok) {
     return { status: "error", message: result.message };
   }
+
+  await recordIntakeActivity({
+    userProfileId: context.userProfileId,
+    activityType: "job.url_previewed",
+    title: "Previewed a job by URL",
+  });
+
   return {
     status: "preview",
     message: "",
@@ -1970,9 +1949,297 @@ export async function extractJobFromDescriptionAction(
   if (!result.ok) {
     return { status: "error", message: result.message };
   }
+
+  await recordIntakeActivity({
+    userProfileId: context.userProfileId,
+    activityType: "job.jd_pasted",
+    title: "Pasted a job description",
+  });
+
   return {
     status: "preview",
     message: "",
     preview: (result as { preview: JobPreview }).preview,
   };
+}
+
+// --- US-077: Save / Save & Analyze / Open Apply Link + intake activity ---
+//
+// Save persists a job from any intake mode via POST /api/jobs/save-external,
+// carrying its in-memory AI relevance + quick match onto the jobs columns
+// (decision 0026). Save & Analyze then runs the existing match analysis and
+// routes to the report. Saving and previewing stay free; only the existing
+// paid actions spend credits, so the spend gate is untouched here.
+
+// Best-effort intake breadcrumb. Never throws into the calling action — a
+// failed activity write must not block save/search/preview.
+async function recordIntakeActivity({
+  userProfileId,
+  activityType,
+  title,
+  importance = "low",
+  relatedJobId = null,
+  assistantDescription = null,
+}: {
+  userProfileId: string;
+  activityType: string;
+  title: string;
+  importance?: "low" | "medium" | "high";
+  relatedJobId?: string | null;
+  assistantDescription?: string | null;
+}): Promise<void> {
+  try {
+    const supabase = getSupabaseServiceClient();
+    await supabase.from("activity_feed").insert({
+      user_id: userProfileId,
+      activity_type: activityType,
+      title,
+      importance,
+      related_job_id: relatedJobId,
+      assistant_description: assistantDescription,
+    });
+  } catch (error) {
+    logSkippedAction(`Intake activity skipped: ${String(error)}`);
+  }
+}
+
+type BuiltSaveRequest =
+  | { ok: true; request: Record<string, unknown> }
+  | { ok: false; message: string };
+
+// Turn the submitted intake payload into a save-external request. Search cards
+// post the result object as-is; the URL/paste confirm step posts the preview
+// plus any user-edited title/company/location/description as overrides.
+function buildSaveRequestFromForm(raw: Record<string, string>): BuiltSaveRequest {
+  const mode = typeof raw.mode === "string" ? raw.mode : "";
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(typeof raw.payload_json === "string" ? raw.payload_json : "");
+  } catch {
+    return { ok: false, message: "Could not read the job to save." };
+  }
+
+  if (mode === "search") {
+    return { ok: true, request: buildSaveRequestFromSearchResult(payload) };
+  }
+  if (mode === "url" || mode === "paste") {
+    const source = mode === "url" ? "manual_url" : "manual_paste";
+    const overrides = {
+      title: typeof raw.title === "string" ? raw.title : undefined,
+      company: typeof raw.company === "string" ? raw.company : undefined,
+      location: typeof raw.location === "string" ? raw.location : undefined,
+      raw_description:
+        typeof raw.raw_description === "string" ? raw.raw_description : undefined,
+    };
+    return { ok: true, request: buildSaveRequestFromPreview(payload, { source, overrides }) };
+  }
+  return { ok: false, message: "Unknown save mode." };
+}
+
+export async function saveExternalJobAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const built = buildSaveRequestFromForm(readForm(formData));
+  if (!built.ok) {
+    return failure(built.message);
+  }
+
+  const sessionToken = await getCurrentSessionToken();
+  const result = await saveExternalJob({
+    apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
+    request: built.request,
+    sessionToken,
+  });
+
+  if (!result.ok) {
+    return failure(result.message);
+  }
+
+  revalidatePath("/jobs");
+  revalidatePath("/tracker");
+  revalidatePath("/dashboard");
+  const message = result.job.duplicate
+    ? "This job was already saved. Opening it."
+    : "Job saved.";
+  return successWithRedirect(message, `/jobs/${result.job.job_id}`);
+}
+
+export async function saveAndAnalyzeExternalJobAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return failure(context.message);
+  }
+
+  const built = buildSaveRequestFromForm(readForm(formData));
+  if (!built.ok) {
+    return failure(built.message);
+  }
+
+  const sessionToken = await getCurrentSessionToken();
+  const result = await saveExternalJob({
+    apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
+    request: built.request,
+    sessionToken,
+  });
+
+  if (!result.ok) {
+    return failure(result.message);
+  }
+
+  // The honest path is recoverable: if analysis can't start or fails, the job
+  // stays saved and the user lands on it to retry, never a dead end.
+  const analysis = await analyzeSavedJob({
+    userProfileId: context.userProfileId,
+    jobId: result.job.job_id,
+  });
+
+  revalidatePath("/jobs");
+  revalidatePath("/matches");
+  revalidatePath("/tracker");
+  revalidatePath("/dashboard");
+
+  if (!analysis.ok) {
+    return successWithRedirect(analysis.message, `/jobs/${result.job.job_id}`);
+  }
+  return successWithRedirect("Job saved and analyzed.", `/matches/${analysis.matchId}`);
+}
+
+// Create (or reuse) a match for the saved job against the most recent resume
+// and run the existing backend analysis. Mirrors generateMatchAction but
+// auto-selects the resume since intake has no resume picker. No credit spend —
+// the initial analysis is free, exactly as generateMatchAction is today.
+async function analyzeSavedJob({
+  userProfileId,
+  jobId,
+}: {
+  userProfileId: string;
+  jobId: string;
+}): Promise<{ ok: true; matchId: string } | { ok: false; message: string }> {
+  const supabase = getSupabaseServiceClient();
+  const { data: resumeRows } = await supabase
+    .from("resumes")
+    .select("id,raw_text")
+    .eq("user_id", userProfileId)
+    .order("updated_at", { ascending: false })
+    .limit(5);
+
+  const resume = (resumeRows ?? []).find(
+    (row) => typeof row?.raw_text === "string" && row.raw_text.trim().length > 0
+  );
+  if (!resume?.id) {
+    return { ok: false, message: "Job saved. Add a resume to analyze your fit." };
+  }
+
+  const { data: existing } = await supabase
+    .from("matches")
+    .select("id")
+    .eq("user_id", userProfileId)
+    .eq("resume_id", resume.id)
+    .eq("job_id", jobId)
+    .limit(1)
+    .maybeSingle();
+  if (existing?.id) {
+    return { ok: true, matchId: existing.id };
+  }
+
+  const { data: match, error: matchError } = await supabase
+    .from("matches")
+    .insert({
+      user_id: userProfileId,
+      resume_id: resume.id,
+      job_id: jobId,
+      overall_score: 0,
+      skill_score: 0,
+      experience_score: 0,
+      ai_readiness_score: 0,
+      ats_keyword_score: 0,
+      seniority_score: 0,
+    })
+    .select("id")
+    .single();
+
+  if (matchError || !match?.id) {
+    // Race backstop: a concurrent insert hit the unique (user, resume, job)
+    // index — open the existing report instead of erroring.
+    if (matchError?.code === "23505") {
+      const { data: raced } = await supabase
+        .from("matches")
+        .select("id")
+        .eq("user_id", userProfileId)
+        .eq("resume_id", resume.id)
+        .eq("job_id", jobId)
+        .limit(1)
+        .maybeSingle();
+      if (raced?.id) {
+        return { ok: true, matchId: raced.id };
+      }
+    }
+    return {
+      ok: false,
+      message: "Job saved, but starting analysis failed. Open the job to analyze it.",
+    };
+  }
+
+  const sessionToken = await getCurrentSessionToken();
+  const analysis = await runMatchAnalysis({
+    apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
+    matchId: match.id,
+    sessionToken,
+  });
+
+  if (!analysis.ok) {
+    // Remove the shell so the matches list never shows a half-finished run; the
+    // job itself stays saved and analysis is retryable from the job page.
+    await supabase
+      .from("matches")
+      .delete()
+      .eq("id", match.id)
+      .eq("user_id", userProfileId);
+    return { ok: false, message: "Job saved, but analysis failed. Open the job to retry." };
+  }
+
+  return { ok: true, matchId: match.id };
+}
+
+// One form, two submit buttons: the clicked button's `intent` picks Save vs
+// Save & Analyze. Keeps a single useActionState per form so the URL/paste
+// confirm fields (shared between both buttons) live in one place.
+export async function saveIntakeJobAction(
+  previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  if (formData.get("intent") === "analyze") {
+    return saveAndAnalyzeExternalJobAction(previousState, formData);
+  }
+  return saveExternalJobAction(previousState, formData);
+}
+
+// Open Apply Link (Epic 7.3): the client opens the URL in a new tab and calls
+// this to record the action. Works for an unsaved search result too — the
+// activity simply carries no related job id.
+export async function recordApplyLinkOpenedAction(input: {
+  jobId?: string | null;
+  title?: string;
+}): Promise<void> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return;
+  }
+  const title = (input.title || "").trim() || "a job";
+  await recordIntakeActivity({
+    userProfileId: context.userProfileId,
+    activityType: "job.apply_link_opened",
+    title: `Opened the apply link for ${title}`,
+    relatedJobId: input.jobId || null,
+  });
+  revalidatePath("/activity");
 }

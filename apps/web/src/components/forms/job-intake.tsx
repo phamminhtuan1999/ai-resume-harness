@@ -55,10 +55,7 @@ export function JobIntake() {
               url={url}
             />
           ) : (
-            <JobPasteFlow
-              defaultJobUrl={url}
-              onUseSearch={() => setTab("search")}
-            />
+            <JobPasteFlow onUseSearch={() => setTab("search")} />
           )}
         </CardContent>
       </Card>

@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 
 import {
   MIN_PASTE_CHARS,
@@ -47,17 +48,17 @@ const LONG_DESC = "Applied AI Engineer building RAG and LLM systems on AWS.";
 describe("validatePasteLength", () => {
   it("rejects descriptions shorter than MIN_PASTE_CHARS", () => {
     const result = validatePasteLength("too short");
-    expect(result.ok).toBe(false);
-    expect(result.message).toMatch(/too short/i);
+    assert.equal(result.ok, false);
+    assert.match(result.message, /too short/i);
   });
 
   it("accepts a sufficiently long description", () => {
-    expect(validatePasteLength("x".repeat(MIN_PASTE_CHARS)).ok).toBe(true);
+    assert.equal(validatePasteLength("x".repeat(MIN_PASTE_CHARS)).ok, true);
   });
 
   it("trims before measuring", () => {
     const padded = "   " + "y".repeat(MIN_PASTE_CHARS - 1) + "   ";
-    expect(validatePasteLength(padded).ok).toBe(false);
+    assert.equal(validatePasteLength(padded).ok, false);
   });
 });
 
@@ -65,19 +66,19 @@ describe("validatePasteLength", () => {
 
 describe("needsConfirmation", () => {
   it("is false when title and company are present", () => {
-    expect(needsConfirmation(makePreview())).toBe(false);
+    assert.equal(needsConfirmation(makePreview()), false);
   });
 
   it("is true when company is blank", () => {
-    expect(needsConfirmation(makePreview({ company: "" }))).toBe(true);
+    assert.equal(needsConfirmation(makePreview({ company: "" })), true);
   });
 
   it("is true when title is blank", () => {
-    expect(needsConfirmation(makePreview({ title: "   " }))).toBe(true);
+    assert.equal(needsConfirmation(makePreview({ title: "   " })), true);
   });
 
   it("is true for a null preview", () => {
-    expect(needsConfirmation(null)).toBe(true);
+    assert.equal(needsConfirmation(null), true);
   });
 });
 
@@ -85,12 +86,12 @@ describe("needsConfirmation", () => {
 
 describe("nonAiWarning", () => {
   it("does not warn for a strong AI role", () => {
-    expect(nonAiWarning(makePreview().ai_relevance).warn).toBe(false);
+    assert.equal(nonAiWarning(makePreview().ai_relevance).warn, false);
   });
 
   it("does not warn for a possible (60-74) AI role", () => {
     const rel = { is_ai_related: true, ai_relevance_score: 65 };
-    expect(nonAiWarning(rel).warn).toBe(false);
+    assert.equal(nonAiWarning(rel).warn, false);
   });
 
   it("warns when score is below the possible threshold", () => {
@@ -100,21 +101,21 @@ describe("nonAiWarning", () => {
       relevance_reason: "This is a generic backend role.",
     };
     const result = nonAiWarning(rel);
-    expect(result.warn).toBe(true);
-    expect(result.reason).toMatch(/generic backend/i);
+    assert.equal(result.warn, true);
+    assert.match(result.reason, /generic backend/i);
   });
 
   it("warns when is_ai_related is false even with a borderline score", () => {
     const rel = { is_ai_related: false, ai_relevance_score: 70 };
-    expect(nonAiWarning(rel).warn).toBe(true);
+    assert.equal(nonAiWarning(rel).warn, true);
   });
 
   it("does not warn when relevance is unavailable", () => {
-    expect(nonAiWarning(makePreview().ai_relevance, false).warn).toBe(false);
+    assert.equal(nonAiWarning(makePreview().ai_relevance, false).warn, false);
   });
 
   it("does not warn for a null relevance", () => {
-    expect(nonAiWarning(null).warn).toBe(false);
+    assert.equal(nonAiWarning(null).warn, false);
   });
 });
 
@@ -132,9 +133,9 @@ describe("extractJobFromDescription", () => {
       rawDescription: "short",
       sessionToken: "tok",
     });
-    expect(result.ok).toBe(false);
-    expect(result.tooShort).toBe(true);
-    expect(called).toBe(false);
+    assert.equal(result.ok, false);
+    assert.equal(result.tooShort, true);
+    assert.equal(called, false);
   });
 
   it("returns error when apiBaseUrl is missing", async () => {
@@ -143,7 +144,7 @@ describe("extractJobFromDescription", () => {
       rawDescription: LONG_DESC,
       sessionToken: "tok",
     });
-    expect(result.ok).toBe(false);
+    assert.equal(result.ok, false);
   });
 
   it("returns ok with the preview on success", async () => {
@@ -154,8 +155,8 @@ describe("extractJobFromDescription", () => {
       rawDescription: LONG_DESC,
       sessionToken: "tok",
     });
-    expect(result.ok).toBe(true);
-    expect(result.preview.title).toBe("Applied AI Engineer");
+    assert.equal(result.ok, true);
+    assert.equal(result.preview.title, "Applied AI Engineer");
   });
 
   it("surfaces the API detail on a 422", async () => {
@@ -165,8 +166,8 @@ describe("extractJobFromDescription", () => {
       rawDescription: LONG_DESC,
       sessionToken: "tok",
     });
-    expect(result.ok).toBe(false);
-    expect(result.message).toMatch(/too short/i);
+    assert.equal(result.ok, false);
+    assert.match(result.message, /too short/i);
   });
 
   it("sends title and company in the request body", async () => {
@@ -183,9 +184,9 @@ describe("extractJobFromDescription", () => {
       company: "My Co",
       sessionToken: "tok",
     });
-    expect(sentBody.title).toBe("My Title");
-    expect(sentBody.company).toBe("My Co");
-    expect(sentBody.raw_description).toBe(LONG_DESC);
+    assert.equal(sentBody.title, "My Title");
+    assert.equal(sentBody.company, "My Co");
+    assert.equal(sentBody.raw_description, LONG_DESC);
   });
 });
 
@@ -198,7 +199,7 @@ describe("previewJobByUrl", () => {
       sourceUrl: "   ",
       sessionToken: "tok",
     });
-    expect(result.ok).toBe(false);
+    assert.equal(result.ok, false);
   });
 
   it("returns ok with the preview on success", async () => {
@@ -209,8 +210,8 @@ describe("previewJobByUrl", () => {
       sourceUrl: "https://x.co/j",
       sessionToken: "tok",
     });
-    expect(result.ok).toBe(true);
-    expect(result.preview.source_url).toBe("https://x.co/j");
+    assert.equal(result.ok, true);
+    assert.equal(result.preview.source_url, "https://x.co/j");
   });
 
   it("surfaces the manual-fallback detail on a 502", async () => {
@@ -220,8 +221,8 @@ describe("previewJobByUrl", () => {
       sourceUrl: "https://x.co/j",
       sessionToken: "tok",
     });
-    expect(result.ok).toBe(false);
-    expect(result.message).toMatch(/paste/i);
+    assert.equal(result.ok, false);
+    assert.match(result.message, /paste/i);
   });
 
   it("returns error when the network throws", async () => {
@@ -233,7 +234,7 @@ describe("previewJobByUrl", () => {
       sourceUrl: "https://x.co/j",
       sessionToken: "tok",
     });
-    expect(result.ok).toBe(false);
-    expect(result.message).toMatch(/could not be reached/i);
+    assert.equal(result.ok, false);
+    assert.match(result.message, /could not be reached/i);
   });
 });

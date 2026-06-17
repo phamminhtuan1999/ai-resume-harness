@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 
 import {
   searchAiJobs,
@@ -74,8 +75,8 @@ describe("searchAiJobs", () => {
       request: {},
       sessionToken: "tok",
     });
-    expect(result.ok).toBe(false);
-    expect(result.error?.code).toBe("not_configured");
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "not_configured");
   });
 
   it("returns error when sessionToken is missing", async () => {
@@ -84,8 +85,8 @@ describe("searchAiJobs", () => {
       request: {},
       sessionToken: "",
     });
-    expect(result.ok).toBe(false);
-    expect(result.message).toMatch(/authenticate/i);
+    assert.equal(result.ok, false);
+    assert.match(result.message, /authenticate/i);
   });
 
   it("returns error when fetch throws", async () => {
@@ -95,8 +96,8 @@ describe("searchAiJobs", () => {
       request: {},
       sessionToken: "tok",
     });
-    expect(result.ok).toBe(false);
-    expect(result.error?.code).toBe("search_unavailable");
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "search_unavailable");
   });
 
   it("returns error for non-200 response", async () => {
@@ -106,8 +107,8 @@ describe("searchAiJobs", () => {
       request: {},
       sessionToken: "tok",
     });
-    expect(result.ok).toBe(false);
-    expect(result.message).toBe("Internal error.");
+    assert.equal(result.ok, false);
+    assert.equal(result.message, "Internal error.");
   });
 
   it("returns error for missing search_session_id in payload", async () => {
@@ -117,8 +118,8 @@ describe("searchAiJobs", () => {
       request: {},
       sessionToken: "tok",
     });
-    expect(result.ok).toBe(false);
-    expect(result.message).toMatch(/invalid data/i);
+    assert.equal(result.ok, false);
+    assert.match(result.message, /invalid data/i);
   });
 
   it("returns ok:false with error envelope for search_not_configured", async () => {
@@ -134,9 +135,9 @@ describe("searchAiJobs", () => {
       request: {},
       sessionToken: "tok",
     });
-    expect(result.ok).toBe(false);
-    expect(result.error?.code).toBe("search_not_configured");
-    expect(result.result).toBeDefined();
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "search_not_configured");
+    assert.notEqual(result.result, undefined);
   });
 
   it("returns ok:true and full result for a valid 200 response", async () => {
@@ -147,9 +148,9 @@ describe("searchAiJobs", () => {
       request: { target_role: "AI Engineer", location: "Remote US" },
       sessionToken: "tok",
     });
-    expect(result.ok).toBe(true);
-    expect(result.result?.search_session_id).toBe("session-abc");
-    expect(result.result?.total_ai_related_results).toBe(3);
+    assert.equal(result.ok, true);
+    assert.equal(result.result?.search_session_id, "session-abc");
+    assert.equal(result.result?.total_ai_related_results, 3);
   });
 
   it("sends the correct Authorization header and JSON body", async () => {
@@ -166,9 +167,9 @@ describe("searchAiJobs", () => {
       request: { target_role: "ML Engineer" },
       sessionToken: "mytoken",
     });
-    expect(capturedUrl).toBe("http://api/api/jobs/search-ai");
-    expect(capturedOptions.headers["Authorization"]).toBe("Bearer mytoken");
-    expect(JSON.parse(capturedOptions.body).target_role).toBe("ML Engineer");
+    assert.equal(capturedUrl, "http://api/api/jobs/search-ai");
+    assert.equal(capturedOptions.headers["Authorization"], "Bearer mytoken");
+    assert.equal(JSON.parse(capturedOptions.body).target_role, "ML Engineer");
   });
 });
 
@@ -182,21 +183,21 @@ describe("groupJobResults", () => {
       makeJob({ external_job_id: "v2", hidden: false }),
     ];
     const { visible, hidden } = groupJobResults(jobs);
-    expect(visible.map((j) => j.external_job_id)).toEqual(["v1", "v2"]);
-    expect(hidden.map((j) => j.external_job_id)).toEqual(["h1"]);
+    assert.deepEqual(visible.map((j) => j.external_job_id), ["v1", "v2"]);
+    assert.deepEqual(hidden.map((j) => j.external_job_id), ["h1"]);
   });
 
   it("returns empty arrays when no jobs", () => {
     const { visible, hidden } = groupJobResults([]);
-    expect(visible).toHaveLength(0);
-    expect(hidden).toHaveLength(0);
+    assert.equal(visible.length, 0);
+    assert.equal(hidden.length, 0);
   });
 
   it("returns all in visible when none are hidden", () => {
     const jobs = [makeJob({ hidden: false }), makeJob({ external_job_id: "j2", hidden: false })];
     const { visible, hidden } = groupJobResults(jobs);
-    expect(visible).toHaveLength(2);
-    expect(hidden).toHaveLength(0);
+    assert.equal(visible.length, 2);
+    assert.equal(hidden.length, 0);
   });
 });
 
@@ -205,25 +206,25 @@ describe("groupJobResults", () => {
 describe("aiRelevanceBadge", () => {
   it("returns success/strong for score ≥75", () => {
     const badge = aiRelevanceBadge({ ai_relevance_score: 80 });
-    expect(badge.variant).toBe("success");
-    expect(badge.label).toMatch(/strong/i);
+    assert.equal(badge.variant, "success");
+    assert.match(badge.label, /strong/i);
   });
 
   it("returns info/possible for score 60–74", () => {
     const badge = aiRelevanceBadge({ ai_relevance_score: 65 });
-    expect(badge.variant).toBe("info");
-    expect(badge.label).toMatch(/adjacent/i);
+    assert.equal(badge.variant, "info");
+    assert.match(badge.label, /adjacent/i);
   });
 
   it("returns outline/hidden for score <60", () => {
     const badge = aiRelevanceBadge({ ai_relevance_score: 40 });
-    expect(badge.variant).toBe("outline");
+    assert.equal(badge.variant, "outline");
   });
 
   it("returns outline/unknown for null input", () => {
     const badge = aiRelevanceBadge(null);
-    expect(badge.variant).toBe("outline");
-    expect(badge.label).toBe("Unknown");
+    assert.equal(badge.variant, "outline");
+    assert.equal(badge.label, "Unknown");
   });
 });
 
@@ -232,30 +233,30 @@ describe("aiRelevanceBadge", () => {
 describe("quickMatchBadge", () => {
   it("returns success for strong match", () => {
     const badge = quickMatchBadge({ match_label: "strong", preview_match_score: 88, unavailable: false });
-    expect(badge.variant).toBe("success");
-    expect(badge.label).toMatch(/88%/);
+    assert.equal(badge.variant, "success");
+    assert.match(badge.label, /88%/);
   });
 
   it("returns info for possible match", () => {
     const badge = quickMatchBadge({ match_label: "possible", preview_match_score: 65, unavailable: false });
-    expect(badge.variant).toBe("info");
+    assert.equal(badge.variant, "info");
   });
 
   it("returns warning for weak match", () => {
     const badge = quickMatchBadge({ match_label: "weak", preview_match_score: 42, unavailable: false });
-    expect(badge.variant).toBe("warning");
+    assert.equal(badge.variant, "warning");
   });
 
   it("returns outline/preview-unavailable when unavailable:true", () => {
     const badge = quickMatchBadge({ match_label: "strong", preview_match_score: 90, unavailable: true });
-    expect(badge.variant).toBe("outline");
-    expect(badge.label).toMatch(/unavailable/i);
+    assert.equal(badge.variant, "outline");
+    assert.match(badge.label, /unavailable/i);
   });
 
   it("returns outline/preview-unavailable for null quick_match", () => {
     const badge = quickMatchBadge(null);
-    expect(badge.variant).toBe("outline");
-    expect(badge.label).toMatch(/unavailable/i);
+    assert.equal(badge.variant, "outline");
+    assert.match(badge.label, /unavailable/i);
   });
 });
 
@@ -263,23 +264,23 @@ describe("quickMatchBadge", () => {
 
 describe("recommendedActionLabel", () => {
   it("maps save_and_analyze", () => {
-    expect(recommendedActionLabel("save_and_analyze")).toBe("Save & Analyze");
+    assert.equal(recommendedActionLabel("save_and_analyze"), "Save & Analyze");
   });
 
   it("maps save", () => {
-    expect(recommendedActionLabel("save")).toBe("Save");
+    assert.equal(recommendedActionLabel("save"), "Save");
   });
 
   it("maps review_carefully", () => {
-    expect(recommendedActionLabel("review_carefully")).toBe("Review carefully");
+    assert.equal(recommendedActionLabel("review_carefully"), "Review carefully");
   });
 
   it("maps skip", () => {
-    expect(recommendedActionLabel("skip")).toBe("Skip");
+    assert.equal(recommendedActionLabel("skip"), "Skip");
   });
 
   it("falls back for unknown action", () => {
-    expect(recommendedActionLabel("something_else")).toBe("Review");
+    assert.equal(recommendedActionLabel("something_else"), "Review");
   });
 });
 
@@ -288,17 +289,17 @@ describe("recommendedActionLabel", () => {
 describe("transitionFriendlinessBadge", () => {
   it("returns success for high", () => {
     const badge = transitionFriendlinessBadge("high");
-    expect(badge.variant).toBe("success");
-    expect(badge.label).toMatch(/transition-friendly/i);
+    assert.equal(badge.variant, "success");
+    assert.match(badge.label, /transition-friendly/i);
   });
 
   it("returns info for medium", () => {
     const badge = transitionFriendlinessBadge("medium");
-    expect(badge.variant).toBe("info");
+    assert.equal(badge.variant, "info");
   });
 
   it("returns outline for low", () => {
     const badge = transitionFriendlinessBadge("low");
-    expect(badge.variant).toBe("outline");
+    assert.equal(badge.variant, "outline");
   });
 });
