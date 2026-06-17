@@ -16,6 +16,7 @@ import {
   learningTargetSavePlan,
   partitionApplications,
   summarizeApplicationStatuses,
+  summarizeTrackerDistribution,
 } from "../src/lib/application-tracker.mjs";
 
 test("application tracker exposes the MVP status workflow", () => {
@@ -127,4 +128,79 @@ test("application tracker summarizes only valid statuses", () => {
   assert.equal(summary.archived, 0);
   assert.equal(isApplicationStatus("offer"), true);
   assert.equal(isApplicationStatus("not-real"), false);
+});
+
+// --- summarizeTrackerDistribution (US-080) ---
+
+const mixedRows = [
+  { status: "saved" },
+  { status: "applied" },
+  { status: "applied" },
+  { status: "interviewing" },
+  { status: "offer" },
+  { status: "rejected" },
+  { status: "archived" },
+  { status: "learning_target" },
+  { status: "learning_target" },
+];
+
+test("summarizeTrackerDistribution rolls up active/closed/learning from groups", () => {
+  const { rollups } = summarizeTrackerDistribution(mixedRows);
+  // active = pipeline only (saved, applied x2, interviewing, offer) = 5
+  assert.equal(rollups.active, 5);
+  // closed = rejected + archived = 2
+  assert.equal(rollups.closed, 2);
+  // learning = 2
+  assert.equal(rollups.learning, 2);
+  assert.equal(rollups.total, 9);
+});
+
+test("summarizeTrackerDistribution buckets carry counts, labels, and groups", () => {
+  const { buckets } = summarizeTrackerDistribution(mixedRows);
+  const applied = buckets.find((b) => b.status === "applied");
+  assert.equal(applied.count, 2);
+  assert.equal(applied.label, "Applied");
+  assert.equal(applied.group, "pipeline");
+  const learning = buckets.find((b) => b.status === "learning_target");
+  assert.equal(learning.label, "Learning Target");
+  assert.equal(learning.group, "learning");
+  // Every status is represented (stable order), zero-count included.
+  assert.equal(buckets.length, APPLICATION_STATUSES.length);
+});
+
+test("summarizeTrackerDistribution keeps learning targets out of active", () => {
+  const { rollups, isEmpty } = summarizeTrackerDistribution([
+    { status: "learning_target" },
+    { status: "learning_target" },
+  ]);
+  assert.equal(rollups.active, 0);
+  assert.equal(rollups.closed, 0);
+  assert.equal(rollups.learning, 2);
+  assert.equal(isEmpty, false);
+});
+
+test("summarizeTrackerDistribution reports an empty state for no rows", () => {
+  const { rollups, isEmpty, buckets } = summarizeTrackerDistribution([]);
+  assert.equal(isEmpty, true);
+  assert.equal(rollups.total, 0);
+  assert.ok(buckets.every((b) => b.count === 0));
+});
+
+test("summarizeTrackerDistribution ignores unknown/unsupported statuses", () => {
+  const { rollups, isEmpty } = summarizeTrackerDistribution([
+    { status: "applied" },
+    { status: "ghosted" },
+    { status: null },
+    {},
+  ]);
+  // Only the valid "applied" row counts; junk statuses are dropped.
+  assert.equal(rollups.active, 1);
+  assert.equal(rollups.total, 1);
+  assert.equal(isEmpty, false);
+});
+
+test("summarizeTrackerDistribution tolerates non-array input", () => {
+  const { isEmpty, rollups } = summarizeTrackerDistribution(undefined);
+  assert.equal(isEmpty, true);
+  assert.equal(rollups.total, 0);
 });
