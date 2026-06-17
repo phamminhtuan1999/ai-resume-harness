@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     job_search_prefilter_limit: int = Field(
         default=20, ge=1, alias="JOB_SEARCH_PREFILTER_LIMIT"
     )
+    job_search_quick_match_limit: int = Field(
+        default=8, ge=0, alias="JOB_SEARCH_QUICK_MATCH_LIMIT"
+    )
 
     @property
     def allowed_origins_list(self) -> list[str]:

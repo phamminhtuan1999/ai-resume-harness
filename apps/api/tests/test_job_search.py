@@ -59,6 +59,7 @@ def _make_settings(**overrides: Any) -> SimpleNamespace:
         "adzuna_timeout_seconds": 10,
         "job_search_fetch_limit": 50,
         "job_search_prefilter_limit": 20,
+        "job_search_quick_match_limit": 8,
         "supabase_url": "",
         "supabase_service_role_key": "",
     }
@@ -109,6 +110,44 @@ class _FakeSupabase:
     def get_profile_for_clerk_user(self, clerk_user_id: str) -> dict[str, str]:
         return {"id": "profile-123"}
 
+    def get_candidate_profile(self, *, user_profile_id: str) -> dict | None:
+        return None
+
+
+class _PassthroughEnricher:
+    """Stub SearchEnricher that marks every job visible with a fixed AI relevance stub.
+
+    Used in US-073 integration tests to isolate provider/normalizer behavior from
+    enrichment logic (which is covered separately in test_search_enricher.py).
+    """
+
+    def __init__(self, **kw: Any) -> None:
+        pass
+
+    def enrich(
+        self,
+        jobs: list[dict[str, Any]],
+        *,
+        profile: Any,
+        quick_match_limit: int,
+        **kw: Any,
+    ) -> list[dict[str, Any]]:
+        for j in jobs:
+            j.setdefault("ai_relevance", {
+                "is_ai_related": True,
+                "ai_relevance_score": 80,
+                "ai_role_category": "applied_ai_engineer",
+                "transition_friendliness": "high",
+                "research_heavy": False,
+                "engineering_focused": True,
+                "relevance_reason": "Stub.",
+                "detected_ai_keywords": [],
+                "exclude_reason": None,
+            })
+            j.setdefault("quick_match", None)
+            j["hidden"] = False
+        return jobs
+
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
@@ -129,6 +168,7 @@ def _wire(monkeypatch: pytest.MonkeyPatch, provider: _FakeProvider) -> None:
     monkeypatch.setattr("app.routers.jobs.get_settings", lambda: _make_settings())
     monkeypatch.setattr("app.routers.jobs.SupabaseDataClient", lambda _s: _FakeSupabase(_s))
     monkeypatch.setattr("app.routers.jobs.build_job_search_provider", lambda _s: provider)
+    monkeypatch.setattr("app.routers.jobs.SearchEnricher", _PassthroughEnricher)
 
 
 # ---------------------------------------------------------------------------
@@ -352,6 +392,7 @@ def test_search_ai_enforces_prefilter_cap(
     )
     monkeypatch.setattr("app.routers.jobs.SupabaseDataClient", lambda _s: _FakeSupabase(_s))
     monkeypatch.setattr("app.routers.jobs.build_job_search_provider", lambda _s: _FakeProvider(jobs))
+    monkeypatch.setattr("app.routers.jobs.SearchEnricher", _PassthroughEnricher)
 
     resp = client.post("/api/jobs/search-ai", json={"target_role": "LLM Engineer"})
     assert resp.status_code == 200
@@ -370,6 +411,7 @@ def test_search_ai_passes_fetch_limit_to_provider(
     )
     monkeypatch.setattr("app.routers.jobs.SupabaseDataClient", lambda _s: _FakeSupabase(_s))
     monkeypatch.setattr("app.routers.jobs.build_job_search_provider", lambda _s: provider)
+    monkeypatch.setattr("app.routers.jobs.SearchEnricher", _PassthroughEnricher)
 
     client.post("/api/jobs/search-ai", json={"target_role": "AI Engineer"})
     assert provider.last_call["results_per_page"] == 15
@@ -386,9 +428,12 @@ def test_search_ai_uses_default_filters(
     assert resp.status_code == 200
 
 
-def test_search_ai_total_ai_related_reflects_pre_cap_count(
+def test_search_ai_total_ai_related_reflects_visible_count(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # US-074 semantic: total_ai_related_results = visible (not hidden) after AI
+    # relevance scoring, NOT the total pre-cap count. total_provider_results carries
+    # the full provider count so the UI can show "showing 3 of 15".
     ai_desc = "Build LLM-powered RAG pipelines with OpenAI embeddings and LangChain."
     jobs = [_make_job(f"a{i}", description=ai_desc) for i in range(10)]
     jobs += [_make_job(f"n{i}", title="Sales Rep", description="Enterprise quota.") for i in range(5)]
@@ -400,8 +445,10 @@ def test_search_ai_total_ai_related_reflects_pre_cap_count(
     )
     monkeypatch.setattr("app.routers.jobs.SupabaseDataClient", lambda _s: _FakeSupabase(_s))
     monkeypatch.setattr("app.routers.jobs.build_job_search_provider", lambda _s: _FakeProvider(jobs))
+    monkeypatch.setattr("app.routers.jobs.SearchEnricher", _PassthroughEnricher)
 
     resp = client.post("/api/jobs/search-ai", json={"target_role": "AI Engineer"})
     body = resp.json()
-    assert body["total_ai_related_results"] == 10
+    assert body["total_provider_results"] == 15
+    assert body["total_ai_related_results"] == 3  # visible after passthrough enrichment
     assert len(body["jobs"]) == 3

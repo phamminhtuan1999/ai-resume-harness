@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 
 from app.auth import AuthenticatedUser, require_authenticated_user
 from app.schemas.job import (
+    AiRelevancePreview,
     EmploymentType,
     JobExtraction,
     JobImportUrlRequest,
@@ -12,6 +13,7 @@ from app.schemas.job import (
     JobSearchRequest,
     JobSearchResponse,
     SearchJobResult,
+    SearchQuickMatchPreview,
     WorkType,
 )
 from app.services.ai.errors import AIWorkflowError
@@ -27,6 +29,7 @@ from app.services.job_extractor import (
     JobExtractionServiceUnavailableError,
     extract_job_from_markdown,
 )
+from app.services.job_search.enricher import SearchEnricher
 from app.services.job_search.normalizer import normalize_and_rank
 from app.services.job_search.provider import (
     JobSearchNotConfiguredError,
@@ -84,19 +87,24 @@ def search_ai_jobs(
     payload: JobSearchRequest,
     user: AuthenticatedUser = Depends(require_authenticated_user),
 ) -> JobSearchResponse:
-    """Search live AI-engineering jobs via the configured provider (US-073).
+    """Search live AI-engineering jobs via the configured provider (US-073/074).
 
     Results are transient — not persisted until the user clicks Save (US-077).
-    The cost-safe cap (fetch→normalize→prefilter) is enforced server-side;
-    AI relevance + quick-match enrichment are added by US-074.
+    Cost-safe pipeline (server-side; client cannot raise limits):
+      fetch ≤50 → normalize+dedup+prefilter → AI relevance (≤20) →
+      keep score ≥60 as visible → quick match on top ≤8 visible.
     """
     settings = get_settings()
 
     try:
         data_client = SupabaseDataClient(settings)
-        profile = data_client.get_profile_for_clerk_user(user.clerk_user_id)
-        if not profile:
+        profile_row = data_client.get_profile_for_clerk_user(user.clerk_user_id)
+        if not profile_row:
             raise HTTPException(status_code=404, detail="Profile not found.")
+        user_profile_id = profile_row["id"]
+        candidate_profile = data_client.get_candidate_profile(
+            user_profile_id=user_profile_id
+        )
     except SupabaseConfigurationError as exc:
         raise HTTPException(
             status_code=500, detail="Job data source is misconfigured."
@@ -143,15 +151,46 @@ def search_ai_jobs(
             },
         )
 
-    ranked, total_ai = normalize_and_rank(
+    ranked, _ = normalize_and_rank(
         raw_jobs,
         prefilter_limit=settings.job_search_prefilter_limit,
     )
+
+    enricher = SearchEnricher(settings=settings)
+    enriched = enricher.enrich(
+        ranked,
+        profile=candidate_profile,
+        quick_match_limit=settings.job_search_quick_match_limit,
+    )
+
+    total_ai_visible = sum(1 for j in enriched if not j.get("hidden", False))
+    jobs_out = []
+    for j in enriched:
+        ai_rel = j.get("ai_relevance")
+        qm = j.get("quick_match")
+        jobs_out.append(
+            SearchJobResult(
+                external_job_id=j["external_job_id"],
+                external_source=j["external_source"],
+                title=j["title"],
+                company=j.get("company"),
+                location=j.get("location"),
+                description=j["description"],
+                apply_url=j.get("apply_url"),
+                pre_score=j.get("pre_score", 0),
+                likely_ai_related=j.get("likely_ai_related", False),
+                keyword_hits=j.get("keyword_hits", []),
+                ai_relevance=AiRelevancePreview(**ai_rel) if ai_rel else None,
+                quick_match=SearchQuickMatchPreview(**qm) if qm else None,
+                hidden=j.get("hidden", False),
+            )
+        )
+
     return JobSearchResponse(
         search_session_id=session_id,
         total_provider_results=len(raw_jobs),
-        total_ai_related_results=total_ai,
-        jobs=[SearchJobResult(**j) for j in ranked],
+        total_ai_related_results=total_ai_visible,
+        jobs=jobs_out,
     )
 
 
