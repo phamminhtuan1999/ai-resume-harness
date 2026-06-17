@@ -52,6 +52,12 @@ export type WorkspaceJob = {
   work_type: string | null;
   structured_json: Record<string, unknown> | null;
   extraction_json: Record<string, unknown> | null;
+  // US-071 (migration 0030): intake source + AI relevance + quick match display fields.
+  source: string | null;
+  ai_relevance_score: number | null;
+  ai_relevance_label: string | null;
+  quick_match_score: number | null;
+  quick_match_label: string | null;
 };
 
 export type WorkspaceMatch = {
@@ -338,6 +344,12 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
             "work_type",
             "structured_json",
             "extraction_json",
+            // US-071: intake source + relevance display fields
+            "source",
+            "ai_relevance_score",
+            "ai_relevance_label",
+            "quick_match_score",
+            "quick_match_label",
           ].join(",")
         )
         .eq("user_id", profile.id)
@@ -547,6 +559,23 @@ export async function getJobDetail(jobId: string) {
         "contact_notes",
         "created_at",
         "updated_at",
+        // US-071: intake source + AI relevance + quick match full set
+        "source",
+        "external_source",
+        "external_job_id",
+        "external_apply_url",
+        "external_posted_at",
+        "ai_relevance_score",
+        "ai_role_category",
+        "ai_relevance_label",
+        "transition_friendliness",
+        "research_heavy",
+        "engineering_focused",
+        "ai_relevance_json",
+        "quick_match_score",
+        "quick_match_label",
+        "quick_match_summary",
+        "quick_match_json",
       ].join(",")
     )
     .eq("id", jobId)

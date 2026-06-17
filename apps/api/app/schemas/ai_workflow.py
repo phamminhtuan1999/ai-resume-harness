@@ -25,6 +25,9 @@ WorkflowType = Literal[
     "draft_cv",
     # US-068: a fast-tier, zero-commitment match-likelihood preview on a job.
     "quick_match",
+    # US-072: AI Role Relevance — classifies a job for AI engineering relevance
+    # (default tier; separate from candidate fit — see Principle 2).
+    "ai_role_relevance",
 ]
 WorkflowStatus = Literal["queued", "running", "completed", "needs_review", "failed"]
 SubjectType = Literal["match", "resume", "job", "dashboard"]

@@ -34,6 +34,9 @@ TASK_TIER: dict[str, Tier] = {
     # US-068 lands the quick-match workflow; routing it here now keeps the
     # policy in one place when that story arrives.
     "quick_match": "fast",
+    # US-072: AI Role Relevance classifier — default tier (richer context than
+    # quick match, must handle edge cases in category assignment).
+    "ai_role_relevance": "default",
     # Default: analysis and generation.
     "match_analysis": "default",
     "missing_skills": "default",

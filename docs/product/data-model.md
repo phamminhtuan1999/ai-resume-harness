@@ -100,8 +100,10 @@ content.
 
 ### `jobs`
 
-Stores manually entered job metadata, URL-imported job metadata, raw job
-description text, parser output, and optional contact details.
+Stores job metadata, raw job description text, parser output, AI relevance
+classification, candidate quick match preview, and optional contact details.
+Jobs enter via three intake paths: Search AI Jobs (`discovered_api`), Import
+Job URL (`manual_url`), or Paste Job Description (`manual_paste`).
 
 Required fields:
 
@@ -109,7 +111,7 @@ Required fields:
 - `user_id uuid references user_profiles(id) on delete cascade`
 - `company text not null`
 - `title text not null`
-- `source text default 'manual'`
+- `source text not null default 'manual_paste'` — intake path
 - `job_url text`
 - `normalized_url text`
 - `location text`
@@ -128,10 +130,11 @@ Required fields:
 - `contact_notes text`
 - timestamps
 
-Valid `source` values:
+Valid `source` values (migration 0030, decision 0027):
 
-- `manual`
-- `manual_url`
+- `discovered_api` — found via Search AI Jobs (external provider)
+- `manual_url` — imported by URL
+- `manual_paste` — pasted job description
 
 Valid `extraction_status` values:
 
@@ -140,6 +143,33 @@ Valid `extraction_status` values:
 - `processing`
 - `succeeded`
 - `failed`
+
+External provider identity columns (null for `manual_url` / `manual_paste`):
+
+- `external_source text` — provider name (e.g. `adzuna`)
+- `external_job_id text` — provider-assigned job ID
+- `external_apply_url text` — provider apply link
+- `external_posted_at timestamptz`
+- `external_raw_payload jsonb` — full provider response snapshot
+
+AI Role Relevance columns (migration 0030, decision 0026 — written by US-077
+from the `ai_role_relevance` workflow run; `ai_workflow_runs` stays the audit
+source of truth):
+
+- `ai_relevance_score integer` — 0–100
+- `ai_role_category text` — see Section 13 of intake spec
+- `ai_relevance_label text` — `strong` (≥75) | `possible` (60–74) | `hidden` (<60)
+- `transition_friendliness text` — `high` | `medium` | `low`
+- `research_heavy boolean not null default false`
+- `engineering_focused boolean not null default true`
+- `ai_relevance_json jsonb` — full classifier output
+
+Candidate Quick Match preview columns (migration 0030, decision 0026):
+
+- `quick_match_score integer` — 0–100
+- `quick_match_label text` — `strong` | `possible` | `weak` | `limited_data`
+- `quick_match_summary text` — one-sentence assistant preview
+- `quick_match_json jsonb` — full quick-match output
 
 For URL-imported jobs, `normalized_url` should be unique per user when present.
 The app should not create a duplicate job for the same user and normalized URL.
