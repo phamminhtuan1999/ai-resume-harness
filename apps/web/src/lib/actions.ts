@@ -37,6 +37,7 @@ import {
   isUploadedResumeFile,
 } from "@/lib/resume-import-flow.mjs";
 import { importJobByUrl } from "@/lib/job-import-flow.mjs";
+import { searchAiJobs } from "@/lib/job-search-flow.mjs";
 import {
   AIWorkflowError,
   patchDraftCvBullet,
@@ -1793,4 +1794,87 @@ export async function deleteAccountAction(
   // The Clerk session is now gone; land the signed-out visitor on the public
   // landing page. Server redirect (outside the try) so it isn't swallowed.
   redirect("/");
+}
+
+// --- US-075: Search AI Jobs ---
+
+export type SearchAiJob = {
+  external_job_id: string;
+  external_source: string;
+  title: string;
+  company: string | null;
+  location: string | null;
+  description: string;
+  apply_url: string | null;
+  pre_score: number;
+  likely_ai_related: boolean;
+  keyword_hits: string[];
+  hidden: boolean;
+  ai_relevance: {
+    is_ai_related: boolean;
+    ai_relevance_score: number;
+    ai_role_category: string;
+    transition_friendliness: string;
+    research_heavy: boolean;
+    engineering_focused: boolean;
+    relevance_reason: string;
+    detected_ai_keywords: string[];
+    exclude_reason: string | null;
+  } | null;
+  quick_match: {
+    preview_match_score: number;
+    match_label: string;
+    assistant_preview: string;
+    recommended_action: string;
+    unavailable: boolean;
+  } | null;
+};
+
+export type SearchAiResult = {
+  search_session_id: string;
+  total_provider_results: number;
+  total_ai_related_results: number;
+  jobs: SearchAiJob[];
+  error: { code: string; message: string } | null;
+};
+
+export type SearchAiJobsState = {
+  status: "idle" | "results" | "error";
+  message: string;
+  result?: SearchAiResult;
+};
+
+export async function searchAiJobsAction(
+  _prev: SearchAiJobsState,
+  formData: FormData
+): Promise<SearchAiJobsState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return { status: "error", message: context.message };
+  }
+
+  const raw = readForm(formData);
+  const request = {
+    target_role: (typeof raw.target_role === "string" && raw.target_role.trim()) || "Applied AI Engineer",
+    location: (typeof raw.location === "string" && raw.location.trim()) || "Remote US",
+    remote_only: raw.remote_only === "on",
+    experience_level: (typeof raw.experience_level === "string" && raw.experience_level.trim()) || null,
+  };
+
+  const sessionToken = await getCurrentSessionToken();
+  const result = await searchAiJobs({
+    apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
+    request,
+    sessionToken,
+  });
+
+  if (!result.ok) {
+    return {
+      status: "error",
+      message: result.message,
+      result: result.result as SearchAiResult | undefined,
+    };
+  }
+
+  return { status: "results", message: "", result: result.result as SearchAiResult };
 }

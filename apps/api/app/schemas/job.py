@@ -37,6 +37,69 @@ class JobImportUrlRequest(BaseModel):
     source_url: str
 
 
+class JobSearchFilters(BaseModel):
+    only_ai_related: bool = True
+    hide_research_heavy: bool = True
+    hide_non_engineering_ai: bool = True
+    prioritize_transition_friendly: bool = True
+
+
+class JobSearchRequest(BaseModel):
+    target_role: str = "Applied AI Engineer"
+    location: str = "Remote US"
+    remote_only: bool = False
+    experience_level: str | None = None
+    filters: JobSearchFilters = Field(default_factory=JobSearchFilters)
+
+
+class AiRelevancePreview(BaseModel):
+    """AI Role Relevance result for a pre-save search result (Section 13)."""
+
+    is_ai_related: bool
+    ai_relevance_score: int
+    ai_role_category: str
+    transition_friendliness: str
+    research_heavy: bool
+    engineering_focused: bool
+    relevance_reason: str
+    detected_ai_keywords: list[str] = Field(default_factory=list)
+    exclude_reason: str | None = None
+
+
+class SearchQuickMatchPreview(BaseModel):
+    """Pre-save quick match preview for a search result (Section 15)."""
+
+    preview_match_score: int
+    match_label: str
+    assistant_preview: str
+    recommended_action: str
+    unavailable: bool = False
+
+
+class SearchJobResult(BaseModel):
+    external_job_id: str
+    external_source: str
+    title: str
+    company: str | None = None
+    location: str | None = None
+    description: str
+    apply_url: str | None = None
+    pre_score: int
+    likely_ai_related: bool
+    keyword_hits: list[str] = Field(default_factory=list)
+    ai_relevance: AiRelevancePreview | None = None
+    quick_match: SearchQuickMatchPreview | None = None
+    hidden: bool = False
+
+
+class JobSearchResponse(BaseModel):
+    search_session_id: str
+    total_provider_results: int
+    total_ai_related_results: int
+    jobs: list[SearchJobResult]
+    error: dict | None = None
+
+
 class JobImportUrlResponse(BaseModel):
     job_id: str
     duplicate: bool = False

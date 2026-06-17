@@ -46,6 +46,25 @@ class Settings(BaseSettings):
     gemini_retry_base_delay_seconds: float = Field(
         default=0.5, ge=0, alias="GEMINI_RETRY_BASE_DELAY_SECONDS"
     )
+    # US-073: job search provider (decision 0025). Provider swap is config-only.
+    # Absence of keys is a state, not a crash: the endpoint returns a friendly
+    # "search not configured" envelope so Import URL / Paste JD remain usable.
+    job_search_provider: str = Field(default="adzuna", alias="JOB_SEARCH_PROVIDER")
+    adzuna_app_id: str = Field(default="", alias="ADZUNA_APP_ID")
+    adzuna_app_key: str = Field(default="", alias="ADZUNA_APP_KEY")
+    adzuna_api_base: str = Field(
+        default="https://api.adzuna.com/v1/api", alias="ADZUNA_API_BASE"
+    )
+    adzuna_search_country: str = Field(default="us", alias="ADZUNA_SEARCH_COUNTRY")
+    adzuna_timeout_seconds: int = Field(default=30, ge=1, alias="ADZUNA_TIMEOUT_SECONDS")
+    # Cost-safe pipeline caps (server-side; client cannot raise these limits).
+    job_search_fetch_limit: int = Field(default=50, ge=1, alias="JOB_SEARCH_FETCH_LIMIT")
+    job_search_prefilter_limit: int = Field(
+        default=20, ge=1, alias="JOB_SEARCH_PREFILTER_LIMIT"
+    )
+    job_search_quick_match_limit: int = Field(
+        default=8, ge=0, alias="JOB_SEARCH_QUICK_MATCH_LIMIT"
+    )
 
     @property
     def allowed_origins_list(self) -> list[str]:

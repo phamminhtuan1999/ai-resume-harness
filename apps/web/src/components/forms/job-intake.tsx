@@ -1,12 +1,10 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Search } from "lucide-react";
 
 import { JobForm } from "@/components/forms/job-form";
 import { JobUrlForm } from "@/components/forms/job-url-form";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { SearchAiPanel } from "@/components/jobs/search-ai-panel";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   DEFAULT_JOB_INTAKE_TAB,
@@ -45,7 +43,7 @@ export function JobIntake() {
       <Card>
         <CardContent>
           {active === "search" ? (
-            <SearchComingSoon
+            <SearchAiPanel
               onUsePaste={() => setTab("manual")}
               onUseUrl={() => setTab("url")}
             />
@@ -64,44 +62,6 @@ export function JobIntake() {
   );
 }
 
-// US-070 ships the Search tab as a shell. The placeholder is honest about what
-// is and isn't available yet (no fake search box, no implied AI verdict) and
-// keeps the page fully usable by pointing at the two working intake methods.
-function SearchComingSoon({
-  onUsePaste,
-  onUseUrl,
-}: {
-  onUsePaste: () => void;
-  onUseUrl: () => void;
-}) {
-  return (
-    <div className="flex flex-col items-start gap-4 py-2">
-      <span className="flex size-10 items-center justify-center rounded-lg bg-brand-muted text-brand">
-        <Search className="size-5" />
-      </span>
-      <div className="flex items-center gap-2">
-        <h2 className="text-base font-semibold">Search AI Jobs</h2>
-        <Badge variant="secondary">Coming soon</Badge>
-      </div>
-      <p className="max-w-prose text-sm leading-6 text-muted-foreground">
-        Soon you&apos;ll search live listings here and ApplyWise will surface the
-        roles that fit your AI Engineer path — checking each one for AI relevance
-        and a quick match preview before you save. It isn&apos;t live yet.
-      </p>
-      <p className="max-w-prose text-sm leading-6 text-muted-foreground">
-        Already found a role? Import it now:
-      </p>
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={onUseUrl} type="button" variant="outline">
-          Import Job URL
-        </Button>
-        <Button onClick={onUsePaste} type="button" variant="outline">
-          Paste Job Description
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 function ModeTab({
   active,
