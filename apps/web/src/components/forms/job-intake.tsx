@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 
-import { JobForm } from "@/components/forms/job-form";
+import { JobPasteFlow } from "@/components/forms/job-paste-flow";
 import { JobUrlForm } from "@/components/forms/job-url-form";
 import { SearchAiPanel } from "@/components/jobs/search-ai-panel";
 import { Card, CardContent } from "@/components/ui/card";
@@ -51,10 +51,14 @@ export function JobIntake() {
             <JobUrlForm
               onUrlChange={setUrl}
               onUseManual={() => setTab("manual")}
+              onUseSearch={() => setTab("search")}
               url={url}
             />
           ) : (
-            <JobForm defaultJobUrl={url} />
+            <JobPasteFlow
+              defaultJobUrl={url}
+              onUseSearch={() => setTab("search")}
+            />
           )}
         </CardContent>
       </Card>

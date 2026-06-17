@@ -100,6 +100,50 @@ class JobSearchResponse(BaseModel):
     error: dict | None = None
 
 
+class JobExtractFromDescriptionRequest(BaseModel):
+    """Pasted job description to extract structured fields from (US-076)."""
+
+    raw_description: str
+    title: str | None = None
+    company: str | None = None
+
+
+class JobPreviewResponse(BaseModel):
+    """Pre-save preview of an extracted job + its AI relevance (US-076).
+
+    Returned by both the paste (``extract-from-description``) and URL
+    (``preview-url``) paths. Nothing is persisted — the user confirms first.
+    ``needs_confirmation`` is set when title/company could not be extracted
+    confidently, so the UI asks the user to confirm or edit before saving.
+    URL-only fields (``source_url`` … ``duplicate_job_id``) stay null for paste.
+    """
+
+    title: str | None = None
+    company: str | None = None
+    location: str | None = None
+    work_type: WorkType = "unknown"
+    employment_type: EmploymentType = "unknown"
+    salary_range: str | None = None
+    responsibilities: list[str] = Field(default_factory=list)
+    required_skills: list[str] = Field(default_factory=list)
+    preferred_skills: list[str] = Field(default_factory=list)
+    required_experience_years: str | None = None
+    ai_related_requirements: list[str] = Field(default_factory=list)
+    cloud_requirements: list[str] = Field(default_factory=list)
+    raw_description: str
+    extraction_confidence: float = 0.0
+    needs_confirmation: bool = False
+    # AI Role Relevance (US-072). ``relevance_available`` is false when the
+    # classifier could not run and the preview degrades to extraction-only.
+    ai_relevance: AiRelevancePreview | None = None
+    relevance_available: bool = True
+    # URL-import-only provenance + dedup.
+    source_url: str | None = None
+    normalized_url: str | None = None
+    duplicate: bool = False
+    duplicate_job_id: str | None = None
+
+
 class JobImportUrlResponse(BaseModel):
     job_id: str
     duplicate: bool = False
