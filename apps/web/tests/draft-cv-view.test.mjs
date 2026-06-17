@@ -18,6 +18,7 @@ import {
   overrideWarning,
   pageOptions,
   pendingReviewCount,
+  previewUrl,
   staleFeedbackCount,
 } from "../src/lib/draft-cv-view.mjs";
 
@@ -278,6 +279,31 @@ test("exportUrl never appends overrides for markdown (US-059)", () => {
   assert.equal(
     exportUrl("https://api.test", "d1", "markdown", 2, 1, "classic_latex", "ats_clean"),
     "https://api.test/api/draft-cvs/d1/export/markdown"
+  );
+});
+
+test("previewUrl uses the preview route with the same override semantics", () => {
+  const base = "https://api.test";
+  // Defaults (no override) → bare preview endpoint.
+  assert.equal(
+    previewUrl(base, "d1", 1, 1, "ats_clean", "ats_clean"),
+    "https://api.test/api/draft-cvs/d1/preview/pdf"
+  );
+  // Page-count override only.
+  assert.equal(
+    previewUrl(base, "d1", 2, 1),
+    "https://api.test/api/draft-cvs/d1/preview/pdf?pages=2"
+  );
+  // Font override only.
+  assert.equal(
+    previewUrl(base, "d1", 1, 1, "modern_latex", "ats_clean"),
+    "https://api.test/api/draft-cvs/d1/preview/pdf?font=modern_latex"
+  );
+  // Both overrides — matches what exportUrl would send, so the preview is the
+  // document Export produces.
+  assert.equal(
+    previewUrl(base, "d1", 2, 1, "classic_latex", "ats_clean"),
+    "https://api.test/api/draft-cvs/d1/preview/pdf?pages=2&font=classic_latex"
   );
 });
 

@@ -368,6 +368,50 @@ def test_preview_pdf_renders_inline_without_stamping(
     assert all(a["activity_type"] != "draft_cv.exported" for a in data.activities)
 
 
+def test_preview_pdf_honors_selected_font_without_stamping(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # US-078 parity: the preview accepts the same font override the export uses,
+    # so the in-app render is the document the user will download — and it stays
+    # a read (no stamp).
+    _authenticate()
+    data = FakeData()
+    _seed_draft(
+        data, status="ready_to_export", bullets=[_bullet("Built Approvedalpha.", "safe_to_use")]
+    )
+    _wire(monkeypatch, data)
+
+    response = client.get(
+        "/api/draft-cvs/draftcv_1/preview/pdf",
+        params={"font": "ats_clean"},
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "inline" in response.headers["content-disposition"]
+    assert response.content[:5] == b"%PDF-"
+    # Still a read — selected options never stamp the draft.
+    assert data.draft_cv_updates == []
+    assert data.draft_cvs[-1]["status"] == "ready_to_export"
+    assert all(a["activity_type"] != "draft_cv.exported" for a in data.activities)
+
+
+def test_preview_pdf_rejects_invalid_font_override(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _authenticate()
+    data = FakeData()
+    _seed_draft(
+        data, status="ready_to_export", bullets=[_bullet("Built Approvedalpha.", "safe_to_use")]
+    )
+    _wire(monkeypatch, data)
+
+    response = client.get(
+        "/api/draft-cvs/draftcv_1/preview/pdf",
+        params={"font": "not_a_real_font"},
+    )
+    assert response.status_code == 422
+
+
 def test_preview_pdf_not_found_is_404(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -11,6 +11,7 @@ import {
 
 import { DraftCvCoveragePanel } from "@/components/draft-cv-coverage-panel";
 import { DraftCvPdfPreview } from "@/components/draft-cv/pdf-preview";
+import { DraftCvRenderOptionsProvider } from "@/components/draft-cv/render-options-context";
 import { VersionDiffPanel } from "@/components/draft-cv/version-diff-panel";
 import { DraftCvBulletEditor } from "@/components/forms/draft-cv-bullet-editor";
 import { DraftCvBulletReviewForm } from "@/components/forms/draft-cv-bullet-review-form";
@@ -126,6 +127,10 @@ export default async function DraftCvPage({ params }: DraftCvPageProps) {
   const blockerCount = preservationConflicts.length + review.pending.length;
 
   return (
+    <DraftCvRenderOptionsProvider
+      recommendedFont={rendering?.fontProfile ?? null}
+      recommendedPages={rendering?.recommendedPages ?? null}
+    >
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
       <TailoringStepper
         matchId={match.id}
@@ -690,6 +695,7 @@ export default async function DraftCvPage({ params }: DraftCvPageProps) {
         </>
       ) : null}
     </div>
+    </DraftCvRenderOptionsProvider>
   );
 }
 

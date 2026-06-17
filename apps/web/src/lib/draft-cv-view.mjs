@@ -356,6 +356,25 @@ export function overrideWarning(recommendedPages, selectedPages) {
 /* Build the export URL with optional page/font overrides (only when they
    differ from the stored recommendation, to keep the default path clean).
    Markdown (US-059) has no pagination or typography, so overrides never apply. */
+// Page/font are sent only when they differ from the recommended values — the
+// shared override semantics export and preview must agree on so the in-app
+// preview is byte-identical to what Export produces (US-078).
+function renderOverrideParams(
+  selectedPages,
+  recommendedPages,
+  selectedFont,
+  recommendedFont
+) {
+  const params = [];
+  if (selectedPages && selectedPages !== recommendedPages) {
+    params.push(`pages=${selectedPages}`);
+  }
+  if (selectedFont && selectedFont !== recommendedFont) {
+    params.push(`font=${selectedFont}`);
+  }
+  return params;
+}
+
 export function exportUrl(
   apiBaseUrl,
   draftCvId,
@@ -367,13 +386,35 @@ export function exportUrl(
 ) {
   const base = `${apiBaseUrl}/api/draft-cvs/${draftCvId}/export/${format}`;
   if (format === "markdown") return base;
-  const params = [];
-  if (selectedPages && selectedPages !== recommendedPages) {
-    params.push(`pages=${selectedPages}`);
-  }
-  if (selectedFont && selectedFont !== recommendedFont) {
-    params.push(`font=${selectedFont}`);
-  }
+  const params = renderOverrideParams(
+    selectedPages,
+    recommendedPages,
+    selectedFont,
+    recommendedFont
+  );
+  return params.length ? `${base}?${params.join("&")}` : base;
+}
+
+/**
+ * Read-only PDF preview URL (US-078). Uses the same page/font override
+ * semantics as {@link exportUrl}, so the inline preview renders exactly what
+ * Export would for the selected options — not a default sample.
+ */
+export function previewUrl(
+  apiBaseUrl,
+  draftCvId,
+  selectedPages,
+  recommendedPages,
+  selectedFont,
+  recommendedFont
+) {
+  const base = `${apiBaseUrl}/api/draft-cvs/${draftCvId}/preview/pdf`;
+  const params = renderOverrideParams(
+    selectedPages,
+    recommendedPages,
+    selectedFont,
+    recommendedFont
+  );
   return params.length ? `${base}?${params.join("&")}` : base;
 }
 

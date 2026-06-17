@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { Download, FileCode, FileText } from "lucide-react";
 
+import { useDraftCvRenderOptions } from "@/components/draft-cv/render-options-context";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import {
@@ -50,13 +51,22 @@ export function DraftCvExportButtons({
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPages, setSelectedPages] = useState<number>(
+  const [compression, setCompression] = useState<CompressionView>(null);
+
+  // Page/font selection is shared with the inline PDF preview (US-078) via
+  // context so the preview matches the export. A local fallback keeps this
+  // component usable on its own (no provider mounted).
+  const shared = useDraftCvRenderOptions();
+  const [localPages, setLocalPages] = useState<number>(
     rendering?.recommendedPages ?? 1
   );
-  const [selectedFont, setSelectedFont] = useState<string>(
+  const [localFont, setLocalFont] = useState<string>(
     rendering?.fontProfile ?? "modern_latex"
   );
-  const [compression, setCompression] = useState<CompressionView>(null);
+  const selectedPages = shared ? shared.pages : localPages;
+  const setSelectedPages = shared ? shared.setPages : setLocalPages;
+  const selectedFont = shared ? shared.font : localFont;
+  const setSelectedFont = shared ? shared.setFont : setLocalFont;
 
   const recommendedPages = rendering?.recommendedPages ?? null;
   const recommendedFont = rendering?.fontProfile ?? null;
