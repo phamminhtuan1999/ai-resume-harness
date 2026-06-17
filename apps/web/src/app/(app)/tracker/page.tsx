@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ClipboardList } from "lucide-react";
 
 import { TrackerDistribution } from "@/components/charts/tracker-distribution";
+import { InterviewAgenda } from "@/components/tracker/interview-agenda";
 import { TrackerRowActions } from "@/components/tracker/tracker-row-actions";
 import { ApplicationStatusForm } from "@/components/forms/application-status-form";
 import { InterviewScheduleForm } from "@/components/forms/interview-schedule-form";
@@ -88,6 +89,9 @@ export default async function TrackerPage() {
 
         {/* US-080: distribution + active/closed/learning rollups over the same rows. */}
         <TrackerDistribution applications={applications} />
+
+        {/* US-083: scheduled interviews grouped by date over the same loaded rows. */}
+        {applications.length > 0 ? <InterviewAgenda applications={applications} /> : null}
 
         {tracked.length > 0 ? (
           <Card>
