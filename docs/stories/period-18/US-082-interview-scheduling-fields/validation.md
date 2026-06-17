@@ -34,5 +34,31 @@ TBD
 
 ## Acceptance Evidence
 
-Add results after verification.
+Implemented as additive nullable fields on `applications` (first slice — no
+separate event table, single round per row).
+
+- **Migration (hard gate):** `apps/web/supabase/migrations/0032_period18_interview_scheduling_fields.sql`
+  applied to Supabase via `psql $SUPABASE_DB_URL`. Verified: `information_schema`
+  reports `interview_date date`, `interview_stage text`, `interview_notes text`
+  all nullable; `pg_indexes` reports
+  `applications_user_interview_date_idx (user_id, interview_date) WHERE interview_date IS NOT NULL`.
+- **Unit:** `apps/web/tests/interview-schedule.test.mjs` (10 tests) — stage
+  vocabulary/labels, strict date validity (`2026-02-31` rejected), normalizer
+  accepts empty→null, accepts a full schedule, rejects invalid date / unknown
+  stage / over-long notes, reports multiple field errors, `hasInterviewSchedule`,
+  and a Learning Target with interview fields stays out of the active count.
+- **Domain/ownership:** `updateInterviewScheduleAction` runs through
+  `requireWritableContext` and updates with `.eq("user_id", …)` — another user's
+  row is denied without revealing existence (same proven path as
+  `updateApplicationStatusAction`). Saving interview details never touches
+  `status` or `applied_date`.
+- **UI:** `InterviewScheduleForm` (date + stage + notes, dirty-tracked) wired
+  into a new Interview column on the `/tracker` tracked table; distinct error
+  copy for invalid date vs. save failure.
+- **Build/lint/test:** full web suite **389 passed**; `tsc --noEmit` + `eslint`
+  clean.
+
+Not yet automated: server-action/DB integration and browser-persistence E2E —
+the web app has no server-action integration harness, and the route is
+Clerk-gated (verified in a real browser). Tracked as the natural follow-up.
 

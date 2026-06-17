@@ -4,6 +4,7 @@ import { ClipboardList } from "lucide-react";
 import { TrackerDistribution } from "@/components/charts/tracker-distribution";
 import { TrackerRowActions } from "@/components/tracker/tracker-row-actions";
 import { ApplicationStatusForm } from "@/components/forms/application-status-form";
+import { InterviewScheduleForm } from "@/components/forms/interview-schedule-form";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -104,6 +105,7 @@ export default async function TrackerPage() {
                     <TableHead>Status</TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead>Match</TableHead>
+                    <TableHead>Interview</TableHead>
                     <TableHead>Updated</TableHead>
                     <TableHead className="text-right">Workflow</TableHead>
                   </TableRow>
@@ -160,6 +162,15 @@ export default async function TrackerPage() {
                         ) : (
                           <span className="text-muted-foreground">No match</span>
                         )}
+                      </TableCell>
+                      <TableCell className="whitespace-normal align-top">
+                        <InterviewScheduleForm
+                          applicationId={application.id}
+                          interviewDate={application.interview_date}
+                          interviewNotes={application.interview_notes}
+                          interviewStage={application.interview_stage}
+                          key={`${application.id}-${application.updated_at}`}
+                        />
                       </TableCell>
                       <TableCell>{formatShortDate(application.updated_at)}</TableCell>
                       <TableCell className="whitespace-normal">

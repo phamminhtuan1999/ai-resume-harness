@@ -130,6 +130,16 @@ const updateApplicationStatusSchema = z.object({
   status: z.enum(APPLICATION_STATUSES, { error: "Choose a valid tracker status." }),
 });
 
+// US-082: guards the owned-row id + shapes the raw interview fields. Domain rules
+// (date validity, known stage, notes cap, empty -> null) live in the pure
+// normalizeInterviewSchedule helper so they stay unit-testable without zod.
+const updateInterviewScheduleSchema = z.object({
+  application_id: z.string().trim().uuid("A valid application is required."),
+  interview_date: z.string().optional(),
+  interview_stage: z.string().optional(),
+  interview_notes: z.string().optional(),
+});
+
 export function readForm(formData) {
   return Object.fromEntries(formData.entries());
 }
@@ -208,4 +218,8 @@ export function validateSaveApplicationInput(input) {
 
 export function validateUpdateApplicationStatusInput(input) {
   return updateApplicationStatusSchema.safeParse(input);
+}
+
+export function validateUpdateInterviewScheduleInput(input) {
+  return updateInterviewScheduleSchema.safeParse(input);
 }
