@@ -7,9 +7,11 @@ from app.auth import AuthenticatedUser, require_authenticated_user
 from app.schemas.job import (
     AiRelevancePreview,
     EmploymentType,
+    JobExtractFromDescriptionRequest,
     JobExtraction,
     JobImportUrlRequest,
     JobImportUrlResponse,
+    JobPreviewResponse,
     JobSearchRequest,
     JobSearchResponse,
     SearchJobResult,
@@ -29,7 +31,7 @@ from app.services.job_extractor import (
     JobExtractionServiceUnavailableError,
     extract_job_from_markdown,
 )
-from app.services.job_search.enricher import SearchEnricher
+from app.services.job_search.enricher import SearchEnricher, run_relevance_preview
 from app.services.job_search.normalizer import normalize_and_rank
 from app.services.job_search.provider import (
     JobSearchNotConfiguredError,
@@ -55,6 +57,8 @@ _MANUAL_FALLBACK_DETAIL = (
     "We could not fetch this job page. Paste the job description manually."
 )
 _MAX_RAW_DESCRIPTION_CHARS = 24_000
+# Below this, a pasted description is too thin to extract or classify usefully.
+_MIN_PASTE_CHARS = 40
 
 _WORK_TYPE_ALIASES: dict[str, WorkType] = {
     "remote": "remote",
@@ -310,6 +314,184 @@ def import_job_by_url(
         raw_description=raw_description,
         extraction_confidence=extraction.confidence_score,
     )
+
+
+@router.post("/extract-from-description", response_model=JobPreviewResponse)
+def extract_from_description(
+    payload: JobExtractFromDescriptionRequest,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> JobPreviewResponse:
+    """Extract structured fields from a pasted job description + score relevance.
+
+    The Paste JD path (US-076): the pasted text is run through AI extraction and
+    the AI Role Relevance check, then returned as a preview. Nothing is saved —
+    the user confirms (or edits uncertain fields) before Save / Save & Analyze.
+    """
+    settings = get_settings()
+
+    text = (payload.raw_description or "").strip()
+    if len(text) < _MIN_PASTE_CHARS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "This job description is too short to analyze. "
+                "Paste the full posting so we can extract and check it."
+            ),
+        )
+
+    try:
+        extraction = extract_job_from_markdown(markdown=text, settings=settings)
+    except JobExtractionServiceUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except JobExtractionError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="We could not read this description. Check the text and try again.",
+        ) from exc
+
+    # The user's typed title/company win over the model when provided.
+    if payload.title and payload.title.strip():
+        extraction.title = payload.title.strip()
+    if payload.company and payload.company.strip():
+        extraction.company = payload.company.strip()
+
+    return _build_preview(extraction, raw_text=text, settings=settings)
+
+
+@router.post("/preview-url", response_model=JobPreviewResponse)
+def preview_job_by_url(
+    payload: JobImportUrlRequest,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> JobPreviewResponse:
+    """Fetch + extract a job by URL and score relevance — WITHOUT saving (US-076).
+
+    The non-saving twin of ``import-url``: it returns the same extracted fields
+    plus the AI Role Relevance preview so the user can confirm before committing.
+    Saving stays an explicit, user-confirmed action (mechanics in US-077). On a
+    fetch/extract failure the user is offered the Paste JD fallback, exactly as
+    ``import-url`` does today.
+    """
+    settings = get_settings()
+
+    try:
+        source_url, normalized_url = validate_and_normalize_url(payload.source_url)
+    except InvalidJobUrlError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    # Surface an existing save so the UI can route to it instead of re-importing.
+    try:
+        data_client = SupabaseDataClient(settings)
+        profile = data_client.get_profile_for_clerk_user(user.clerk_user_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="Profile not found.")
+        existing = data_client.find_job_by_normalized_url(
+            user_profile_id=profile["id"], normalized_url=normalized_url
+        )
+    except SupabaseConfigurationError as exc:
+        raise HTTPException(
+            status_code=500, detail="Job data source is misconfigured."
+        ) from exc
+    except SupabaseDataError as exc:
+        raise HTTPException(status_code=503, detail="Job data is unavailable.") from exc
+
+    try:
+        markdown = scrape_job_page(url=source_url, settings=settings)
+    except FirecrawlNotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail=_MANUAL_FALLBACK_DETAIL) from exc
+    except (FirecrawlFetchError, FirecrawlError) as exc:
+        raise HTTPException(status_code=502, detail=_MANUAL_FALLBACK_DETAIL) from exc
+
+    try:
+        extraction = extract_job_from_markdown(markdown=markdown, settings=settings)
+    except JobExtractionServiceUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except JobExtractionError as exc:
+        raise HTTPException(status_code=502, detail=_MANUAL_FALLBACK_DETAIL) from exc
+
+    if not (extraction.company or "").strip():
+        extraction.company = fallback_company_from_url(normalized_url)
+
+    raw_text = (extraction.raw_description or "").strip() or markdown.strip()
+    return _build_preview(
+        extraction,
+        raw_text=raw_text,
+        settings=settings,
+        source_url=source_url,
+        normalized_url=normalized_url,
+        duplicate=bool(existing),
+        duplicate_job_id=str(existing["id"]) if existing else None,
+    )
+
+
+def _build_preview(
+    extraction: JobExtraction,
+    *,
+    raw_text: str,
+    settings: object,
+    source_url: str | None = None,
+    normalized_url: str | None = None,
+    duplicate: bool = False,
+    duplicate_job_id: str | None = None,
+) -> JobPreviewResponse:
+    """Assemble a JobPreviewResponse: normalize fields + run AI relevance.
+
+    Relevance degrades gracefully: if the classifier raises, the preview is
+    returned extraction-only with ``relevance_available=False`` rather than
+    failing the whole request.
+    """
+    title = (extraction.title or "").strip()
+    company = (extraction.company or "").strip()
+    raw_description = raw_text[:_MAX_RAW_DESCRIPTION_CHARS]
+
+    ai_relevance: AiRelevancePreview | None = None
+    relevance_available = True
+    try:
+        snapshot = run_relevance_preview(
+            {
+                "title": title,
+                "company": company,
+                "raw_description": raw_description,
+            },
+            settings=settings,
+        )
+        ai_relevance = AiRelevancePreview(**snapshot)
+    except Exception:
+        relevance_available = False
+
+    return JobPreviewResponse(
+        title=title or None,
+        company=company or None,
+        location=_clean(extraction.location),
+        work_type=_normalize_choice(extraction.work_type, _WORK_TYPE_ALIASES, "unknown"),
+        employment_type=_normalize_choice(
+            extraction.employment_type, _EMPLOYMENT_TYPE_ALIASES, "unknown"
+        ),
+        salary_range=_clean(extraction.salary_range),
+        responsibilities=extraction.responsibilities,
+        required_skills=extraction.required_skills,
+        preferred_skills=extraction.preferred_skills,
+        required_experience_years=_clean(extraction.required_experience_years),
+        ai_related_requirements=extraction.ai_related_requirements,
+        cloud_requirements=extraction.cloud_requirements,
+        raw_description=raw_description,
+        extraction_confidence=extraction.confidence_score,
+        needs_confirmation=_needs_confirmation(title, company),
+        ai_relevance=ai_relevance,
+        relevance_available=relevance_available,
+        source_url=source_url,
+        normalized_url=normalized_url,
+        duplicate=duplicate,
+        duplicate_job_id=duplicate_job_id,
+    )
+
+
+def _needs_confirmation(title: str, company: str) -> bool:
+    """True when title or company is missing — the UI asks the user to confirm.
+
+    Section 9 rule: do not invent missing fields. A blank key field is shown for
+    the user to fill rather than guessed.
+    """
+    return not title.strip() or not company.strip()
 
 
 @router.post("/{job_id}/quick-match")

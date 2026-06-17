@@ -11,7 +11,20 @@ import { SubmitButton } from "@/components/forms/submit-button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
-export function JobForm({ defaultJobUrl = "" }: { defaultJobUrl?: string }) {
+export type JobFormDefaults = {
+  company?: string;
+  title?: string;
+  location?: string;
+  rawDescription?: string;
+};
+
+export function JobForm({
+  defaultJobUrl = "",
+  defaults,
+}: {
+  defaultJobUrl?: string;
+  defaults?: JobFormDefaults;
+}) {
   const [state, formAction] = useActionState(saveJobAction, idleActionState);
 
   return (
@@ -28,6 +41,7 @@ export function JobForm({ defaultJobUrl = "" }: { defaultJobUrl?: string }) {
       >
         <Input
           aria-invalid={Boolean(state.fieldErrors?.company)}
+          defaultValue={defaults?.company}
           name="company"
           minLength={2}
           placeholder="Northstar AI"
@@ -42,6 +56,7 @@ export function JobForm({ defaultJobUrl = "" }: { defaultJobUrl?: string }) {
       >
         <Input
           aria-invalid={Boolean(state.fieldErrors?.title)}
+          defaultValue={defaults?.title}
           name="title"
           minLength={2}
           placeholder="Applied AI Engineer"
@@ -68,6 +83,7 @@ export function JobForm({ defaultJobUrl = "" }: { defaultJobUrl?: string }) {
       >
         <Input
           aria-invalid={Boolean(state.fieldErrors?.location)}
+          defaultValue={defaults?.location}
           name="location"
           placeholder="Remote, US"
         />
@@ -81,6 +97,7 @@ export function JobForm({ defaultJobUrl = "" }: { defaultJobUrl?: string }) {
       >
         <Textarea
           aria-invalid={Boolean(state.fieldErrors?.raw_description)}
+          defaultValue={defaults?.rawDescription}
           name="raw_description"
           className="min-h-52"
           minLength={10}

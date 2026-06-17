@@ -7,11 +7,10 @@ import type { SearchAiJob, SearchAiJobsState } from "@/lib/actions";
 import { searchAiJobsAction } from "@/lib/actions";
 import {
   groupJobResults,
-  aiRelevanceBadge,
   quickMatchBadge,
   recommendedActionLabel,
-  transitionFriendlinessBadge,
 } from "@/lib/job-search-flow.mjs";
+import { JobRelevancePreview } from "@/components/jobs/job-relevance-preview";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -186,11 +185,7 @@ function SearchForm({ formAction }: { formAction: (payload: FormData) => void })
 }
 
 function SearchJobCard({ job, dimmed = false }: { job: SearchAiJob; dimmed?: boolean }) {
-  const relBadge = aiRelevanceBadge(job.ai_relevance);
   const qmBadge = quickMatchBadge(job.quick_match);
-  const tfBadge = job.ai_relevance
-    ? transitionFriendlinessBadge(job.ai_relevance.transition_friendliness)
-    : null;
 
   const quickMatchUnavailable = !job.quick_match || job.quick_match.unavailable;
 
@@ -221,30 +216,10 @@ function SearchJobCard({ job, dimmed = false }: { job: SearchAiJob; dimmed?: boo
       <Separator />
 
       {/* AI relevance — about the job */}
-      <div className="flex flex-col gap-1.5">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          AI Relevance
-        </p>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Badge variant={relBadge.variant as never}>{relBadge.label}</Badge>
-          {tfBadge && (
-            <Badge variant={tfBadge.variant as never}>{tfBadge.label}</Badge>
-          )}
-          {job.ai_relevance?.research_heavy && (
-            <Badge variant="warning">Research-heavy</Badge>
-          )}
-        </div>
-        {job.ai_relevance?.relevance_reason && (
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            {job.ai_relevance.relevance_reason}
-          </p>
-        )}
-        {job.hidden && job.ai_relevance?.exclude_reason && (
-          <p className="text-xs italic text-muted-foreground/80">
-            Hidden: {job.ai_relevance.exclude_reason}
-          </p>
-        )}
-      </div>
+      <JobRelevancePreview
+        aiRelevance={job.ai_relevance}
+        hiddenExcludeReason={job.hidden ? job.ai_relevance?.exclude_reason : null}
+      />
 
       <Separator />
 

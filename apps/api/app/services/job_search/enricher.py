@@ -93,27 +93,9 @@ class SearchEnricher:
 
     def _run_relevance(self, job: dict[str, Any]) -> dict[str, Any]:
         job_proxy = _with_raw_description(job)
-        pre = compute_prefilter_score(
-            {"title": job.get("title", ""), "raw_description": job_proxy["raw_description"]}
+        return run_relevance_preview(
+            job_proxy, settings=self._settings, client=self._gemini_client
         )
-        prompt = _relevance_prompt(job_proxy, pre)
-
-        try:
-            model = resolve_model("ai_role_relevance", self._settings)
-            provider = build_primary_provider(
-                prompt=prompt,
-                output_model=AiRoleRelevanceOutput,
-                settings=self._settings,
-                model=model,
-                client=self._gemini_client,
-            )
-            if provider is not None:
-                raw = provider.generate()
-                return AiRoleRelevanceOutput.model_validate(raw).model_dump(mode="json")
-        except (ProviderError, Exception):
-            pass
-
-        return deterministic_ai_relevance(job_proxy)
 
     def _run_quick_match(
         self, job: dict[str, Any], profile: dict[str, Any] | None
@@ -148,6 +130,51 @@ class SearchEnricher:
 
         ai_score = job.get("ai_relevance", {}).get("ai_relevance_score", 0)
         return _map_quick_match(output, ai_score)
+
+
+# ---------------------------------------------------------------------------
+# Shared relevance runner (used by the enricher AND the preview endpoints US-076)
+# ---------------------------------------------------------------------------
+
+
+def run_relevance_preview(
+    job: dict[str, Any],
+    *,
+    settings: Any,
+    client: Any | None = None,
+) -> dict[str, Any]:
+    """Run AI Role Relevance on an unsaved job dict and return the snapshot.
+
+    The single source of truth for relevance-without-a-saved-row: the search
+    enricher (US-074) and the URL/paste preview endpoints (US-076) both call it.
+    ``job`` must carry ``title``, ``company`` and ``raw_description``. Falls back
+    to the deterministic classifier on any provider error, so a preview always
+    has a relevance result to show.
+    """
+    pre = compute_prefilter_score(
+        {
+            "title": job.get("title", ""),
+            "raw_description": job.get("raw_description", ""),
+        }
+    )
+    prompt = _relevance_prompt(job, pre)
+
+    try:
+        model = resolve_model("ai_role_relevance", settings)
+        provider = build_primary_provider(
+            prompt=prompt,
+            output_model=AiRoleRelevanceOutput,
+            settings=settings,
+            model=model,
+            client=client,
+        )
+        if provider is not None:
+            raw = provider.generate()
+            return AiRoleRelevanceOutput.model_validate(raw).model_dump(mode="json")
+    except (ProviderError, Exception):
+        pass
+
+    return deterministic_ai_relevance(job)
 
 
 # ---------------------------------------------------------------------------

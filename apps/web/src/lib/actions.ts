@@ -39,6 +39,10 @@ import {
 import { importJobByUrl } from "@/lib/job-import-flow.mjs";
 import { searchAiJobs } from "@/lib/job-search-flow.mjs";
 import {
+  extractJobFromDescription,
+  previewJobByUrl,
+} from "@/lib/job-preview-flow.mjs";
+import {
   AIWorkflowError,
   patchDraftCvBullet,
   patchResumeSuggestion,
@@ -1877,4 +1881,98 @@ export async function searchAiJobsAction(
   }
 
   return { status: "results", message: "", result: result.result as SearchAiResult };
+}
+
+// --- US-076: URL + Paste preview (relevance gate before save) ---
+
+export type JobPreview = {
+  title: string | null;
+  company: string | null;
+  location: string | null;
+  work_type: string;
+  employment_type: string;
+  salary_range: string | null;
+  responsibilities: string[];
+  required_skills: string[];
+  preferred_skills: string[];
+  required_experience_years: string | null;
+  ai_related_requirements: string[];
+  cloud_requirements: string[];
+  raw_description: string;
+  extraction_confidence: number;
+  needs_confirmation: boolean;
+  ai_relevance: SearchAiJob["ai_relevance"];
+  relevance_available: boolean;
+  source_url: string | null;
+  normalized_url: string | null;
+  duplicate: boolean;
+  duplicate_job_id: string | null;
+};
+
+export type JobPreviewState = {
+  status: "idle" | "preview" | "error";
+  message: string;
+  preview?: JobPreview;
+};
+
+export async function previewJobUrlAction(
+  _prev: JobPreviewState,
+  formData: FormData
+): Promise<JobPreviewState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return { status: "error", message: context.message };
+  }
+
+  const sourceUrl = formData.get("source_url");
+  if (typeof sourceUrl !== "string" || !sourceUrl.trim()) {
+    return { status: "error", message: "Enter a job URL." };
+  }
+
+  const sessionToken = await getCurrentSessionToken();
+  const result = await previewJobByUrl({
+    apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
+    sourceUrl,
+    sessionToken,
+  });
+
+  if (!result.ok) {
+    return { status: "error", message: result.message };
+  }
+  return {
+    status: "preview",
+    message: "",
+    preview: (result as { preview: JobPreview }).preview,
+  };
+}
+
+export async function extractJobFromDescriptionAction(
+  _prev: JobPreviewState,
+  formData: FormData
+): Promise<JobPreviewState> {
+  const context = await requireWritableContext();
+  if (!context.ok) {
+    return { status: "error", message: context.message };
+  }
+
+  const raw = readForm(formData);
+  const rawDescription = typeof raw.raw_description === "string" ? raw.raw_description : "";
+
+  const sessionToken = await getCurrentSessionToken();
+  const result = await extractJobFromDescription({
+    apiBaseUrl: serverEnv.NEXT_PUBLIC_API_BASE_URL,
+    rawDescription,
+    title: typeof raw.title === "string" ? raw.title : "",
+    company: typeof raw.company === "string" ? raw.company : "",
+    sessionToken,
+  });
+
+  if (!result.ok) {
+    return { status: "error", message: result.message };
+  }
+  return {
+    status: "preview",
+    message: "",
+    preview: (result as { preview: JobPreview }).preview,
+  };
 }
