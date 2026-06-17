@@ -89,6 +89,34 @@ export function countActiveApplications(applications) {
   return list.filter((a) => isActiveApplicationStatus(a?.status)).length;
 }
 
+// Status distribution + pipeline rollups for the tracker overview (US-080).
+// Pure aggregation over loaded rows: per-status buckets (with display labels and
+// group) plus active/closed/learning rollups, all derived from the shared status
+// groups so a future status flows through here without new label code. Learning
+// targets are NEVER counted as active applications. Unknown/unsupported status
+// values are ignored (never counted), mirroring summarizeApplicationStatuses.
+export function summarizeTrackerDistribution(applications) {
+  const list = Array.isArray(applications) ? applications : [];
+  const counts = summarizeApplicationStatuses(list);
+
+  const buckets = APPLICATION_STATUSES.map((status) => ({
+    status,
+    label: getApplicationStatusLabel(status),
+    group: applicationStatusGroup(status),
+    count: counts[status],
+  }));
+
+  const rollups = { active: 0, closed: 0, learning: 0, total: 0 };
+  for (const bucket of buckets) {
+    if (bucket.group === "pipeline") rollups.active += bucket.count;
+    else if (bucket.group === "closed") rollups.closed += bucket.count;
+    else if (bucket.group === "learning") rollups.learning += bucket.count;
+  }
+  rollups.total = rollups.active + rollups.closed + rollups.learning;
+
+  return { buckets, rollups, isEmpty: rollups.total === 0 };
+}
+
 // Split tracker rows for the two-segment tracker view: the pipeline/closed table
 // vs. the dedicated Learning Targets segment.
 export function partitionApplications(applications) {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ClipboardList } from "lucide-react";
 
+import { TrackerDistribution } from "@/components/charts/tracker-distribution";
 import { ApplicationStatusForm } from "@/components/forms/application-status-form";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
@@ -81,6 +82,9 @@ export default async function TrackerPage() {
             </Card>
           ))}
         </section>
+
+        {/* US-080: distribution + active/closed/learning rollups over the same rows. */}
+        <TrackerDistribution applications={applications} />
 
         {tracked.length > 0 ? (
           <Card>
