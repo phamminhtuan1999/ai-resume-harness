@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useActionState } from "react";
-import { AlertCircle, ExternalLink, Search, ChevronDown, ChevronRight } from "lucide-react";
+import { AlertCircle, Search, ChevronDown, ChevronRight } from "lucide-react";
 
 import type { SearchAiJob, SearchAiJobsState } from "@/lib/actions";
 import { searchAiJobsAction } from "@/lib/actions";
@@ -10,10 +10,10 @@ import {
   quickMatchBadge,
   recommendedActionLabel,
 } from "@/lib/job-search-flow.mjs";
+import { IntakeSaveActions } from "@/components/jobs/intake-save-actions";
 import { JobRelevancePreview } from "@/components/jobs/job-relevance-preview";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
@@ -251,26 +251,13 @@ function SearchJobCard({ job, dimmed = false }: { job: SearchAiJob; dimmed?: boo
         )}
       </div>
 
-      {/* Actions */}
-      <div className="flex flex-wrap gap-2 pt-1">
-        <Button disabled size="sm" type="button" variant="default">
-          Save
-        </Button>
-        <Button disabled size="sm" type="button" variant="outline">
-          Save &amp; Analyze
-        </Button>
-        {job.apply_url && (
-          <a
-            className="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[0.8rem] font-medium text-foreground hover:bg-muted transition-colors"
-            href={job.apply_url}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            Open Apply Link
-            <ExternalLink className="size-3" />
-          </a>
-        )}
-      </div>
+      {/* Actions (US-077): save the result + its AI judgments, or save & analyze. */}
+      <IntakeSaveActions
+        applyUrl={job.apply_url}
+        jobTitle={job.title}
+        mode="search"
+        payload={job}
+      />
     </div>
   );
 }

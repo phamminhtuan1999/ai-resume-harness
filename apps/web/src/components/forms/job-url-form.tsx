@@ -4,15 +4,16 @@ import { useActionState } from "react";
 import Link from "next/link";
 
 import type { JobPreview } from "@/lib/actions";
-import { idleActionState } from "@/lib/action-state";
-import { importJobByUrlAction, previewJobUrlAction } from "@/lib/actions";
+import { previewJobUrlAction } from "@/lib/actions";
+import {
+  IntakeConfirmFields,
+  IntakeSaveActions,
+} from "@/components/jobs/intake-save-actions";
 import {
   JobRelevancePreview,
   NonAiWarning,
 } from "@/components/jobs/job-relevance-preview";
 import { FormField } from "@/components/forms/form-field";
-import { FormStatusMessage } from "@/components/forms/form-status-message";
-import { FormSuccessPopup } from "@/components/forms/form-success-popup";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,11 +29,10 @@ type JobUrlFormProps = {
 const PREVIEW_IDLE = { status: "idle" as const, message: "" };
 
 /**
- * URL import (US-076): fetch + extract + score relevance WITHOUT saving, then
- * preview the role and its AI relevance before the user commits. On a
- * fetch/extract failure the user is offered the manual-paste fallback. Save
- * itself reuses the existing import-url save path (US-077 splits Save Only /
- * Save & Analyze / Open Apply + activity events).
+ * URL import (US-076/077): fetch + extract + score relevance WITHOUT saving,
+ * preview the role and its AI relevance, then Save / Save & Analyze (US-077)
+ * persists the job with its AI judgments. On a fetch/extract failure the user
+ * is offered the manual-paste fallback.
  */
 export function JobUrlForm({
   url,
@@ -49,7 +49,6 @@ export function JobUrlForm({
         onUseManual={onUseManual}
         onUseSearch={onUseSearch}
         preview={previewState.preview}
-        url={url}
       />
     );
   }
@@ -92,16 +91,12 @@ function UrlPreviewStep({
   onUseManual,
   onUseSearch,
   preview,
-  url,
 }: {
   onCancel: () => void;
   onUseManual: () => void;
   onUseSearch?: () => void;
   preview: JobPreview;
-  url: string;
 }) {
-  const [saveState, saveAction] = useActionState(importJobByUrlAction, idleActionState);
-
   if (preview.duplicate && preview.duplicate_job_id) {
     return (
       <div className="flex flex-col gap-4">
@@ -122,12 +117,6 @@ function UrlPreviewStep({
 
   return (
     <div className="flex flex-col gap-5">
-      <FormSuccessPopup
-        redirectTo={saveState.status === "success" ? saveState.redirectTo : undefined}
-        state={saveState}
-        title="Job saved"
-      />
-
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col gap-0.5">
           <h2 className="text-base font-semibold">{preview.title ?? "Imported role"}</h2>
@@ -157,24 +146,36 @@ function UrlPreviewStep({
 
       {preview.needs_confirmation && (
         <p className="rounded-lg border border-warning/40 bg-warning/8 px-3 py-2 text-xs text-muted-foreground">
-          We couldn&apos;t confidently read the title or company. You can save and
-          edit it afterward, or paste the description manually for a cleaner read.
+          We couldn&apos;t confidently read the title or company. Confirm or edit them
+          below before saving.
         </p>
       )}
 
       <Separator />
 
-      {/* Save reuses the existing import-url save path (US-077 evolves this). */}
-      <form action={saveAction} className="flex flex-col gap-3">
-        <FormStatusMessage state={saveState} />
-        <input name="source_url" type="hidden" value={url} />
-        <div className="flex flex-wrap items-center gap-3">
-          <SubmitButton pendingLabel="Saving…">Save job</SubmitButton>
-          <Button onClick={onUseManual} type="button" variant="outline">
+      <div className="flex flex-col gap-3">
+        <p className="text-sm font-medium">Confirm and save</p>
+        <IntakeSaveActions
+          applyUrl={preview.source_url}
+          jobTitle={preview.title ?? "Imported role"}
+          mode="url"
+          payload={preview}
+          saveLabel="Save job"
+        >
+          <IntakeConfirmFields
+            defaults={{
+              company: preview.company,
+              title: preview.title,
+              location: preview.location,
+            }}
+          />
+        </IntakeSaveActions>
+        <div>
+          <Button onClick={onUseManual} size="sm" type="button" variant="ghost">
             Edit manually instead
           </Button>
         </div>
-      </form>
+      </div>
     </div>
   );
 }

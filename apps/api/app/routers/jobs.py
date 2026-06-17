@@ -12,6 +12,8 @@ from app.schemas.job import (
     JobImportUrlRequest,
     JobImportUrlResponse,
     JobPreviewResponse,
+    JobSaveExternalRequest,
+    JobSaveResponse,
     JobSearchRequest,
     JobSearchResponse,
     SearchJobResult,
@@ -492,6 +494,196 @@ def _needs_confirmation(title: str, company: str) -> bool:
     the user to fill rather than guessed.
     """
     return not title.strip() or not company.strip()
+
+
+# How each intake path reads in a saved-job activity line.
+_SOURCE_PHRASES = {
+    "discovered_api": "from Search AI Jobs",
+    "manual_url": "from a job URL",
+    "manual_paste": "from a pasted description",
+}
+
+
+@router.post("/save-external", response_model=JobSaveResponse)
+def save_external_job(
+    payload: JobSaveExternalRequest,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+) -> JobSaveResponse:
+    """Persist a job from any intake mode + its AI judgments (US-077).
+
+    The keystone save for the Add Job hub: search results, URL previews, and
+    pasted JDs all land here. Dedups by normalized URL (URL/paste) or external
+    provider id (search), mirrors the in-memory AI Role Relevance + Quick Match
+    onto the ``jobs`` display columns (decision 0026), and records a
+    ``job.saved`` activity event. Saving never spends credits — analysis stays
+    the paid step (US-077 leaves the spend gate untouched).
+    """
+    settings = get_settings()
+
+    # Section 9: never invent a title/company, but the row requires both — fall
+    # back to the same safe placeholders import-url uses rather than failing.
+    title = (payload.title or "").strip() or "Untitled role"
+    company = (payload.company or "").strip() or "Unknown company"
+
+    try:
+        data_client = SupabaseDataClient(settings)
+        profile = data_client.get_profile_for_clerk_user(user.clerk_user_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="Profile not found.")
+        user_profile_id = profile["id"]
+        existing = _find_existing_job(
+            data_client, user_profile_id=user_profile_id, payload=payload
+        )
+    except SupabaseConfigurationError as exc:
+        raise HTTPException(
+            status_code=500, detail="Job data source is misconfigured."
+        ) from exc
+    except SupabaseDataError as exc:
+        raise HTTPException(status_code=503, detail="Job data is unavailable.") from exc
+
+    if existing:
+        return JobSaveResponse(
+            job_id=str(existing["id"]),
+            duplicate=True,
+            title=existing.get("title") or title,
+            company=existing.get("company") or company,
+        )
+
+    job_row = _build_save_row(payload, title=title, company=company)
+
+    try:
+        saved = data_client.insert_job(user_profile_id=user_profile_id, job=job_row)
+        data_client.insert_activity(
+            user_profile_id=user_profile_id,
+            workflow_run_id=None,
+            activity_type="job.saved",
+            title=f"Saved {title} at {company}",
+            importance="medium",
+            related_job_id=str(saved["id"]),
+            assistant_description=_save_activity_description(payload),
+        )
+    except SupabaseConfigurationError as exc:
+        raise HTTPException(
+            status_code=500, detail="Job data source is misconfigured."
+        ) from exc
+    except SupabaseDataError as exc:
+        raise HTTPException(status_code=503, detail="Job data is unavailable.") from exc
+
+    return JobSaveResponse(
+        job_id=str(saved["id"]), duplicate=False, title=title, company=company
+    )
+
+
+def _find_existing_job(
+    data_client: SupabaseDataClient,
+    *,
+    user_profile_id: str,
+    payload: JobSaveExternalRequest,
+) -> dict | None:
+    """Dedup lookup: normalized URL (URL/paste) first, then external id (search)."""
+    if payload.normalized_url:
+        found = data_client.find_job_by_normalized_url(
+            user_profile_id=user_profile_id, normalized_url=payload.normalized_url
+        )
+        if found:
+            return found
+    if payload.external_source and payload.external_job_id:
+        return data_client.find_job_by_external_id(
+            user_profile_id=user_profile_id,
+            external_source=payload.external_source,
+            external_job_id=payload.external_job_id,
+        )
+    return None
+
+
+def _build_save_row(
+    payload: JobSaveExternalRequest, *, title: str, company: str
+) -> dict:
+    """Assemble the jobs insert row, mirroring AI judgments per decision 0026."""
+    raw_description = (payload.raw_description or "").strip()[:_MAX_RAW_DESCRIPTION_CHARS]
+    row: dict = {
+        "company": company,
+        "title": title,
+        "source": payload.source,
+        "location": _clean(payload.location),
+        "work_type": payload.work_type,
+        "employment_type": payload.employment_type,
+        "salary_range": _clean(payload.salary_range),
+        "raw_description": raw_description,
+        "job_url": payload.source_url or payload.external_apply_url,
+        "source_url": payload.source_url,
+        "normalized_url": payload.normalized_url,
+        "parse_status": "parsed",
+        "extraction_status": "succeeded",
+        "extraction_confidence": payload.extraction_confidence,
+        "extraction_json": {
+            "responsibilities": payload.responsibilities,
+            "required_skills": payload.required_skills,
+            "preferred_skills": payload.preferred_skills,
+            "required_experience_years": payload.required_experience_years,
+            "ai_related_requirements": payload.ai_related_requirements,
+            "cloud_requirements": payload.cloud_requirements,
+        },
+    }
+
+    # External provider identity — search results only.
+    if payload.external_source:
+        row["external_source"] = payload.external_source
+        row["external_job_id"] = payload.external_job_id
+        row["external_apply_url"] = payload.external_apply_url
+        if payload.external_raw_payload is not None:
+            row["external_raw_payload"] = payload.external_raw_payload
+
+    # AI Role Relevance mirror — the audit snapshot stays in ai_workflow_runs.
+    if payload.ai_relevance is not None:
+        rel = payload.ai_relevance
+        row.update(
+            {
+                "ai_relevance_score": rel.ai_relevance_score,
+                "ai_role_category": rel.ai_role_category,
+                "ai_relevance_label": _relevance_label(rel.ai_relevance_score),
+                "transition_friendliness": rel.transition_friendliness,
+                "research_heavy": rel.research_heavy,
+                "engineering_focused": rel.engineering_focused,
+                "ai_relevance_json": rel.model_dump(mode="json"),
+            }
+        )
+
+    # Candidate Quick Match mirror — distinct from AI relevance (Principle 2).
+    if payload.quick_match is not None:
+        qm = payload.quick_match
+        row.update(
+            {
+                "quick_match_score": qm.preview_match_score,
+                "quick_match_label": qm.match_label,
+                "quick_match_summary": qm.assistant_preview,
+                "quick_match_json": qm.model_dump(mode="json"),
+            }
+        )
+
+    return row
+
+
+def _relevance_label(score: int) -> str:
+    """Map a 0–100 relevance score to its band label (decision 0025/0026)."""
+    if score >= 75:
+        return "strong"
+    if score >= 60:
+        return "possible"
+    return "hidden"
+
+
+def _save_activity_description(payload: JobSaveExternalRequest) -> str:
+    """An honest one-line activity description; no invented detail."""
+    where = _SOURCE_PHRASES.get(payload.source, "")
+    base = f"Saved {where}.".strip()
+    rel = payload.ai_relevance
+    if rel is not None:
+        return (
+            f"{base} AI relevance {rel.ai_relevance_score}/100 "
+            f"({_relevance_label(rel.ai_relevance_score)})."
+        )
+    return base
 
 
 @router.post("/{job_id}/quick-match")

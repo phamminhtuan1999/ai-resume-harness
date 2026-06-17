@@ -103,6 +103,29 @@ class SupabaseDataClient:
         rows = response.json()
         return rows[0] if rows else None
 
+    def find_job_by_external_id(
+        self, *, user_profile_id: str, external_source: str, external_job_id: str
+    ) -> dict[str, Any] | None:
+        """Find an owned job already saved from the same external provider listing.
+
+        Dedup key for ``discovered_api`` saves (US-077): a provider name +
+        provider-assigned id pair is unique per listing, so re-saving the same
+        search result opens the existing job rather than creating a duplicate.
+        """
+        response = self._request(
+            "GET",
+            "/jobs",
+            params={
+                "select": "id,company,title,external_source,external_job_id",
+                "user_id": f"eq.{user_profile_id}",
+                "external_source": f"eq.{external_source}",
+                "external_job_id": f"eq.{external_job_id}",
+                "limit": "1",
+            },
+        )
+        rows = response.json()
+        return rows[0] if rows else None
+
     def insert_job(self, *, user_profile_id: str, job: dict[str, Any]) -> dict[str, Any]:
         response = self._request(
             "POST",

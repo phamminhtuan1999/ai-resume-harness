@@ -282,6 +282,16 @@ Required fields:
 
 Index: `(user_id, created_at desc)`.
 
+Intake activity types (US-077, Epic 11) — written for the Add Job hub actions,
+distinct from the AI-workflow `*.completed` types:
+
+- `search.performed` — a Search AI Jobs query ran (`low`)
+- `job.url_previewed` — a job URL was previewed before save (`low`)
+- `job.jd_pasted` — a job description was pasted for preview (`low`)
+- `job.saved` — a job was saved from any intake mode; `related_job_id` set,
+  `assistant_description` carries the source + AI relevance band (`medium`)
+- `job.apply_link_opened` — the user opened a posting's apply link (`low`)
+
 ### `missing_skill_analyses`
 
 The AI missing-skill / gap analysis for a match (Period 8, migration `0012`;

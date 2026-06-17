@@ -5,7 +5,10 @@ import { Sparkles } from "lucide-react";
 
 import type { JobPreview } from "@/lib/actions";
 import { extractJobFromDescriptionAction } from "@/lib/actions";
-import { JobForm } from "@/components/forms/job-form";
+import {
+  IntakeConfirmFields,
+  IntakeSaveActions,
+} from "@/components/jobs/intake-save-actions";
 import {
   JobRelevancePreview,
   NonAiWarning,
@@ -19,24 +22,21 @@ import { Separator } from "@/components/ui/separator";
 const IDLE = { status: "idle" as const, message: "" };
 
 type JobPasteFlowProps = {
-  defaultJobUrl?: string;
   onUseSearch: () => void;
 };
 
 /**
- * Paste JD path (US-076): the pasted text is run through AI extraction + the AI
- * Role Relevance check, previewed, and only then committed via the existing save
- * form. The relevance result and a non-AI warning appear before save; the user
- * confirms or edits uncertain fields. Save mechanics are unchanged (US-077 adds
- * Save & Analyze / activity events).
+ * Paste JD path (US-076/077): the pasted text is run through AI extraction + the
+ * AI Role Relevance check and previewed; Save / Save & Analyze (US-077) then
+ * persists the job with its relevance result. The relevance result and a non-AI
+ * warning appear before save; the user confirms or edits uncertain fields first.
  */
-export function JobPasteFlow({ defaultJobUrl = "", onUseSearch }: JobPasteFlowProps) {
+export function JobPasteFlow({ onUseSearch }: JobPasteFlowProps) {
   const [state, formAction] = useActionState(extractJobFromDescriptionAction, IDLE);
 
   if (state.status === "preview" && state.preview) {
     return (
       <PreviewStep
-        defaultJobUrl={defaultJobUrl}
         onStartOver={() => window.location.reload()}
         onUseSearch={onUseSearch}
         preview={state.preview}
@@ -93,12 +93,10 @@ export function JobPasteFlow({ defaultJobUrl = "", onUseSearch }: JobPasteFlowPr
 }
 
 function PreviewStep({
-  defaultJobUrl,
   onStartOver,
   onUseSearch,
   preview,
 }: {
-  defaultJobUrl: string;
   onStartOver: () => void;
   onUseSearch: () => void;
   preview: JobPreview;
@@ -120,7 +118,7 @@ function PreviewStep({
       <NonAiWarning
         aiRelevance={preview.ai_relevance}
         onAddAnyway={() => {
-          /* Non-blocking: the save form below is already shown. */
+          /* Non-blocking: the save action below is already shown. */
         }}
         onFindAiJobs={onUseSearch}
         relevanceAvailable={preview.relevance_available}
@@ -135,17 +133,22 @@ function PreviewStep({
 
       <Separator />
 
-      <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium">Confirm the details</p>
-        <JobForm
-          defaultJobUrl={defaultJobUrl}
-          defaults={{
-            company: preview.company ?? undefined,
-            title: preview.title ?? undefined,
-            location: preview.location ?? undefined,
-            rawDescription: preview.raw_description,
-          }}
-        />
+      <div className="flex flex-col gap-3">
+        <p className="text-sm font-medium">Confirm and save</p>
+        <IntakeSaveActions
+          jobTitle={preview.title ?? "Pasted role"}
+          mode="paste"
+          payload={preview}
+          saveLabel="Save job"
+        >
+          <IntakeConfirmFields
+            defaults={{
+              company: preview.company,
+              title: preview.title,
+              location: preview.location,
+            }}
+          />
+        </IntakeSaveActions>
       </div>
     </div>
   );
