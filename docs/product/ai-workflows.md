@@ -648,3 +648,37 @@ Output:
 
 When the user lacks evidence for a topic, the prep should say the user needs to
 study or build proof instead of pretending they already have experience.
+
+## AI Role Relevance Classifier
+
+`workflow_type = 'ai_role_relevance'`, subject_type `job`, **default tier**
+(US-072, Period 16). Classifies a job for AI engineering relevance — a judgment
+about the *job itself*, completely separate from candidate fit (Principle 2).
+Result lives in `ai_workflow_runs.output_snapshot_json`; display fields are
+mirrored onto the `jobs` row at Save time (US-077, decision 0026).
+
+A deterministic keyword pre-filter (Section 14 of the intake spec) runs first,
+grounding the model with detected AI keywords. The pre-filter adds zero model
+calls; the AI classifier only runs on jobs the pre-filter marks as plausibly
+AI-related.
+
+Input:
+
+- job row (`raw_description`, `title`, `company`)
+- pre-filter result (keyword groups from Section 14)
+
+Output (Section 13 schema):
+
+- `is_ai_related` — whether the job is meaningfully related to AI engineering
+- `ai_relevance_score` — 0–100; ≥75 = strong, 60–74 = possible, <60 = hidden
+- `ai_role_category` — one of 13 enumerated values (see `ai_role_relevance.py`)
+- `transition_friendliness` — `high` | `medium` | `low`
+- `research_heavy`, `engineering_focused` — boolean flags for default-hide rules
+- `relevance_reason` — one-sentence explanation
+- `detected_ai_keywords` — which keywords drove the call
+- `exclude_reason` — why the job was excluded (null when `is_ai_related` is true)
+
+Deterministic fallback: rule-based from pre-filter result. Jobs with
+`raw_description` shorter than 80 chars return `exclude_reason =
+insufficient_job_data` (no fabricated score). US-067 reuse applies — unchanged
+job text re-serves the saved result with no model call.

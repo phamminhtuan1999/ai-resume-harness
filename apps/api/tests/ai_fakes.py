@@ -616,6 +616,74 @@ def gemini_valid_quick_match(**overrides: Any) -> SimpleNamespace:
     return gemini_response(text=json.dumps(valid_quick_match(**overrides)))
 
 
+# --- US-072 AI role relevance fixtures -------------------------------------------
+
+
+def valid_ai_role_relevance(**overrides: Any) -> dict:
+    base = {
+        "is_ai_related": True,
+        "ai_relevance_score": 82,
+        "ai_role_category": "applied_ai_engineer",
+        "transition_friendliness": "high",
+        "research_heavy": False,
+        "engineering_focused": True,
+        "relevance_reason": "The role builds LLM-powered product features and RAG pipelines.",
+        "detected_ai_keywords": ["LLM", "RAG", "ai"],
+        "exclude_reason": None,
+        "confidence_score": 0.85,
+    }
+    base.update(overrides)
+    return base
+
+
+def gemini_valid_ai_role_relevance(**overrides: Any) -> SimpleNamespace:
+    return gemini_response(text=json.dumps(valid_ai_role_relevance(**overrides)))
+
+
+def ai_job(**overrides: Any) -> dict:
+    """A job with rich AI keywords for relevance tests."""
+    base = {
+        "id": "job_ai_1",
+        "company": "Acme AI",
+        "title": "AI Engineer",
+        "location": "Remote US",
+        "work_type": "remote",
+        "raw_description": (
+            "We are looking for an AI Engineer to build LLM-powered features, "
+            "RAG pipelines, and production AI systems using Python, FastAPI, and OpenAI. "
+            "You will work on embeddings, vector databases, and AI agent workflows. "
+            "5+ years of backend engineering experience required."
+        ),
+        "structured_json": None,
+        "extraction_json": None,
+        "parse_status": "parsed",
+        "updated_at": "2026-06-15T00:00:00Z",
+    }
+    base.update(overrides)
+    return base
+
+
+def non_ai_job(**overrides: Any) -> dict:
+    """A job that should not pass the AI relevance pre-filter."""
+    base = {
+        "id": "job_nai_1",
+        "company": "Generic Corp",
+        "title": "Marketing Manager",
+        "location": "New York",
+        "work_type": "hybrid",
+        "raw_description": (
+            "We are hiring a Marketing Manager to run campaigns, manage sales outreach, "
+            "and produce content. Business analyst skills required. No engineering background needed."
+        ),
+        "structured_json": None,
+        "extraction_json": None,
+        "parse_status": "not_parsed",
+        "updated_at": "2026-06-15T00:00:00Z",
+    }
+    base.update(overrides)
+    return base
+
+
 def structured_job(**overrides: Any) -> dict:
     """An owned job with enough structured data for the pre-score to rate it."""
     base = {
