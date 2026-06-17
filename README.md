@@ -1,230 +1,298 @@
-# repository-harness
+# ApplyWise
 
-Turn any software repo into an agent-ready workspace.
+**An AI career copilot for engineers breaking into AI roles. It answers one question honestly: apply now, or improve first?**
 
-`repository-harness` is a repository-level operating harness for Claude Code,
-Codex, Cursor, and other coding agents. It gives agents the missing project
-context they need before they change code: where to start, what the product
-contract says, how risky the work is, what proof is required, and which
-decisions future agents should inherit.
+ApplyWise reads your resume and a job posting, then leads with a plain-language verdict instead of a hype score. It will tell you to improve first when that's the truth — and it always hands you the next concrete step.
 
-The app is what users touch. The harness is what agents touch.
+> Status: MVP feature-complete, pre-launch · Built solo · Next.js 16 · React 19 · FastAPI · Supabase Postgres · Google Gemini
 
-## Why Star This Repo
+![Decision-first job analysis](docs/screenshots/01-job-analysis-overview.png)
 
-Star this repo if you want practical, reusable patterns for making AI-assisted
-software development more reliable, inspectable, and easier for humans to steer.
+---
 
-This project is exploring a simple idea:
+## What it does
 
-> Coding agents do not only need better prompts. They need better repositories.
+You add a job (paste it, drop a URL, or search), upload a resume once, and ApplyWise analyzes the fit. Every analysis page opens with a verdict — **Strong Apply Target**, **Apply With Improvements**, **Learning Target**, or **Not Recommended Yet** — followed by the evidence behind it. The model's numbers stay tucked behind an Advanced tab.
 
-## The Problem
+From there you can:
 
-Most repos are built for humans reading code in a familiar codebase. Coding
-agents usually enter with only a chat prompt and a shallow snapshot of files.
-That leads to common failure modes:
+- See exactly which requirements you match and which you're missing.
+- Get resume bullets tailored to the job — without invented metrics or fake skills.
+- Export an ATS-safe CV to PDF, DOCX, or Markdown.
+- Generate a cover letter built from the tailored CV, not the raw resume.
+- Follow a 4-week roadmap to close the gaps that matter.
+- Prep for the interview with questions grounded in your actual experience.
+- Track applications and buy credits for the paid AI steps.
 
-- The agent edits code before understanding product intent.
-- Important constraints live only in chat history or in someone's head.
-- Validation expectations are vague or discovered too late.
-- Architecture tradeoffs are repeated instead of inherited.
-- Large requests do not get broken into reviewable story-sized work.
+## Why I built it
 
-## The Harness Approach
+Engineers moving into AI/LLM roles waste effort applying to jobs they aren't ready for. The tools that promise to help mostly inflate claims to beat resume filters — which falls apart the moment you have to defend a fabricated bullet in an interview.
 
-A repository starts to have a harness when it helps an agent answer practical
-engineering questions without relying only on chat history:
+What's missing is honest triage:
 
-- What should I read first?
-- What type of work is this?
-- Which product contract does it affect?
-- How risky is the change?
-- What proof will show the work is done?
-- What decision or lesson should future agents inherit?
+- Which jobs should I apply to **now**?
+- Which should I **improve for first**?
+- What exactly should I build or learn before applying?
 
-In this repo, those answers live in:
+No tool I tried was willing to say "not yet." ApplyWise is built around being willing to say it — and then showing a way forward.
 
-- `AGENTS.md` — the stable agent shim with local project notes and Harness
-  doc links.
-- `docs/HARNESS.md` — the human-agent collaboration model.
-- `docs/FEATURE_INTAKE.md` — tiny, normal, and high-risk work classification.
-- `docs/ARCHITECTURE.md` — architecture discovery and boundary rules.
-- `docs/TEST_MATRIX.md` — behavior-to-proof validation expectations.
-- `docs/stories/` — story packets and backlog items.
-- `docs/decisions/` — durable decisions and tradeoffs.
-- `docs/templates/` — reusable spec, story, decision, and validation templates.
+## Key features
 
-OpenAI describes this shift as an agent-first world where humans steer and
-agents execute:
+| Feature | What it does |
+| --- | --- |
+| **Decision-first analysis** | One verdict per job, evidence underneath, mechanics behind Advanced. A fixed six-tab shell (Overview, Skill Gaps, Resume Strategy, Application Materials, Interview Prep, Advanced) whose order never changes. |
+| **Deterministic verdict engine** | A pure, unit-tested engine decides the verdict from recomputed scores using ordered rules. The LLM's text is an input — it never gets the final say. |
+| **Truth Guard** | After the model writes a bullet, deterministic guards strip any number or skill not backed by the source resume. A fabricated claim can't reach an exported document. |
+| **Tailored CV + export** | One render model serializes the same CV to web, PDF, DOCX, and Markdown, with deterministic page sizing and ATS-safe layout. |
+| **Skill gaps + roadmap** | Missing skills typed as true gap / wording gap / proof gap, each with a fix. A 4-week plan turns "improve first" into a concrete path. |
+| **Interview prep** | Technical, AI/LLM, system-design, and behavioral questions with answer guidance drawn from your resume — it tells you to go build proof rather than fake it. |
+| **Resume import** | Upload PDF/DOCX/image (OCR included) or paste text; an extractor builds a structured profile you review before it goes live. |
+| **Prepaid credits** | Stripe-hosted checkout, credits granted only after a signed webhook, balance tracked on an append-only ledger with a server-side spend check. |
 
-https://openai.com/index/harness-engineering/
+## Tech stack
 
-## Install Harness Into A Project
+**Frontend** — Next.js 16 (App Router, React Server Components), React 19, TypeScript, Tailwind CSS v4, Base UI primitives, Zod, Clerk for auth, Playwright for E2E.
 
-From a target project directory, run:
+**Backend** — Python + FastAPI, Pydantic for boundary parsing and AI output validation, Docling for resume normalization (PDF/DOCX/image + OCR), fpdf2 and python-docx for export rendering, Clerk JWKS verification, pytest.
+
+**Data** — Supabase Postgres. User-owned rows with cascade deletion; append-only ledgers for billing, decisions, and the AI run log.
+
+**AI** — Google Gemini (default `gemini-3.5-flash`, with configurable fast and heavy tiers). Structured JSON validated by Pydantic with a single retry on bad JSON. Every workflow has a deterministic, non-LLM fallback that satisfies the same schema, so a missing key or a provider outage never breaks a feature.
+
+**Integrations** — Clerk (auth), Stripe (credits), Firecrawl (job URL scraping, with manual-paste fallback), Google Gemini API.
+
+## How it fits together
+
+A monorepo with two independently deployable surfaces over one Postgres database. The frontend only ever talks to API contracts; the backend owns all AI orchestration, scoring, the decision engine, parsing, export, and persistence.
+
+```mermaid
+flowchart TD
+    User([Engineer / job seeker])
+
+    subgraph Web["apps/web — Next.js 16 (Vercel)"]
+        Pages[Workspace + marketing routes]
+        Actions[Server actions + API proxy]
+    end
+
+    subgraph API["apps/api — FastAPI (Render / Fly / Railway)"]
+        Routers[11 routers · ~52 endpoints]
+        Spine[Shared AI workflow spine]
+        Engine[(Decision engine<br/>pure code · AI is an input)]
+        Export[Export renderer<br/>PDF / DOCX / Markdown]
+    end
+
+    subgraph Providers["AI + external"]
+        Gemini[[Google Gemini]]
+        Fallback[[Deterministic fallback<br/>same schema, no provider]]
+        Firecrawl[[Firecrawl — URL scrape]]
+        Docling[[Docling — resume parse + OCR]]
+    end
+
+    DB[(Supabase Postgres<br/>19 tables)]
+    Clerk[[Clerk auth]]
+    Stripe[[Stripe credits]]
+
+    User --> Web
+    Pages --> Actions
+    Actions -->|API contracts| Routers
+    Clerk -. identity .-> Routers
+
+    Routers --> Spine
+    Spine -->|key set| Gemini
+    Spine -->|no key / outage| Fallback
+    Spine --> Engine
+    Engine --> DB
+    Routers -->|URL intake| Firecrawl
+    Routers -->|resume import| Docling
+    Export --> DB
+    Stripe -->|signed webhook| Routers
+```
+
+Every AI feature runs the same flow, so reliability lives in one place rather than being reinvented per feature:
+
+```
+authorize ownership → insert run row → load minimum input
+→ build prompt (truthfulness preamble)
+→ call Gemini (retry once on bad JSON)  OR  deterministic fallback
+→ validate with Pydantic → run Truth Guard → map confidence to status
+→ persist result + snapshot → write activity event → return envelope
+```
+
+The full system diagram lives in [`docs/product/architecture.md`](docs/product/architecture.md); the data model is in [`docs/product/data-model.md`](docs/product/data-model.md).
+
+## Screenshots
+
+Captured at 1440px in both light and dark themes. The design system carries full light/dark parity — here's the signature analysis surface in both:
+
+| Light | Dark |
+| --- | --- |
+| ![Job analysis, light](docs/screenshots/01-job-analysis-overview.png) | ![Job analysis, dark](docs/screenshots/01-job-analysis-overview-dark.png) |
+
+**Truth Guard resume suggestions** — every rewrite is tagged Safe to use / Needs confirmation / Do not use yet, traceable to evidence.
+
+![Truth Guard suggestions](docs/screenshots/03-truth-guard-suggestions.png)
+
+**Tailored CV with ATS-safe export** — one render model, identical output to web, PDF, DOCX, and Markdown.
+
+![Draft CV export](docs/screenshots/04-draft-cv-export.png)
+
+| Skill gaps | 4-week roadmap |
+| --- | --- |
+| ![Skill gaps](docs/screenshots/05-skill-gaps.png) | ![Roadmap](docs/screenshots/11-roadmap.png) |
+
+| Interview prep | Analyzed jobs list |
+| --- | --- |
+| ![Interview prep](docs/screenshots/12-interview-prep.png) | ![Analyzed jobs](docs/screenshots/02-analyzed-jobs-list.png) |
+
+| Dashboard | Pricing & credits |
+| --- | --- |
+| ![Dashboard](docs/screenshots/07-dashboard.png) | ![Pricing](docs/screenshots/08-pricing-credits.png) |
+
+## Getting started
+
+### Prerequisites
+
+- **Node 20+** (22+ recommended; the E2E suite needs 22+)
+- **Python 3.11+**
+- A **Supabase** project (Postgres)
+- A **Clerk** application (auth)
+- Optional: **Google Gemini** API key — without it, every AI workflow falls back to its deterministic generator, so the app still runs end to end
+- Optional: **Stripe** (credits) and **Firecrawl** (job URL scraping) keys
+
+### Install
 
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.sh?$(date +%s)" | bash -s -- --yes
+git clone <your-fork-url> applywise
+cd applywise
+
+# Web (npm workspace)
+npm install
+
+# API (Python venv + dev deps)
+npm run setup:api
 ```
 
-On Windows PowerShell, run:
+### Environment variables
 
-```powershell
-& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.ps1"))) -Yes
-```
-
-If the target already has `AGENTS.md`, `docs/`, or `scripts/`, choose one:
+Copy the examples and fill them in:
 
 ```bash
-# Update an existing Harness repo without moving existing files
-curl -fsSL "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.sh?$(date +%s)" | bash -s -- --merge --yes
-
-# Back up and replace AGENTS.md, docs/, and scripts/
-curl -fsSL "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.sh?$(date +%s)" | bash -s -- --override --yes
+cp apps/web/.env.example apps/web/.env
+cp apps/api/.env.example apps/api/.env.local
 ```
 
-```powershell
-# Update an existing Harness repo without moving existing files
-& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.ps1"))) -Merge -Yes
+**`apps/web/.env`**
 
-# Back up and replace AGENTS.md, docs/, and scripts/
-& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.ps1"))) -Override -Yes
-```
+| Variable | Purpose |
+| --- | --- |
+| `NEXT_PUBLIC_API_BASE_URL` | Where the FastAPI backend runs (`http://localhost:8000`) |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` | Clerk auth |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_DB_URL` | Database access |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Billing (optional) |
 
-Use `--merge` when a project already has Harness and you want to append newly
-added Harness files without moving the existing `AGENTS.md`, `docs/`, or
-`scripts/` paths into backup. Existing files stay untouched; only missing
-Harness files are created.
+**`apps/api/.env.local`**
 
-For older Harness installs whose `AGENTS.md` still contains the full generated
-operating guide, refresh it into the small stable shim:
+| Variable | Purpose |
+| --- | --- |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Database access |
+| `CLERK_SECRET_KEY` | Server-side identity verification |
+| `GEMINI_API_KEY` | AI workflows (omit to use deterministic fallbacks) |
+| `GEMINI_MODEL` | Default model tier (`gemini-3.5-flash`) |
+| `JOB_SEARCH_PROVIDER` / `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` | AI job search (optional) |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Billing (optional) |
+
+See both `.env.example` files for the complete list and inline notes.
+
+### Database setup
+
+The schema is Supabase Postgres — 19 tables documented in [`docs/product/data-model.md`](docs/product/data-model.md). Apply the schema to your Supabase project (via the Supabase SQL editor or `psql` against `SUPABASE_DB_URL`) before running the API. The backend reads and writes through the service-role key, with ownership enforced per request.
+
+### Run it locally
+
+Three terminals:
 
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.sh?$(date +%s)" | bash -s -- --merge --refresh-agent-shim --yes
+# 1) API on :8000
+npm run dev:api
+
+# 2) Web on :3000
+npm run dev:web
+
+# 3) Optional — forward Stripe webhooks for billing
+npm run dev:stripe
 ```
 
-The refresh backs up the existing file. If it detects the old
-Harness-generated guide, it replaces it with the shim. If the file appears
-custom, it appends or updates a marked Harness block instead of overwriting the
-project's local instructions.
+Then open <http://localhost:3000>.
 
-Or install into a specific path:
+## Available scripts
 
-```bash
-curl -fsSL "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.sh?$(date +%s)" | bash -s -- --directory /path/to/project --yes
+Run from the repo root:
+
+| Script | What it does |
+| --- | --- |
+| `npm run dev:web` | Start the Next.js dev server |
+| `npm run dev:api` | Start the FastAPI server with reload |
+| `npm run dev:stripe` | Forward Stripe webhooks to the local API |
+| `npm run setup:api` | Create the Python venv and install API deps |
+| `npm run build:web` | Production build of the web app |
+| `npm run lint:web` | Lint the web app |
+| `npm run test:web` | Run the web unit tests |
+| `npm run kill:ports` | Free the dev ports if something hangs |
+
+Inside `apps/web`, `npm run test:e2e` runs the Playwright suite (needs Node 22+ and both dev servers up). Inside `apps/api`, `.venv/bin/python -m pytest` runs the backend tests.
+
+## Project structure
+
+```
+applywise/
+├─ apps/
+│  ├─ web/                 Next.js 16 frontend
+│  │  └─ src/
+│  │     ├─ app/           App Router routes (workspace + marketing + auth)
+│  │     ├─ components/    UI, forms, jobs, matches, billing, design system
+│  │     └─ lib/           server actions, data access, auth, supabase
+│  └─ api/                 FastAPI backend
+│     └─ app/
+│        ├─ routers/       11 routers (~52 endpoints)
+│        ├─ schemas/       Pydantic DTOs
+│        └─ services/
+│           ├─ ai/         11 AI workflows + deterministic fallbacks
+│           ├─ export/     PDF / DOCX / Markdown renderers
+│           └─ job_search/ external search + enrichment
+├─ docs/                   architecture, data model, decisions, screenshots
+└─ scripts/                tooling
 ```
 
-```powershell
-& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/scripts/install-harness.ps1"))) -Directory C:\path\to\project -Yes
-```
+## Implementation notes
 
-Use `--dry-run` on Bash or `-DryRun` on PowerShell to preview changes before
-writing files.
+A few decisions worth calling out, because they're the interesting part:
 
-The installer also downloads the prebuilt Harness CLI for the current platform,
-verifies its `.sha256` checksum, and installs it at
-`scripts/bin/harness-cli` on macOS/Linux or `scripts/bin/harness-cli.exe` on
-Windows. The Rust CLI is the main Harness tool and stable command path.
+- **AI is an input, not the verdict.** An LLM that grades its own confidence drifts run to run and can't be explained. The verdict comes from a pure decision engine with ordered, first-match-wins rules over recomputed scores. Decision history is append-only and the rules are versioned, so the history can say "the rules changed, not you."
 
-Harness CLI release assets are published from tags by the
-`Harness CLI Release` GitHub Actions workflow. The installer expects each
-release to include `harness-cli-<platform>` and
-`harness-cli-<platform>.sha256` assets for macOS arm64, macOS x64, Linux x64,
-Linux arm64, and Windows x64. The Windows asset is
-`harness-cli-windows-x64.exe` plus `harness-cli-windows-x64.exe.sha256`.
+- **Truth Guard is enforced in code, not in the prompt.** A prompt that says "don't fabricate" guarantees nothing. After the model returns, deterministic guards demote any number missing from the source resume and remove any unsupported skill. Server-side render filtering is authoritative — the client can't ship a fabricated bullet into an export.
 
-## Try The Flow
+- **Cost control is a feature.** To keep a free-tier-friendly model viable: task-based model tiers, version-keyed run reuse that skips the model entirely when nothing changed (keyed on a hash of row IDs and timestamps — never raw resume text), and a local pre-score before any opt-in AI match.
 
-The fastest way to understand the harness is to inspect the tiny demo:
+- **Deterministic export.** Export isn't an AI call. One shared render model turns stored CV JSON into web, PDF, DOCX, and Markdown identically, with page sizing derived from experience level rather than the model's opinion. Swapping the PDF engine (WeasyPrint → fpdf2) when native libs weren't available was invisible to the other formats because the render model is the contract.
 
-- `docs/demo/README.md`: shows how a simple product idea becomes product docs,
-  stories, validation expectations, and decisions before implementation starts.
+- **Parse at the boundary.** HTTP bodies, env vars, DB rows, and provider payloads are all parsed into typed DTOs before they reach application logic. Sensitive resume/JD text is minimized in prompts and never logged in production.
 
-A typical flow looks like this:
+The reasoning behind these (with the alternatives I rejected) is written up as architecture decision records in [`docs/decisions/`](docs/decisions).
 
-```text
-human intent or product spec
-  -> product contract
-  -> feature intake
-  -> story packet
-  -> validation expectations
-  -> implementation work
-  -> decision or lesson captured for future agents
-```
+## Roadmap
 
-Implementation prompts do not go straight to code. They first pass through
-feature intake, become story-sized work when needed, and then carry both product
-validation and harness maintenance expectations.
+Pre-launch. What's next:
 
-## Current State
+- A second live AI provider (the stack is already provider-abstracted behind a typed interface — OpenAI/Claude wiring is the next step).
+- Subscription billing alongside the current prepaid credits.
+- Expanding the AI job search beyond the initial provider.
+- Full WCAG AAA audit on the surfaces still at the AA floor.
+- Usage analytics once there are real users to measure.
 
-This repository is in Harness v0.
+## A note on how this was built
 
-There is no application implementation and no baked-in product specification
-yet. The current work is the reusable project harness: the file structure,
-agent operating model, feature intake process, story templates, and validation
-expectations that help humans and agents turn a future user-provided spec into
-implementation work.
+ApplyWise was built solo over a focused two-week window, with AI agents assisting under a repository "harness" — a set of docs, story packets, a test matrix, and architecture decision records that kept the engineering judgment human-owned while moving fast. The harness tooling lives in `docs/` and `scripts/`; the product itself is everything under `apps/`.
 
-## Product Sources
+## License
 
-No product contract is currently defined.
-
-When a user provides a project specification, add or reference it as the input
-spec for the first buildout, then derive smaller living artifacts from it:
-
-- `docs/product/`: current product contract files, created from the spec.
-- `docs/stories/`: story packets and backlog created from selected work.
-- `docs/TEST_MATRIX.md`: behavior-to-proof control panel.
-- `docs/decisions/`: durable decisions and tradeoffs.
-
-Do not keep a project-specific spec or product breakdown in this harness until
-a real project supplies one.
-
-## Repository Structure
-
-```text
-project/
-  AGENTS.md
-  README.md
-  docs/
-    HARNESS.md
-    FEATURE_INTAKE.md
-    ARCHITECTURE.md
-    TEST_MATRIX.md
-    HARNESS_BACKLOG.md
-    product/
-    stories/
-    decisions/
-    demo/
-    templates/
-  scripts/
-    README.md
-```
-
-## Contributing
-
-This project is early and benefits most from real-world agent failure cases,
-example harness installs, docs improvements, and reusable workflow patterns.
-See `CONTRIBUTING.md` for contribution ideas.
-
-Useful contributions include:
-
-- Show how the harness works in a real project.
-- Add missing templates or improve existing ones.
-- Propose validation patterns for different stacks.
-- Share failures where an agent made the wrong change because the repo lacked
-  context.
-- Compare harness behavior across Claude Code, Codex, Cursor, and other tools.
-
-## Share
-
-If this idea resonates, please star the repo and share it with someone building
-with coding agents.
-
-Short description:
-
-> An agent-ready repo harness for Claude Code, Codex, Cursor, and other coding
-> agents: AGENTS.md, product contracts, story packets, validation matrix, and
-> decision records.
+No license file yet — all rights reserved for now. Open an issue if you'd like to use any part of it.

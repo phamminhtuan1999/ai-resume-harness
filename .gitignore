@@ -35,9 +35,12 @@ __pycache__/
 venv/
 *.egg-info/
 
-# Local agent skills (not pushed).
+# Local agent skills.
 .agents/
 skills-lock.json
+.claude/
+.impeccable/
+.ruff_cache/
 
 # Portfolio generated assets (screenshots, AI-generated docs).
 portfolio/
