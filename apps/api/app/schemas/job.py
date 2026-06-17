@@ -37,6 +37,42 @@ class JobImportUrlRequest(BaseModel):
     source_url: str
 
 
+class JobSearchFilters(BaseModel):
+    only_ai_related: bool = True
+    hide_research_heavy: bool = True
+    hide_non_engineering_ai: bool = True
+    prioritize_transition_friendly: bool = True
+
+
+class JobSearchRequest(BaseModel):
+    target_role: str = "Applied AI Engineer"
+    location: str = "Remote US"
+    remote_only: bool = False
+    experience_level: str | None = None
+    filters: JobSearchFilters = Field(default_factory=JobSearchFilters)
+
+
+class SearchJobResult(BaseModel):
+    external_job_id: str
+    external_source: str
+    title: str
+    company: str | None = None
+    location: str | None = None
+    description: str
+    apply_url: str | None = None
+    pre_score: int
+    likely_ai_related: bool
+    keyword_hits: list[str] = Field(default_factory=list)
+
+
+class JobSearchResponse(BaseModel):
+    search_session_id: str
+    total_provider_results: int
+    total_ai_related_results: int
+    jobs: list[SearchJobResult]
+    error: dict | None = None
+
+
 class JobImportUrlResponse(BaseModel):
     job_id: str
     duplicate: bool = False
