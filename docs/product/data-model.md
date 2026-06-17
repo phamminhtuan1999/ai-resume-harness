@@ -241,8 +241,8 @@ Required fields:
 - `workflow_type text` — `match_analysis | missing_skills | resume_suggestions | resume_draft | cover_letter | roadmap | interview_prep | assistant_insight | dashboard_summary | activity_description | draft_cv`
 
 `draft_cv` is added by Period 9 (migration `0018`, US-039). The
-`workflow_type` CHECK constraint from migration `0010` is extended in place
-(per `docs/stories/period-8/flows/README.md`). `resume_draft` generation was
+`workflow_type` CHECK constraint from migration `0010` is extended in place.
+`resume_draft` generation was
 retired by US-059 / decision 0019; the value stays in the constraint and the
 API schema so historic run rows keep validating.
 - `subject_type text` — `match | resume | job | dashboard`

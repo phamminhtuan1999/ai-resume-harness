@@ -26,7 +26,7 @@ The MVP is complete when a user can:
 ## Out Of Scope For MVP
 
 - PDF or DOCX resume export. *(Pulled in by Period 9 as the Draft CV export —
-  US-039 through US-042; see `docs/stories/period-9/README.md`.)*
+  US-039 through US-042.)*
 - Section-by-section resume editor.
 - Resume version comparison.
 - Real Stripe or payment processing.

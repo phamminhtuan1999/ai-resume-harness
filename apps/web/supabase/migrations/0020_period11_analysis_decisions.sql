@@ -3,8 +3,7 @@
 -- deleted. Written ONLY by recompute_decision on the server (apps/api) under the
 -- Supabase service role after Clerk identity + ownership checks; the GET
 -- /analysis-package read path never writes. See
--- docs/decisions/0015-job-analysis-decision-engine.md §7 and
--- docs/stories/period-11/US-047-analysis-package-decision-engine/.
+-- docs/decisions/0015-job-analysis-decision-engine.md §7.
 
 create table if not exists public.analysis_decisions (
   id uuid primary key default gen_random_uuid(),

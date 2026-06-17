@@ -221,7 +221,7 @@ unless a provider integration exists.
 ## Suggested Story Slices
 
 These are pre-intake candidates, not accepted stories — no story files exist yet.
-Run each through `docs/FEATURE_INTAKE.md` before implementation. Ordered by
+Vet each before implementation. Ordered by
 marginal value (the most-already-built work is sequenced last).
 
 ### 1. Tracker Contact And Materials Shortcuts
@@ -271,7 +271,7 @@ Goal: support interview scheduling inside Tracker. Sequence this last — it is 
 only slice that changes persisted state.
 
 Lane: normal with stronger validation, escalating to high-risk if reminders or
-calendar sync are included (data-model hard gate per `docs/FEATURE_INTAKE.md`).
+calendar sync are included (data-model hard gate).
 
 Scope:
 

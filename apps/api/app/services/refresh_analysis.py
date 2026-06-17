@@ -6,8 +6,7 @@ artifacts (resume draft, draft CV, cover letter, roadmap, interview prep). Job
 requirement extraction is re-run conditionally before the chain. The work runs
 in the background (the endpoint returns 202); this module is the unit underneath.
 
-See docs/decisions/0015-job-analysis-decision-engine.md §6 and
-docs/stories/period-11/US-050-refresh-analysis.md.
+See docs/decisions/0015-job-analysis-decision-engine.md §6.
 """
 
 from __future__ import annotations

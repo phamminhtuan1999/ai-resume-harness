@@ -291,7 +291,7 @@ Pre-launch. What's next:
 
 ## A note on how this was built
 
-ApplyWise was built solo over a focused two-week window, with AI agents assisting under a repository "harness" — a set of docs, story packets, a test matrix, and architecture decision records that kept the engineering judgment human-owned while moving fast. The harness tooling lives in `docs/` and `scripts/`; the product itself is everything under `apps/`.
+ApplyWise was built solo over a focused two-week window, with AI agents assisting under a human-owned engineering process — a written product spec, a documented design system, and architecture decision records that captured the trade-offs as they were made and kept the judgment human-owned while moving fast. That thinking is recorded in `SPEC.md`, `DESIGN.md`, and `docs/decisions/`; the product itself is everything under `apps/`.
 
 ## License
 

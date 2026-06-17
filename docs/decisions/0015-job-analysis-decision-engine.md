@@ -24,14 +24,14 @@ prep, draft CV + export) and the AI workflow panel. The job analysis page
 (`/matches/[matchId]`) renders every module and every action with equal
 weight, exposes several regenerate buttons, and shows the technical workflow
 panel inline. The Period 11 brief
-(`docs/stories/period-11/brief.md`, verbatim user requirement 2026-06-10) asks
+(verbatim user requirement 2026-06-10) asks
 to refactor this into a decision-based assistant that answers "should I apply,
 why, and what next" — driven by one decision label, recommendation-based
 actions, a single Refresh Analysis, advanced details, learning targets, and
 decision history.
 
 Several brief details conflict with the system as built (full adversarial
-review: `docs/stories/period-11/README.md`, restatements #1–#12, plus the
+review, restatements #1–#12, plus the
 review-driven amendments below). The load-bearing decisions:
 
 ## Decisions
@@ -154,8 +154,7 @@ user-agency/lifecycle rules that override both Epics:
   Primary, and the header carries an applied banner — the page must never
   tell a user with a live application to shop around (US-048/US-049).
 
-The frozen table lives in
-`docs/stories/period-11/US-047-analysis-package-decision-engine/design.md`;
+The frozen table is the US-047 analysis-package decision engine design;
 US-049 renders and tests against it (not against "Epic 2/8"). Two further
 placement rules: Generate Draft CV renders in the **primary tier permanently**
 for `apply_with_improvements` but **locked with an inline reason** ("Review
