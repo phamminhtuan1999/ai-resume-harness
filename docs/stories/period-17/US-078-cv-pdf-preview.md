@@ -2,8 +2,7 @@
 
 ## Status
 
-in_progress (backend/no-stamp preview implemented; web selected-option parity
-follow-up required)
+implemented
 
 ## Lane
 

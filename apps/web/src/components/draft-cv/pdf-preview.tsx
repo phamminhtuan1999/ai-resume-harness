@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { FileText } from "lucide-react";
 
+import { useDraftCvRenderOptions } from "@/components/draft-cv/render-options-context";
 import { Button } from "@/components/ui/button";
+import { previewUrl } from "@/lib/draft-cv-view.mjs";
 
 type DraftCvPdfPreviewProps = {
   apiBaseUrl: string | null;
@@ -16,9 +18,12 @@ type PreviewState = "idle" | "loading" | "ready" | "error";
 // On-demand inline render of the draft CV as PDF. Hits the read-only preview
 // endpoint (no export stamp), so opening this never advances the draft to
 // "exported" — only the Export buttons do. The blob URL is revoked on refresh
-// and unmount so we don't leak object URLs.
+// and unmount so we don't leak object URLs. The selected page count / font are
+// read from shared context (US-078) so the preview is the document Export will
+// produce, not a default sample.
 export function DraftCvPdfPreview({ apiBaseUrl, draftCvId }: DraftCvPdfPreviewProps) {
   const { getToken } = useAuth();
+  const options = useDraftCvRenderOptions();
   const [state, setState] = useState<PreviewState>("idle");
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +46,17 @@ export function DraftCvPdfPreview({ apiBaseUrl, draftCvId }: DraftCvPdfPreviewPr
     setError(null);
     try {
       const token = await getToken();
-      const response = await fetch(`${apiBaseUrl}/api/draft-cvs/${draftCvId}/preview/pdf`, {
+      const endpoint = options
+        ? previewUrl(
+            apiBaseUrl,
+            draftCvId,
+            options.pages,
+            options.recommendedPages,
+            options.font,
+            options.recommendedFont
+          )
+        : `${apiBaseUrl}/api/draft-cvs/${draftCvId}/preview/pdf`;
+      const response = await fetch(endpoint, {
         headers: { Authorization: `Bearer ${token ?? ""}` },
       });
       if (!response.ok) {
