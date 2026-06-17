@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ClipboardList } from "lucide-react";
 
 import { TrackerDistribution } from "@/components/charts/tracker-distribution";
+import { TrackerRowActions } from "@/components/tracker/tracker-row-actions";
 import { ApplicationStatusForm } from "@/components/forms/application-status-form";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
@@ -27,6 +28,7 @@ import {
   getApplicationStatusLabel,
   partitionApplications,
 } from "@/lib/application-tracker.mjs";
+import { CONTACT_NOTE_LABEL, getContactNote } from "@/lib/tracker-row-actions.mjs";
 import {
   formatShortDate,
   getContactLabel,
@@ -109,7 +111,7 @@ export default async function TrackerPage() {
                 <TableBody>
                   {tracked.map((application) => (
                     <TableRow key={application.id}>
-                      <TableCell className="min-w-[220px] whitespace-normal">
+                      <TableCell className="min-w-[260px] whitespace-normal">
                         <Link
                           href={`/jobs/${application.job_id}`}
                           className="font-medium hover:underline"
@@ -119,6 +121,7 @@ export default async function TrackerPage() {
                         <p className="mt-1 text-muted-foreground">
                           {application.jobs?.title || "Unknown role"}
                         </p>
+                        <TrackerRowActions application={application} />
                       </TableCell>
                       <TableCell>
                         <Badge variant={statusVariant(application.status)}>
@@ -141,6 +144,12 @@ export default async function TrackerPage() {
                           >
                             LinkedIn
                           </a>
+                        ) : null}
+                        {getContactNote(application.jobs) ? (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground">{CONTACT_NOTE_LABEL}:</span>{" "}
+                            {getContactNote(application.jobs)}
+                          </p>
                         ) : null}
                       </TableCell>
                       <TableCell>

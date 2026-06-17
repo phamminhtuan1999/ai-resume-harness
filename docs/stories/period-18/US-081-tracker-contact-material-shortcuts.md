@@ -2,7 +2,7 @@
 
 ## Status
 
-planned
+implemented
 
 ## Lane
 
@@ -76,5 +76,27 @@ None expected.
 
 ## Evidence
 
-Add commands, reports, screenshots, or links after validation exists.
+- `apps/web/src/lib/tracker-row-actions.mjs` — pure presenter
+  `buildTrackerRowActions(application, { artifacts })` returning job / Job
+  Analysis / ordered material shortcuts (segments mirror `match-tabs.mjs`), plus
+  `getContactNote` + `CONTACT_NOTE_LABEL`. Material shortcuts route to the match
+  sub-route that owns the artifact; that page is itself the generation surface
+  when the artifact is missing, so existing per-page readiness rules remain the
+  source of truth. An optional `artifacts` map annotates `state`
+  (`ready` | `generate`). A Learning Target keeps only the prominent roadmap
+  shortcut so it never reads as an active application (AC6).
+- `apps/web/src/components/tracker/tracker-row-actions.tsx` — compact ghost-link
+  action group rendered in the tracked Job cell (no new column; rows stay
+  scannable). No-match rows show an explanatory hint instead of dead shortcuts.
+- `apps/web/src/app/(app)/tracker/page.tsx` — wires the action group into the
+  tracked table and surfaces `jobs.contact_notes` in the Contact cell, labeled
+  distinctly from application notes.
+- Unit: `apps/web/tests/tracker-row-actions.test.mjs` (8 tests — no match, no
+  job, linked-match full set, artifact ready/generate annotation, Learning
+  Target roadmap prominence, Learning Target without match, contact-note
+  trim/fallback, segment sync). Full web suite 379 passed; `tsc` + `eslint`
+  clean.
+- Integration left at 0: contact fields were already selected and user-scoped by
+  `getTrackerData` (no loader change), and this slice loads no per-artifact
+  readiness, so no new integration surface was added or tested.
 
