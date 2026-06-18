@@ -84,6 +84,38 @@ export async function searchAiJobs({
   return { ok: true, result: payload };
 }
 
+// --- Pagination ("Load more") ---
+
+/**
+ * Merge a freshly-fetched page onto the accumulated results for "Load more".
+ * Jobs are de-duplicated by external_job_id (provider pages can overlap),
+ * total_provider_results accumulates across fetched pages, total_ai_related is
+ * recomputed over the merged set, and the page/has_more flags come from the new
+ * page so the UI knows whether to keep offering "Load more".
+ */
+export function appendSearchPage(previous, next) {
+  const prevJobs = Array.isArray(previous?.jobs) ? previous.jobs : [];
+  const nextJobs = Array.isArray(next?.jobs) ? next.jobs : [];
+
+  const seen = new Set(prevJobs.map((job) => job.external_job_id));
+  const jobs = [...prevJobs];
+  for (const job of nextJobs) {
+    if (seen.has(job.external_job_id)) continue;
+    seen.add(job.external_job_id);
+    jobs.push(job);
+  }
+
+  return {
+    ...next,
+    jobs,
+    total_provider_results:
+      (previous?.total_provider_results ?? 0) + (next?.total_provider_results ?? 0),
+    total_ai_related_results: jobs.filter((job) => !job.hidden).length,
+    page: next?.page,
+    has_more: Boolean(next?.has_more),
+  };
+}
+
 // --- Pure view-model helpers ---
 
 /**

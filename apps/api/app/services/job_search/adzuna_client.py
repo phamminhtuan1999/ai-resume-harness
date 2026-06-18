@@ -37,6 +37,7 @@ class AdzunaJobSearchProvider:
         location: str,
         remote_only: bool,
         results_per_page: int,
+        page: int = 1,
     ) -> list[ProviderJob]:
         if not self._app_id or not self._app_key:
             raise JobSearchNotConfiguredError(
@@ -51,7 +52,8 @@ class AdzunaJobSearchProvider:
             "what": what,
             "where": where,
         }
-        endpoint = f"{self._api_base}/jobs/{self._country}/search/1"
+        safe_page = max(int(page), 1)
+        endpoint = f"{self._api_base}/jobs/{self._country}/search/{safe_page}"
 
         try:
             response = self._get(endpoint, params=params, timeout=self._timeout)

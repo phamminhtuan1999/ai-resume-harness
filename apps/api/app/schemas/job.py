@@ -49,6 +49,9 @@ class JobSearchRequest(BaseModel):
     location: str = "Remote US"
     remote_only: bool = False
     experience_level: str | None = None
+    # Provider result page for "Load more". Capped server-side so the per-search
+    # cost stays bounded no matter what the client sends.
+    page: int = Field(default=1, ge=1, le=10)
     filters: JobSearchFilters = Field(default_factory=JobSearchFilters)
 
 
@@ -97,6 +100,8 @@ class JobSearchResponse(BaseModel):
     total_provider_results: int
     total_ai_related_results: int
     jobs: list[SearchJobResult]
+    page: int = 1
+    has_more: bool = False
     error: dict | None = None
 
 

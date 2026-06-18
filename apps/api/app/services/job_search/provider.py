@@ -35,6 +35,7 @@ class JobSearchProvider(Protocol):
         location: str,
         remote_only: bool,
         results_per_page: int,
+        page: int = 1,
     ) -> list[ProviderJob]: ...
 
 

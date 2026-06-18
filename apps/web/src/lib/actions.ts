@@ -37,7 +37,7 @@ import {
   isUploadedResumeFile,
 } from "@/lib/resume-import-flow.mjs";
 import { importJobByUrl } from "@/lib/job-import-flow.mjs";
-import { searchAiJobs } from "@/lib/job-search-flow.mjs";
+import { appendSearchPage, searchAiJobs } from "@/lib/job-search-flow.mjs";
 import {
   extractJobFromDescription,
   previewJobByUrl,
@@ -1857,6 +1857,8 @@ export type SearchAiResult = {
   total_provider_results: number;
   total_ai_related_results: number;
   jobs: SearchAiJob[];
+  page?: number;
+  has_more?: boolean;
   error: { code: string; message: string } | null;
 };
 
@@ -1867,7 +1869,7 @@ export type SearchAiJobsState = {
 };
 
 export async function searchAiJobsAction(
-  _prev: SearchAiJobsState,
+  previous: SearchAiJobsState,
   formData: FormData
 ): Promise<SearchAiJobsState> {
   const context = await requireWritableContext();
@@ -1876,11 +1878,19 @@ export async function searchAiJobsAction(
   }
 
   const raw = readForm(formData);
+  // "Load more" submits the same query with intent=more; the next page is
+  // derived from the accumulated state, not from the client, so it can't be
+  // forged past the server-side cap.
+  const loadMore = raw.intent === "more" && Boolean(previous.result);
+  const priorResult = loadMore ? previous.result : undefined;
+  const page = priorResult ? (priorResult.page ?? 1) + 1 : 1;
+
   const request = {
     target_role: (typeof raw.target_role === "string" && raw.target_role.trim()) || "Applied AI Engineer",
     location: (typeof raw.location === "string" && raw.location.trim()) || "Remote US",
     remote_only: raw.remote_only === "on",
     experience_level: (typeof raw.experience_level === "string" && raw.experience_level.trim()) || null,
+    page,
   };
 
   const sessionToken = await getCurrentSessionToken();
@@ -1894,18 +1904,25 @@ export async function searchAiJobsAction(
     return {
       status: "error",
       message: result.message,
-      result: result.result as SearchAiResult | undefined,
+      // Keep the already-loaded pages on a failed "Load more" so the list
+      // doesn't vanish; a fresh search clears them by having no prior result.
+      result: (priorResult ?? (result.result as SearchAiResult | undefined)),
     };
   }
 
   // Intake activity (US-077): a low-importance breadcrumb that a search ran.
-  await recordIntakeActivity({
-    userProfileId: context.userProfileId,
-    activityType: "search.performed",
-    title: `Searched AI jobs for "${request.target_role}"`,
-  });
+  // Only the initial search is logged — "Load more" is the same search.
+  if (!loadMore) {
+    await recordIntakeActivity({
+      userProfileId: context.userProfileId,
+      activityType: "search.performed",
+      title: `Searched AI jobs for "${request.target_role}"`,
+    });
+  }
 
-  return { status: "results", message: "", result: result.result as SearchAiResult };
+  const fresh = result.result as SearchAiResult;
+  const merged = priorResult ? (appendSearchPage(priorResult, fresh) as SearchAiResult) : fresh;
+  return { status: "results", message: "", result: merged };
 }
 
 // --- US-076: URL + Paste preview (relevance gate before save) ---

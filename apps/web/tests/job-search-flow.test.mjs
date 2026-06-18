@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   searchAiJobs,
+  appendSearchPage,
   groupJobResults,
   aiRelevanceBadge,
   quickMatchBadge,
@@ -170,6 +171,59 @@ describe("searchAiJobs", () => {
     assert.equal(capturedUrl, "http://api/api/jobs/search-ai");
     assert.equal(capturedOptions.headers["Authorization"], "Bearer mytoken");
     assert.equal(JSON.parse(capturedOptions.body).target_role, "ML Engineer");
+  });
+});
+
+// --- appendSearchPage (Load more) ---
+
+describe("appendSearchPage", () => {
+  const page = (jobs, overrides = {}) => ({
+    search_session_id: "s",
+    total_provider_results: jobs.length,
+    total_ai_related_results: jobs.filter((j) => !j.hidden).length,
+    jobs,
+    page: 1,
+    has_more: false,
+    error: null,
+    ...overrides,
+  });
+
+  it("appends the next page's jobs onto the previous set", () => {
+    const prev = page([makeJob({ external_job_id: "a" })], { page: 1, has_more: true });
+    const next = page([makeJob({ external_job_id: "b" })], { page: 2, has_more: false });
+    const merged = appendSearchPage(prev, next);
+    assert.deepEqual(merged.jobs.map((j) => j.external_job_id), ["a", "b"]);
+    assert.equal(merged.page, 2);
+    assert.equal(merged.has_more, false);
+  });
+
+  it("de-duplicates jobs that appear on both pages", () => {
+    const prev = page([makeJob({ external_job_id: "a" }), makeJob({ external_job_id: "b" })]);
+    const next = page([makeJob({ external_job_id: "b" }), makeJob({ external_job_id: "c" })]);
+    const merged = appendSearchPage(prev, next);
+    assert.deepEqual(merged.jobs.map((j) => j.external_job_id), ["a", "b", "c"]);
+  });
+
+  it("accumulates provider totals and recomputes the visible count", () => {
+    const prev = page([
+      makeJob({ external_job_id: "a", hidden: false }),
+      makeJob({ external_job_id: "h", hidden: true }),
+    ]);
+    const next = page([makeJob({ external_job_id: "b", hidden: false })]);
+    const merged = appendSearchPage(prev, next);
+    assert.equal(merged.total_provider_results, 3); // 2 + 1
+    assert.equal(merged.total_ai_related_results, 2); // a + b visible, h hidden
+  });
+
+  it("carries the new page's has_more so the UI stops at the last page", () => {
+    const prev = page([makeJob({ external_job_id: "a" })], { has_more: true });
+    const next = page([makeJob({ external_job_id: "b" })], { page: 2, has_more: false });
+    assert.equal(appendSearchPage(prev, next).has_more, false);
+  });
+
+  it("tolerates missing job arrays", () => {
+    const merged = appendSearchPage({}, { jobs: [makeJob({ external_job_id: "a" })], page: 1 });
+    assert.deepEqual(merged.jobs.map((j) => j.external_job_id), ["a"]);
   });
 });
 

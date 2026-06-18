@@ -88,6 +88,7 @@ class _FakeProvider:
         location: str,
         remote_only: bool,
         results_per_page: int,
+        page: int = 1,
     ) -> list[ProviderJob]:
         self.call_count += 1
         self.last_call = {
@@ -95,6 +96,7 @@ class _FakeProvider:
             "location": location,
             "remote_only": remote_only,
             "results_per_page": results_per_page,
+            "page": page,
         }
         if self._not_configured:
             raise JobSearchNotConfiguredError("Not configured.")
@@ -547,3 +549,100 @@ def test_search_ai_total_ai_related_reflects_visible_count(
     assert body["total_provider_results"] == 15
     assert body["total_ai_related_results"] == 3  # visible after passthrough enrichment
     assert len(body["jobs"]) == 3
+
+
+# ---------------------------------------------------------------------------
+# Pagination ("Load more")
+# ---------------------------------------------------------------------------
+
+
+def test_adzuna_search_uses_requested_page_in_endpoint() -> None:
+    import httpx
+
+    captured: dict[str, Any] = {}
+
+    def capture_get(url: str, *, params: dict[str, Any], timeout: Any) -> httpx.Response:
+        captured["url"] = url
+        return httpx.Response(200, json={"results": [], "count": 0})
+
+    provider = AdzunaJobSearchProvider(_make_settings(), get=capture_get)
+    provider.search(query="x", location="", remote_only=False, results_per_page=10, page=3)
+    assert captured["url"].endswith("/search/3")
+
+
+def test_adzuna_search_defaults_to_page_one() -> None:
+    import httpx
+
+    captured: dict[str, Any] = {}
+
+    def capture_get(url: str, *, params: dict[str, Any], timeout: Any) -> httpx.Response:
+        captured["url"] = url
+        return httpx.Response(200, json={"results": [], "count": 0})
+
+    provider = AdzunaJobSearchProvider(_make_settings(), get=capture_get)
+    provider.search(query="x", location="", remote_only=False, results_per_page=10)
+    assert captured["url"].endswith("/search/1")
+
+
+def _wire_paged(
+    monkeypatch: pytest.MonkeyPatch, provider: _FakeProvider, *, fetch_limit: int
+) -> None:
+    _auth()
+    monkeypatch.setattr(
+        "app.routers.jobs.get_settings",
+        lambda: _make_settings(job_search_fetch_limit=fetch_limit),
+    )
+    monkeypatch.setattr("app.routers.jobs.SupabaseDataClient", lambda _s: _FakeSupabase(_s))
+    monkeypatch.setattr("app.routers.jobs.build_job_search_provider", lambda _s: provider)
+    monkeypatch.setattr("app.routers.jobs.SearchEnricher", _PassthroughEnricher)
+
+
+def test_search_ai_passes_page_to_provider(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    provider = _FakeProvider([_make_job()])
+    _wire_paged(monkeypatch, provider, fetch_limit=3)
+    client.post("/api/jobs/search-ai", json={"target_role": "AI Engineer", "page": 2})
+    assert provider.last_call["page"] == 2
+
+
+def test_search_ai_has_more_true_on_a_full_provider_page(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    jobs = [_make_job(f"j{i}", description="LLM RAG OpenAI vector db") for i in range(5)]
+    _wire_paged(monkeypatch, _FakeProvider(jobs), fetch_limit=3)  # returns exactly 3
+    resp = client.post("/api/jobs/search-ai", json={"target_role": "AI Engineer"})
+    body = resp.json()
+    assert body["page"] == 1
+    assert body["has_more"] is True
+
+
+def test_search_ai_has_more_false_on_a_partial_page(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    jobs = [_make_job("only", description="LLM RAG OpenAI vector db")]
+    _wire_paged(monkeypatch, _FakeProvider(jobs), fetch_limit=3)  # returns 1 < 3
+    resp = client.post("/api/jobs/search-ai", json={"target_role": "AI Engineer"})
+    assert resp.json()["has_more"] is False
+
+
+def test_search_ai_has_more_false_at_the_page_cap(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    jobs = [_make_job(f"j{i}", description="LLM RAG OpenAI vector db") for i in range(5)]
+    _wire_paged(monkeypatch, _FakeProvider(jobs), fetch_limit=3)  # full page...
+    resp = client.post("/api/jobs/search-ai", json={"target_role": "AI Engineer", "page": 10})
+    body = resp.json()
+    assert body["page"] == 10
+    assert body["has_more"] is False  # ...but the cap stops further paging
+
+
+def test_search_ai_rejects_page_out_of_range(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _auth()
+    for bad_page in (0, 11):
+        resp = client.post(
+            "/api/jobs/search-ai", json={"target_role": "AI Engineer", "page": bad_page}
+        )
+        assert resp.status_code == 422
