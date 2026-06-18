@@ -113,6 +113,11 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
                         <Link href={`/jobs/${job.id}`} className="hover:underline">
                           {job.title}
                         </Link>
+                        {job.salary_range && (
+                          <span className="block text-xs text-muted-foreground">
+                            {job.salary_range}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell>{renderMatchScore(bestScoreByJob.get(job.id))}</TableCell>
                       <TableCell>{renderFitHint(job, profile)}</TableCell>

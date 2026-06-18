@@ -68,6 +68,7 @@ export function buildSaveRequestFromSearchResult(job) {
     title: _str(j.title),
     company: _nullable(j.company),
     location: _nullable(j.location),
+    salary_range: _nullable(j.salary_range),
     raw_description: _str(j.description),
     external_source: _nullable(j.external_source),
     external_job_id: _nullable(j.external_job_id),

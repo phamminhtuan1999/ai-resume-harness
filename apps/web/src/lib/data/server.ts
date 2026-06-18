@@ -41,6 +41,7 @@ export type WorkspaceJob = {
   title: string;
   job_url: string | null;
   location: string | null;
+  salary_range: string | null;
   parse_status: string;
   contact_name: string | null;
   contact_email: string | null;
@@ -337,6 +338,7 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
             "title",
             "job_url",
             "location",
+            "salary_range",
             "parse_status",
             "contact_name",
             "contact_email",
