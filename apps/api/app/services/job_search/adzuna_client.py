@@ -43,12 +43,22 @@ class AdzunaJobSearchProvider:
                 "Adzuna credentials (ADZUNA_APP_ID / ADZUNA_APP_KEY) are not configured."
             )
 
-        where = "Remote" if remote_only else location
+        # Adzuna's `where` geocodes to a physical place, so a literal "Remote"
+        # matches nothing and the search comes back empty. Fold the remote intent
+        # into the `what` keywords instead and clear `where` (remote roles aren't
+        # tied to a city); the country path already scopes the search.
+        what = query
+        where = location
+        if remote_only:
+            where = ""
+            if "remote" not in query.lower():
+                what = f"{query} remote".strip()
+
         params: dict[str, Any] = {
             "app_id": self._app_id,
             "app_key": self._app_key,
             "results_per_page": min(int(results_per_page), 50),
-            "what": query,
+            "what": what,
             "where": where,
         }
         endpoint = f"{self._api_base}/jobs/{self._country}/search/1"
