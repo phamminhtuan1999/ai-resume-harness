@@ -97,14 +97,26 @@ export default async function ResumeSuggestionsPage({ params }: ResumeSuggestion
     unsupported: "destructive",
   };
 
-  // Group by Truth Guard status, numbering suggestions continuously across groups.
-  let runningIndex = 0;
-  const groups = TRUTH_SECTIONS.map((section) => {
-    const items = rows
-      .filter((row) => row.truth_guard_status === section.status)
-      .map((row) => ({ row, index: (runningIndex += 1) }));
-    return { section, items };
-  }).filter((group) => group.items.length > 0);
+  // Group by Truth Guard status, numbering suggestions continuously across
+  // groups. Derive each group's starting number from the row counts of the
+  // groups before it (no mutation during render — see react-hooks/immutability).
+  const nonEmptySections = TRUTH_SECTIONS.map((section) => ({
+    section,
+    sectionRows: rows.filter((row) => row.truth_guard_status === section.status),
+  })).filter((group) => group.sectionRows.length > 0);
+
+  const groups = nonEmptySections.map((group, sectionIndex) => {
+    const startIndex = nonEmptySections
+      .slice(0, sectionIndex)
+      .reduce((sum, prior) => sum + prior.sectionRows.length, 0);
+    return {
+      section: group.section,
+      items: group.sectionRows.map((row, rowIndex) => ({
+        row,
+        index: startIndex + rowIndex + 1,
+      })),
+    };
+  });
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">

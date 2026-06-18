@@ -7,10 +7,12 @@ import baseConfig from "./playwright.config";
 //
 // Run: npm run test:e2e:screens   (needs Node >= 22 for global WebSocket/fetch,
 // the web + api dev servers running, and E2E_CLERK_USER_PASSWORD in .env)
-export default {
+const screenshotsConfig = {
   ...baseConfig,
   // Run ONLY the capture spec — and clear the base config's *.capture.ts ignore
   // (inherited via the spread) so it isn't filtered out here.
   testMatch: /screenshots\.capture\.ts$/,
   testIgnore: [],
 };
+
+export default screenshotsConfig;
