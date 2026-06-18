@@ -343,7 +343,15 @@ class _FakeJobSearchProvider:
     def __init__(self, jobs: list[ProviderJob]) -> None:
         self._jobs = jobs
 
-    def search(self, *, query: str, location: str, remote_only: bool, results_per_page: int) -> list[ProviderJob]:
+    def search(
+        self,
+        *,
+        query: str,
+        location: str,
+        remote_only: bool,
+        results_per_page: int,
+        page: int = 1,
+    ) -> list[ProviderJob]:
         return self._jobs[:results_per_page]
 
 

@@ -27,7 +27,7 @@ type SearchAiPanelProps = {
 };
 
 export function SearchAiPanel({ onUsePaste, onUseUrl }: SearchAiPanelProps) {
-  const [state, formAction] = useActionState(searchAiJobsAction, IDLE_STATE);
+  const [state, formAction, isPending] = useActionState(searchAiJobsAction, IDLE_STATE);
   const [showHidden, setShowHidden] = useState(false);
 
   const result = state.result;
@@ -118,6 +118,23 @@ export function SearchAiPanel({ onUsePaste, onUseUrl }: SearchAiPanelProps) {
                 ))}
             </div>
           )}
+
+          {result?.has_more && (
+            <div className="flex justify-center pt-1">
+              {/* Outside the form, but submits it via form= so the same query is
+                  re-run with intent=more (the server derives the next page). */}
+              <button
+                className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted/40 disabled:opacity-60"
+                disabled={isPending}
+                form="search-ai-form"
+                name="intent"
+                type="submit"
+                value="more"
+              >
+                {isPending ? "Loading…" : "Load more results"}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -126,7 +143,7 @@ export function SearchAiPanel({ onUsePaste, onUseUrl }: SearchAiPanelProps) {
 
 function SearchForm({ formAction }: { formAction: (payload: FormData) => void }) {
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <form action={formAction} className="flex flex-col gap-4" id="search-ai-form">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium" htmlFor="search-role">

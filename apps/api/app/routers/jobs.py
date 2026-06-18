@@ -88,6 +88,11 @@ _EMPLOYMENT_TYPE_ALIASES: dict[str, EmploymentType] = {
 }
 
 
+# Hard cap on "Load more" depth (mirrors JobSearchRequest.page le=10). Bounds the
+# total AI-enrichment cost a single search session can incur.
+_MAX_SEARCH_PAGE = 10
+
+
 @router.post("/search-ai", response_model=JobSearchResponse)
 def search_ai_jobs(
     payload: JobSearchRequest,
@@ -127,6 +132,7 @@ def search_ai_jobs(
             location=payload.location,
             remote_only=payload.remote_only,
             results_per_page=settings.job_search_fetch_limit,
+            page=payload.page,
         )
     except JobSearchNotConfiguredError:
         return JobSearchResponse(
@@ -169,6 +175,13 @@ def search_ai_jobs(
         quick_match_limit=settings.job_search_quick_match_limit,
     )
 
+    # A full provider page implies more may exist; the page cap (mirrored in the
+    # request schema) bounds how far "Load more" can fetch.
+    has_more = (
+        len(raw_jobs) >= settings.job_search_fetch_limit
+        and payload.page < _MAX_SEARCH_PAGE
+    )
+
     total_ai_visible = sum(1 for j in enriched if not j.get("hidden", False))
     jobs_out = []
     for j in enriched:
@@ -197,6 +210,8 @@ def search_ai_jobs(
         total_provider_results=len(raw_jobs),
         total_ai_related_results=total_ai_visible,
         jobs=jobs_out,
+        page=payload.page,
+        has_more=has_more,
     )
 
 
