@@ -123,8 +123,8 @@ export function NonAiWarning({
 
 function SectionLabel() {
   return (
-    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-      AI Relevance
+    <p className="text-xs font-medium text-muted-foreground">
+      AI relevance
     </p>
   );
 }

@@ -9,6 +9,14 @@ import { formatShortDate, getContactLabel, getWorkspaceData } from "@/lib/data/s
 import type { WorkspaceJob, WorkspaceProfile } from "@/lib/data/server";
 import { jobDeletionSummaryGeneric } from "@/lib/deletion-view.mjs";
 import { computeJobPreScore, preScoreTierLabel } from "@/lib/job-prescore.mjs";
+import {
+  SAVED_JOB_SORTS,
+  resolveSavedJobSort,
+  savedJobSortLabel,
+  sortSavedJobs,
+} from "@/lib/saved-jobs-view.mjs";
+import { cn } from "@/lib/utils";
+import { CompanyMonogram } from "@/components/jobs/company-monogram";
 import { QuickMatchControl } from "@/components/jobs/quick-match-control";
 import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,11 +37,11 @@ import {
 } from "@/components/ui/table";
 
 type JobsPageProps = {
-  searchParams: Promise<{ flash?: string }>;
+  searchParams: Promise<{ flash?: string; sort?: string }>;
 };
 
 export default async function JobsPage({ searchParams }: JobsPageProps) {
-  const { flash } = await searchParams;
+  const { flash, sort } = await searchParams;
   const { jobs, matches, profile } = await getWorkspaceData();
 
   const bestScoreByJob = new Map<string, number>();
@@ -44,30 +52,34 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
     }
   }
 
+  const activeSort = resolveSavedJobSort(sort);
+  const sortedJobs = sortSavedJobs(jobs, activeSort, Object.fromEntries(bestScoreByJob));
+
   return (
-    
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
-        <FlashToast code={flash} />
-        <PageHeader
-          actions={
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+      <FlashToast code={flash} />
+      <PageHeader
+        actions={
           <Link href="/jobs/new" className={buttonVariants({ size: "lg" })}>
             Analyze new job
           </Link>
-          }
-          description="Add a job by URL or paste a description, then track company and contact context."
-          title="Jobs"
-        />
-        <Card>
-          <CardHeader>
-            <CardTitle>Saved jobs</CardTitle>
-            <CardDescription>
-              {jobs.length > 0
-                ? "Jobs saved under your account."
-                : "Saved jobs will appear here once you add one."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {jobs.length > 0 ? (
+        }
+        description="Add a job by URL or paste a description, then track company and contact context."
+        title="Jobs"
+      />
+      <Card>
+        <CardHeader>
+          <CardTitle>Saved jobs</CardTitle>
+          <CardDescription>
+            {jobs.length > 0
+              ? "Jobs saved under your account."
+              : "Saved jobs will appear here once you add one."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {jobs.length > 0 ? (
+            <div className="flex flex-col gap-4">
+              <SavedJobsToolbar activeSort={activeSort} count={jobs.length} />
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -85,9 +97,18 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {jobs.map((job) => (
+                  {sortedJobs.map((job: WorkspaceJob) => (
                     <TableRow key={job.id}>
-                      <TableCell className="font-medium">{job.company}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2.5">
+                          <CompanyMonogram
+                            className="size-8 text-xs"
+                            company={job.company}
+                            title={job.title}
+                          />
+                          <span>{job.company}</span>
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <Link href={`/jobs/${job.id}`} className="hover:underline">
                           {job.title}
@@ -117,22 +138,54 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
                   ))}
                 </TableBody>
               </Table>
-            ) : (
-              <EmptyState
-                variant="create"
-                action={
-                  <Link href="/jobs/new" className={buttonVariants({ variant: "outline" })}>
-                    Add job
-                  </Link>
-                }
-                description="Add a job by URL or paste a description to start tracking company, role, and contact details."
-                icon={BriefcaseBusiness}
-                title="No saved jobs"
-              />
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          ) : (
+            <EmptyState
+              variant="create"
+              action={
+                <Link href="/jobs/new" className={buttonVariants({ variant: "outline" })}>
+                  Add job
+                </Link>
+              }
+              description="Add a job by URL or paste a description to start tracking company, role, and contact details."
+              icon={BriefcaseBusiness}
+              title="No saved jobs"
+            />
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function SavedJobsToolbar({ activeSort, count }: { activeSort: string; count: number }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <p className="text-sm text-muted-foreground">
+        {count} {count === 1 ? "job" : "jobs"}
+      </p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-xs text-muted-foreground">Sort</span>
+        {SAVED_JOB_SORTS.map((key: string) => {
+          const active = key === activeSort;
+          return (
+            <Link
+              key={key}
+              aria-current={active ? "true" : undefined}
+              className={cn(
+                "inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition-colors",
+                active
+                  ? "border-transparent bg-accent text-accent-foreground"
+                  : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+              href={`/jobs?sort=${key}`}
+            >
+              {savedJobSortLabel(key)}
+            </Link>
+          );
+        })}
       </div>
+    </div>
   );
 }
 

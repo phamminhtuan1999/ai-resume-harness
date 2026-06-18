@@ -116,6 +116,87 @@ export function appendSearchPage(previous, next) {
   };
 }
 
+// --- Results list: sort, filter, and company identity (search redesign) ---
+
+/** Sort keys understood by sortSearchJobs (the results toolbar control). */
+export const SEARCH_SORT_KEYS = ["recommended", "relevance", "fit"];
+
+function _searchSortScore(job, sortKey) {
+  if (sortKey === "relevance") {
+    const score = job?.ai_relevance?.ai_relevance_score;
+    return typeof score === "number" && Number.isFinite(score) ? score : -1;
+  }
+  // "fit": rank by the candidate quick-match; unavailable/missing sinks to the end.
+  const quickMatch = job?.quick_match;
+  if (!quickMatch || quickMatch.unavailable) return -1;
+  const score = quickMatch.preview_match_score;
+  return typeof score === "number" && Number.isFinite(score) ? score : -1;
+}
+
+/**
+ * Return a sorted copy of the job list. "recommended" (and any unknown key)
+ * preserves the order the server already ranked. "relevance" and "fit" sort by
+ * the respective score descending; ties keep their original order (stable) and
+ * missing scores sink to the bottom.
+ */
+export function sortSearchJobs(jobs, sortKey = "recommended") {
+  const list = Array.isArray(jobs) ? [...jobs] : [];
+  if (sortKey !== "relevance" && sortKey !== "fit") return list;
+  return list
+    .map((job, index) => ({ job, index, score: _searchSortScore(job, sortKey) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((entry) => entry.job);
+}
+
+/**
+ * Filter the job list by the active result chips. Flags are AND-combined; an
+ * all-false set returns the list unchanged. Every flag reads a field already on
+ * the job, so filtering never triggers another fetch.
+ *   - strongAi: AI relevance score >= 75 (decision 0025 "strong" threshold)
+ *   - transitionFriendly: transition_friendliness === "high"
+ *   - strongFit: quick match is available and labelled "strong"
+ */
+export function filterSearchJobs(jobs, filters = {}) {
+  const list = Array.isArray(jobs) ? jobs : [];
+  return list.filter((job) => {
+    if (
+      filters.strongAi &&
+      !((job?.ai_relevance?.ai_relevance_score ?? -1) >= RELEVANCE_THRESHOLD_STRONG)
+    ) {
+      return false;
+    }
+    if (filters.transitionFriendly && job?.ai_relevance?.transition_friendliness !== "high") {
+      return false;
+    }
+    if (filters.strongFit) {
+      const quickMatch = job?.quick_match;
+      if (!quickMatch || quickMatch.unavailable || quickMatch.match_label !== "strong") {
+        return false;
+      }
+    }
+    return true;
+  });
+}
+
+/**
+ * Monogram for the company tile on a result card. Falls back to the job title
+ * when the company is blank, and to "?" when neither yields a letter or digit.
+ * Multi-word names use the first letter of the first two words.
+ */
+export function companyInitials(company, fallback = "") {
+  const source =
+    (typeof company === "string" && company.trim()) ||
+    (typeof fallback === "string" && fallback.trim()) ||
+    "";
+  const words = source
+    .split(/\s+/)
+    .map((word) => word.replace(/[^a-zA-Z0-9]/g, ""))
+    .filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0].slice(0, 1).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
 // --- Pure view-model helpers ---
 
 /**
