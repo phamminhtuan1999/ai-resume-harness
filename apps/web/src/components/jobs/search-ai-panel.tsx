@@ -175,6 +175,14 @@ export function SearchAiPanel({ onUsePaste, onUseUrl }: SearchAiPanelProps) {
 }
 
 function SearchForm({ formAction }: { formAction: (payload: FormData) => void }) {
+  // Controlled fields: React auto-resets an uncontrolled action form after the
+  // action completes, which would snap the query back to its default after every
+  // search / "Load more". Holding the values in state keeps what the user typed.
+  const [targetRole, setTargetRole] = useState("Applied AI Engineer");
+  const [location, setLocation] = useState("Remote US");
+  const [experienceLevel, setExperienceLevel] = useState("");
+  const [remoteOnly, setRemoteOnly] = useState(false);
+
   return (
     <form action={formAction} className="flex flex-col gap-3" id="search-ai-form">
       <div className="flex flex-wrap items-end gap-3">
@@ -183,10 +191,11 @@ function SearchForm({ formAction }: { formAction: (payload: FormData) => void })
             Role / keywords
           </label>
           <Input
-            defaultValue="Applied AI Engineer"
             id="search-role"
             name="target_role"
+            onChange={(e) => setTargetRole(e.target.value)}
             placeholder="Applied AI Engineer"
+            value={targetRole}
           />
         </div>
         <div className="flex min-w-[10rem] flex-1 flex-col gap-1.5">
@@ -194,17 +203,23 @@ function SearchForm({ formAction }: { formAction: (payload: FormData) => void })
             Location
           </label>
           <Input
-            defaultValue="Remote US"
             id="search-location"
             name="location"
+            onChange={(e) => setLocation(e.target.value)}
             placeholder="Remote US"
+            value={location}
           />
         </div>
         <div className="flex min-w-[9rem] flex-1 flex-col gap-1.5">
           <label className="text-xs font-medium" htmlFor="search-experience">
             Experience
           </label>
-          <Select id="search-experience" name="experience_level">
+          <Select
+            id="search-experience"
+            name="experience_level"
+            onChange={(e) => setExperienceLevel(e.target.value)}
+            value={experienceLevel}
+          >
             <option value="">Any level</option>
             <option value="entry">Entry level</option>
             <option value="mid">Mid level</option>
@@ -217,7 +232,14 @@ function SearchForm({ formAction }: { formAction: (payload: FormData) => void })
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="flex cursor-pointer items-center gap-2 text-sm">
-          <input className="size-4 accent-brand" name="remote_only" type="checkbox" value="on" />
+          <input
+            checked={remoteOnly}
+            className="size-4 accent-brand"
+            name="remote_only"
+            onChange={(e) => setRemoteOnly(e.target.checked)}
+            type="checkbox"
+            value="on"
+          />
           Remote only
         </label>
         <SubmitButton pendingLabel="Searching…">
