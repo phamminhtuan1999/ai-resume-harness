@@ -196,6 +196,8 @@ def search_ai_jobs(
                 location=j.get("location"),
                 description=j["description"],
                 apply_url=j.get("apply_url"),
+                posted_at=j.get("posted_at"),
+                salary_range=j.get("salary_range"),
                 pre_score=j.get("pre_score", 0),
                 likely_ai_related=j.get("likely_ai_related", False),
                 keyword_hits=j.get("keyword_hits", []),

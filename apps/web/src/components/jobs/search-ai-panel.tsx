@@ -11,6 +11,7 @@ import {
   recommendedActionLabel,
   sortSearchJobs,
   filterSearchJobs,
+  postedDateLabel,
 } from "@/lib/job-search-flow.mjs";
 import { CompanyMonogram } from "@/components/jobs/company-monogram";
 import { IntakeSaveActions } from "@/components/jobs/intake-save-actions";
@@ -281,6 +282,7 @@ function ResultsToolbar({
             <option value="recommended">Sort: Recommended</option>
             <option value="relevance">Sort: AI relevance</option>
             <option value="fit">Sort: Best fit</option>
+            <option value="newest">Sort: Newest</option>
           </Select>
         </div>
       </div>
@@ -318,6 +320,10 @@ function SearchJobCard({ job, dimmed = false }: { job: SearchAiJob; dimmed?: boo
   const qmBadge = quickMatchBadge(job.quick_match);
   const quickMatchUnavailable = !job.quick_match || job.quick_match.unavailable;
   const subtitle = [job.company, job.location].filter(Boolean).join(" · ");
+  const posted = postedDateLabel(job.posted_at);
+  const meta = [job.salary_range, posted ? `Posted ${posted}` : null]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div
@@ -341,6 +347,8 @@ function SearchJobCard({ job, dimmed = false }: { job: SearchAiJob; dimmed?: boo
           </Badge>
         </div>
       </div>
+
+      {meta && <p className="text-xs text-muted-foreground">{meta}</p>}
 
       <Separator />
 

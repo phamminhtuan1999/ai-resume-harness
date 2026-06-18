@@ -7,6 +7,7 @@ import {
   sortSearchJobs,
   filterSearchJobs,
   companyInitials,
+  postedDateLabel,
   groupJobResults,
   aiRelevanceBadge,
   quickMatchBadge,
@@ -276,6 +277,19 @@ describe("sortSearchJobs", () => {
   it("tolerates a non-array input", () => {
     assert.deepEqual(sortSearchJobs(undefined, "relevance"), []);
   });
+
+  it("sorts by posted date descending for 'newest', missing dates last", () => {
+    const jobs = [
+      makeJob({ external_job_id: "old", posted_at: "2025-01-01T00:00:00Z" }),
+      makeJob({ external_job_id: "new", posted_at: "2025-03-01T00:00:00Z" }),
+      makeJob({ external_job_id: "none", posted_at: null }),
+      makeJob({ external_job_id: "mid", posted_at: "2025-02-01T00:00:00Z" }),
+    ];
+    assert.deepEqual(
+      sortSearchJobs(jobs, "newest").map((j) => j.external_job_id),
+      ["new", "mid", "old", "none"]
+    );
+  });
 });
 
 // --- filterSearchJobs ---
@@ -355,6 +369,22 @@ describe("companyInitials", () => {
   it("returns '?' when nothing usable is provided", () => {
     assert.equal(companyInitials("   ", ""), "?");
     assert.equal(companyInitials(null), "?");
+  });
+});
+
+// --- postedDateLabel ---
+
+describe("postedDateLabel", () => {
+  it("formats an ISO datetime to a short date", () => {
+    assert.equal(postedDateLabel("2025-01-15T09:00:00Z"), "Jan 15, 2025");
+    assert.equal(postedDateLabel("2025-12-03"), "Dec 3, 2025");
+  });
+
+  it("returns null for non-date input", () => {
+    assert.equal(postedDateLabel(null), null);
+    assert.equal(postedDateLabel(""), null);
+    assert.equal(postedDateLabel("not a date"), null);
+    assert.equal(postedDateLabel("2025-13-01T00:00:00Z"), null); // invalid month
   });
 });
 

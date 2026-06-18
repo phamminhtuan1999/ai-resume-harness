@@ -119,7 +119,7 @@ export function appendSearchPage(previous, next) {
 // --- Results list: sort, filter, and company identity (search redesign) ---
 
 /** Sort keys understood by sortSearchJobs (the results toolbar control). */
-export const SEARCH_SORT_KEYS = ["recommended", "relevance", "fit"];
+export const SEARCH_SORT_KEYS = ["recommended", "relevance", "fit", "newest"];
 
 function _searchSortScore(job, sortKey) {
   if (sortKey === "relevance") {
@@ -136,11 +136,22 @@ function _searchSortScore(job, sortKey) {
 /**
  * Return a sorted copy of the job list. "recommended" (and any unknown key)
  * preserves the order the server already ranked. "relevance" and "fit" sort by
- * the respective score descending; ties keep their original order (stable) and
- * missing scores sink to the bottom.
+ * the respective score descending; "newest" sorts by posted date descending.
+ * Ties keep their original order (stable); missing scores/dates sink to the
+ * bottom.
  */
 export function sortSearchJobs(jobs, sortKey = "recommended") {
   const list = Array.isArray(jobs) ? [...jobs] : [];
+  if (sortKey === "newest") {
+    return list
+      .map((job, index) => ({
+        job,
+        index,
+        posted: typeof job?.posted_at === "string" ? job.posted_at : "",
+      }))
+      .sort((a, b) => b.posted.localeCompare(a.posted) || a.index - b.index)
+      .map((entry) => entry.job);
+  }
   if (sortKey !== "relevance" && sortKey !== "fit") return list;
   return list
     .map((job, index) => ({ job, index, score: _searchSortScore(job, sortKey) }))
@@ -195,6 +206,26 @@ export function companyInitials(company, fallback = "") {
   if (words.length === 0) return "?";
   if (words.length === 1) return words[0].slice(0, 1).toUpperCase();
   return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+const _MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/**
+ * Short label for an ISO posted date ("2025-01-15T09:00:00Z" → "Jan 15, 2025").
+ * Parsed straight off the YYYY-MM-DD prefix so it's timezone-independent and
+ * deterministic; returns null for anything that isn't a valid date string.
+ */
+export function postedDateLabel(value) {
+  if (typeof value !== "string") return null;
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  const monthIndex = Number(month) - 1;
+  if (monthIndex < 0 || monthIndex > 11) return null;
+  return `${_MONTHS[monthIndex]} ${Number(day)}, ${year}`;
 }
 
 // --- Pure view-model helpers ---
