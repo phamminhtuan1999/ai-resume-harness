@@ -290,6 +290,59 @@ def test_adzuna_parse_skips_items_missing_id_or_title() -> None:
     assert jobs[0].external_id == "valid-id-2"
 
 
+def test_adzuna_remote_only_rides_keyword_not_where_place() -> None:
+    """Adzuna `where` geocodes to a place — a literal "Remote" matches nothing
+    (live count 0). Remote intent must ride in `what`, with `where` cleared."""
+    import httpx
+
+    captured: dict[str, Any] = {}
+
+    def capture_get(url: str, *, params: dict[str, Any], timeout: Any) -> httpx.Response:
+        captured["params"] = params
+        return httpx.Response(200, json={"results": [], "count": 0})
+
+    provider = AdzunaJobSearchProvider(_make_settings(), get=capture_get)
+    provider.search(query="python engineer", location="", remote_only=True, results_per_page=10)
+
+    assert "remote" in captured["params"]["what"].lower()
+    assert captured["params"]["where"] == ""  # never the literal "Remote" place
+
+
+def test_adzuna_remote_only_does_not_duplicate_existing_remote_keyword() -> None:
+    import httpx
+
+    captured: dict[str, Any] = {}
+
+    def capture_get(url: str, *, params: dict[str, Any], timeout: Any) -> httpx.Response:
+        captured["params"] = params
+        return httpx.Response(200, json={"results": [], "count": 0})
+
+    provider = AdzunaJobSearchProvider(_make_settings(), get=capture_get)
+    provider.search(query="Remote Data Scientist", location="", remote_only=True, results_per_page=5)
+
+    # Query already says "remote" — must not become "... remote remote".
+    assert captured["params"]["what"].lower().split().count("remote") == 1
+
+
+def test_adzuna_location_search_keeps_plain_query_and_where() -> None:
+    import httpx
+
+    captured: dict[str, Any] = {}
+
+    def capture_get(url: str, *, params: dict[str, Any], timeout: Any) -> httpx.Response:
+        captured["params"] = params
+        return httpx.Response(200, json={"results": [], "count": 0})
+
+    provider = AdzunaJobSearchProvider(_make_settings(), get=capture_get)
+    provider.search(
+        query="python engineer", location="New York", remote_only=False, results_per_page=10
+    )
+
+    # Non-remote searches are untouched: query verbatim, location in `where`.
+    assert captured["params"]["what"] == "python engineer"
+    assert captured["params"]["where"] == "New York"
+
+
 def test_adzuna_raises_not_configured_when_keys_absent() -> None:
     settings = _make_settings(adzuna_app_id="", adzuna_app_key="")
     provider = AdzunaJobSearchProvider(settings)
