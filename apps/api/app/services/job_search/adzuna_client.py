@@ -43,17 +43,7 @@ class AdzunaJobSearchProvider:
                 "Adzuna credentials (ADZUNA_APP_ID / ADZUNA_APP_KEY) are not configured."
             )
 
-        # Adzuna's `where` geocodes to a physical place, so a literal "Remote"
-        # matches nothing and the search comes back empty. Fold the remote intent
-        # into the `what` keywords instead and clear `where` (remote roles aren't
-        # tied to a city); the country path already scopes the search.
-        what = query
-        where = location
-        if remote_only:
-            where = ""
-            if "remote" not in query.lower():
-                what = f"{query} remote".strip()
-
+        what, where = self._resolve_what_where(query, location, remote_only)
         params: dict[str, Any] = {
             "app_id": self._app_id,
             "app_key": self._app_key,
@@ -74,6 +64,29 @@ class AdzunaJobSearchProvider:
             )
 
         return self._parse(response.json())
+
+    @staticmethod
+    def _resolve_what_where(query: str, location: str, remote_only: bool) -> tuple[str, str]:
+        """Shape Adzuna's ``what``/``where`` from the search intent.
+
+        Adzuna's ``where`` geocodes to a physical place, so any "remote" text —
+        the ``remote_only`` flag *or* a location like "Remote US" (the default)
+        — matches nothing and returns an empty result set. Such remote intent
+        rides in the ``what`` keywords instead. A real location is preserved as
+        ``where`` even for remote searches (remote roles in a region), and the
+        country path already scopes the search, so a remote location string is
+        simply dropped rather than geocoded.
+        """
+        query = (query or "").strip()
+        location = (location or "").strip()
+        location_signals_remote = "remote" in location.lower()
+        is_remote = remote_only or location_signals_remote
+
+        where = "" if location_signals_remote else location
+        what = query
+        if is_remote and "remote" not in query.lower():
+            what = f"{query} remote".strip()
+        return what, where
 
     def _parse(self, data: Any) -> list[ProviderJob]:
         if not isinstance(data, dict):

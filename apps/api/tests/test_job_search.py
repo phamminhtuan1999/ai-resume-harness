@@ -343,6 +343,48 @@ def test_adzuna_location_search_keeps_plain_query_and_where() -> None:
     assert captured["params"]["where"] == "New York"
 
 
+def test_adzuna_resolve_default_remote_us_location_rides_keyword() -> None:
+    """The schema default location "Remote US" must not be sent as a `where`
+    place (Adzuna geocodes it to nothing — verified live count 0). It is a
+    remote signal, so it rides in `what` with `where` cleared."""
+    what, where = AdzunaJobSearchProvider._resolve_what_where(
+        "Applied AI Engineer", "Remote US", False
+    )
+    assert "remote" in what.lower()
+    assert where == ""
+
+
+def test_adzuna_resolve_remote_only_keeps_a_real_location() -> None:
+    # remote_only + a concrete place keeps the place as `where` (remote roles in
+    # a region; live count 235) and folds remote into the keywords.
+    what, where = AdzunaJobSearchProvider._resolve_what_where(
+        "python engineer", "New York", True
+    )
+    assert where == "New York"
+    assert "remote" in what.lower()
+
+
+def test_adzuna_resolve_plain_location_is_unchanged() -> None:
+    what, where = AdzunaJobSearchProvider._resolve_what_where(
+        "python engineer", "New York", False
+    )
+    assert what == "python engineer"
+    assert where == "New York"
+
+
+def test_adzuna_resolve_does_not_duplicate_remote_keyword() -> None:
+    what, _ = AdzunaJobSearchProvider._resolve_what_where(
+        "Remote Data Scientist", "", True
+    )
+    assert what.lower().split().count("remote") == 1
+
+
+def test_adzuna_resolve_empty_intent_sends_empty_params() -> None:
+    what, where = AdzunaJobSearchProvider._resolve_what_where("", "", False)
+    assert what == ""
+    assert where == ""
+
+
 def test_adzuna_raises_not_configured_when_keys_absent() -> None:
     settings = _make_settings(adzuna_app_id="", adzuna_app_key="")
     provider = AdzunaJobSearchProvider(settings)
