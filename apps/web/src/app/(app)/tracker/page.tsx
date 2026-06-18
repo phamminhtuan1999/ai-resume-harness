@@ -3,6 +3,7 @@ import { ClipboardList } from "lucide-react";
 
 import { TrackerDistribution } from "@/components/charts/tracker-distribution";
 import { InterviewAgenda } from "@/components/tracker/interview-agenda";
+import { TrackerNextSteps } from "@/components/tracker/tracker-next-steps";
 import { TrackerRowActions } from "@/components/tracker/tracker-row-actions";
 import { ApplicationStatusForm } from "@/components/forms/application-status-form";
 import { InterviewScheduleForm } from "@/components/forms/interview-schedule-form";
@@ -265,6 +266,9 @@ export default async function TrackerPage() {
             </CardContent>
           </Card>
         ) : null}
+
+        {/* US-084: product-native next-step routing over the same loaded rows. */}
+        {applications.length > 0 ? <TrackerNextSteps applications={applications} /> : null}
 
         {applications.length === 0 ? (
           <EmptyState
