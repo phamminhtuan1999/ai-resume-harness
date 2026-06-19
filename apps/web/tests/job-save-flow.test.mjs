@@ -42,6 +42,7 @@ function searchJob(overrides = {}) {
     title: "Senior Applied AI Engineer",
     company: "Acme AI",
     location: "Remote US",
+    salary_range: "$120,000 – $150,000",
     description: "Build LLM products with RAG.",
     apply_url: "https://acme.com/apply/99",
     ai_relevance: AI_RELEVANCE,
@@ -83,16 +84,18 @@ test("search result maps to a discovered_api request with external identity", ()
   assert.equal(req.external_source, "adzuna");
   assert.equal(req.external_job_id, "adzuna-99");
   assert.equal(req.external_apply_url, "https://acme.com/apply/99");
+  assert.equal(req.salary_range, "$120,000 – $150,000");
   assert.deepEqual(req.ai_relevance, AI_RELEVANCE);
   assert.deepEqual(req.quick_match, QUICK_MATCH);
 });
 
 test("search result tolerates missing optional fields", () => {
   const req = buildSaveRequestFromSearchResult(
-    searchJob({ company: null, location: null, apply_url: null, quick_match: null })
+    searchJob({ company: null, location: null, salary_range: null, apply_url: null, quick_match: null })
   );
   assert.equal(req.company, null);
   assert.equal(req.location, null);
+  assert.equal(req.salary_range, null);
   assert.equal(req.external_apply_url, null);
   assert.equal(req.quick_match, null);
 });

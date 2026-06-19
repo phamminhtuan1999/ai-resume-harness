@@ -87,6 +87,8 @@ class SearchJobResult(BaseModel):
     location: str | None = None
     description: str
     apply_url: str | None = None
+    posted_at: str | None = None
+    salary_range: str | None = None
     pre_score: int
     likely_ai_related: bool
     keyword_hits: list[str] = Field(default_factory=list)

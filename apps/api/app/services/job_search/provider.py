@@ -24,6 +24,7 @@ class ProviderJob:
     description: str
     apply_url: str | None
     posted_at: str | None
+    salary_range: str | None = None
     raw_payload: dict[str, Any] = field(default_factory=dict)
 
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, type ReactNode } from "react";
-import { ExternalLink } from "lucide-react";
+import { Bookmark, ExternalLink, Sparkles } from "lucide-react";
 
 import { idleActionState } from "@/lib/action-state";
 import { recordApplyLinkOpenedAction, saveIntakeJobAction } from "@/lib/actions";
@@ -9,6 +9,7 @@ import { FormStatusMessage } from "@/components/forms/form-status-message";
 import { FormSuccessPopup } from "@/components/forms/form-success-popup";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 type IntakeMode = "search" | "url" | "paste";
 
@@ -32,6 +33,7 @@ export function IntakeSaveActions({
   jobTitle,
   jobId = null,
   saveLabel = "Save",
+  primaryAction = "save",
   children,
 }: {
   mode: IntakeMode;
@@ -40,11 +42,20 @@ export function IntakeSaveActions({
   jobTitle: string;
   jobId?: string | null;
   saveLabel?: string;
+  /**
+   * Which button leads the row. "save" (default) keeps Save as the filled
+   * primary and Save & Analyze as the outline — used by the URL/paste confirm
+   * steps. "analyze" makes Save & Analyze the hero (filled) and Save a quiet
+   * ghost beside it — used by the discovery result cards, where analysing is
+   * the high-value next step.
+   */
+  primaryAction?: "save" | "analyze";
   children?: ReactNode;
 }) {
   const [state, formAction] = useActionState(saveIntakeJobAction, idleActionState);
   const payloadJson = JSON.stringify(payload ?? {});
   const apply = (applyUrl ?? "").trim();
+  const analyzeFirst = primaryAction === "analyze";
 
   return (
     <form action={formAction} className="flex flex-col gap-3">
@@ -60,21 +71,52 @@ export function IntakeSaveActions({
       {children}
 
       <div className="flex flex-wrap items-center gap-2">
-        <SubmitButton name="intent" pendingLabel="Saving…" size="sm" value="save">
-          {saveLabel}
-        </SubmitButton>
-        <SubmitButton
-          name="intent"
-          pendingLabel="Analyzing…"
-          size="sm"
-          value="analyze"
-          variant="outline"
-        >
-          Save &amp; Analyze
-        </SubmitButton>
+        {analyzeFirst ? (
+          <>
+            <SubmitButton
+              name="intent"
+              pendingLabel="Analyzing…"
+              size="sm"
+              title="Save & analyze"
+              value="analyze"
+            >
+              <Sparkles className="size-4" />
+              Analyze
+            </SubmitButton>
+            <SubmitButton
+              name="intent"
+              pendingLabel="Saving…"
+              size="sm"
+              value="save"
+              variant="ghost"
+            >
+              <Bookmark className="size-4" />
+              {saveLabel}
+            </SubmitButton>
+          </>
+        ) : (
+          <>
+            <SubmitButton name="intent" pendingLabel="Saving…" size="sm" value="save">
+              {saveLabel}
+            </SubmitButton>
+            <SubmitButton
+              name="intent"
+              pendingLabel="Analyzing…"
+              size="sm"
+              value="analyze"
+              variant="outline"
+            >
+              Save &amp; Analyze
+            </SubmitButton>
+          </>
+        )}
         {apply ? (
           <a
-            className="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[0.8rem] font-medium text-foreground transition-colors hover:bg-muted"
+            aria-label={analyzeFirst ? "Open apply link" : undefined}
+            className={cn(
+              "inline-flex h-8 items-center justify-center gap-1.5 rounded-md text-[0.8rem] font-medium text-foreground transition-colors hover:bg-muted",
+              analyzeFirst ? "ml-auto w-8" : "px-3"
+            )}
             href={apply}
             onClick={() => {
               // Fire-and-forget breadcrumb; never blocks opening the posting.
@@ -82,9 +124,10 @@ export function IntakeSaveActions({
             }}
             rel="noopener noreferrer"
             target="_blank"
+            title={analyzeFirst ? "Open apply link" : undefined}
           >
-            Open Apply Link
-            <ExternalLink className="size-3" />
+            {!analyzeFirst && "Open Apply Link"}
+            <ExternalLink className="size-3.5" />
           </a>
         ) : null}
       </div>

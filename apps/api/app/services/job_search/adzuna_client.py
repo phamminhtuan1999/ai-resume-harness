@@ -121,6 +121,7 @@ class AdzunaJobSearchProvider:
         description = str(item.get("description") or "").strip()[:_MAX_DESCRIPTION_CHARS]
         apply_url = str(item.get("redirect_url") or "").strip() or None
         posted_at = str(item.get("created") or "").strip() or None
+        salary_range = _format_salary(item)
 
         return ProviderJob(
             external_id=job_id,
@@ -131,5 +132,33 @@ class AdzunaJobSearchProvider:
             description=description,
             apply_url=apply_url,
             posted_at=posted_at,
+            salary_range=salary_range,
             raw_payload=item,
         )
+
+
+def _format_salary(item: dict[str, Any]) -> str | None:
+    """Format Adzuna's annual salary min/max into a display string, or None.
+
+    Adzuna does not return a currency code on the basic salary fields — it is
+    implied by the country endpoint (US default → USD), so we format as USD.
+    Predicted (estimated) salaries are flagged so we never present a guess as a
+    posted figure (Truth Guard).
+    """
+
+    def _amount(value: Any) -> int | None:
+        return int(value) if isinstance(value, (int, float)) and value > 0 else None
+
+    low = _amount(item.get("salary_min"))
+    high = _amount(item.get("salary_max"))
+    if low is None and high is None:
+        return None
+
+    if low and high and low != high:
+        text = f"${low:,} – ${high:,}"
+    else:
+        text = f"${low or high:,}"
+
+    if str(item.get("salary_is_predicted") or "").strip() == "1":
+        text += " (est.)"
+    return text

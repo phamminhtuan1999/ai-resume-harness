@@ -261,6 +261,8 @@ def test_adzuna_parse_maps_fields() -> None:
                 "description": "Build LLM products.",
                 "redirect_url": "https://example.com/apply",
                 "created": "2025-01-15T09:00:00Z",
+                "salary_min": 120000,
+                "salary_max": 150000,
             }
         ],
         "count": 1,
@@ -274,6 +276,7 @@ def test_adzuna_parse_maps_fields() -> None:
     assert j.location == "Remote, US"
     assert j.apply_url == "https://example.com/apply"
     assert j.posted_at == "2025-01-15T09:00:00Z"
+    assert j.salary_range == "$120,000 – $150,000"
     assert j.external_source == "adzuna"
 
 
@@ -290,6 +293,43 @@ def test_adzuna_parse_skips_items_missing_id_or_title() -> None:
     jobs = provider._parse(payload)
     assert len(jobs) == 1
     assert jobs[0].external_id == "valid-id-2"
+
+
+def test_adzuna_salary_formatting() -> None:
+    settings = _make_settings(adzuna_app_id="id", adzuna_app_key="key")
+    provider = AdzunaJobSearchProvider(settings)
+
+    def parse_one(extra: dict[str, Any]) -> ProviderJob:
+        payload = {"results": [{"id": "s", "title": "AI Engineer", **extra}]}
+        return provider._parse(payload)[0]
+
+    assert parse_one({"salary_min": 120000, "salary_max": 150000}).salary_range == "$120,000 – $150,000"
+    # Equal min/max collapses to a single figure.
+    assert parse_one({"salary_min": 130000, "salary_max": 130000}).salary_range == "$130,000"
+    # Only one bound present.
+    assert parse_one({"salary_max": 90000}).salary_range == "$90,000"
+    # Predicted salaries are flagged, never shown as a posted figure.
+    assert parse_one({"salary_min": 100000, "salary_is_predicted": "1"}).salary_range == "$100,000 (est.)"
+    # No salary fields → None (no chip rendered).
+    assert parse_one({}).salary_range is None
+    assert parse_one({"salary_min": 0, "salary_max": 0}).salary_range is None
+
+
+def test_normalize_carries_posted_at_and_salary() -> None:
+    pj = ProviderJob(
+        external_id="az-9",
+        external_source="adzuna",
+        title="AI Engineer",
+        company="Example AI",
+        location="Remote US",
+        description="Build LLM features.",
+        apply_url="https://example.com/apply",
+        posted_at="2025-02-01T00:00:00Z",
+        salary_range="$120,000 – $150,000",
+    )
+    ranked, _ = normalize_and_rank([pj], prefilter_limit=20)
+    assert ranked[0]["posted_at"] == "2025-02-01T00:00:00Z"
+    assert ranked[0]["salary_range"] == "$120,000 – $150,000"
 
 
 def test_adzuna_remote_only_rides_keyword_not_where_place() -> None:

@@ -1828,6 +1828,8 @@ export type SearchAiJob = {
   location: string | null;
   description: string;
   apply_url: string | null;
+  posted_at: string | null;
+  salary_range: string | null;
   pre_score: number;
   likely_ai_related: boolean;
   keyword_hits: string[];

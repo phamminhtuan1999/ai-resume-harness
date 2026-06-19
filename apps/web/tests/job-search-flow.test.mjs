@@ -4,9 +4,14 @@ import { describe, it } from "node:test";
 import {
   searchAiJobs,
   appendSearchPage,
+  sortSearchJobs,
+  filterSearchJobs,
+  companyInitials,
+  postedDateLabel,
   groupJobResults,
   aiRelevanceBadge,
   quickMatchBadge,
+  searchFitTier,
   recommendedActionLabel,
   transitionFriendlinessBadge,
 } from "../src/lib/job-search-flow.mjs";
@@ -227,6 +232,163 @@ describe("appendSearchPage", () => {
   });
 });
 
+// --- sortSearchJobs ---
+
+describe("sortSearchJobs", () => {
+  const job = (id, relScore, fitScore, fitLabel = "possible", fitUnavailable = false) =>
+    makeJob({
+      external_job_id: id,
+      ai_relevance: { ...makeJob().ai_relevance, ai_relevance_score: relScore },
+      quick_match: {
+        ...makeJob().quick_match,
+        preview_match_score: fitScore,
+        match_label: fitLabel,
+        unavailable: fitUnavailable,
+      },
+    });
+
+  it("preserves provider order for 'recommended' and unknown keys", () => {
+    const jobs = [job("a", 60, 50), job("b", 90, 70), job("c", 40, 90)];
+    assert.deepEqual(sortSearchJobs(jobs, "recommended").map((j) => j.external_job_id), ["a", "b", "c"]);
+    assert.deepEqual(sortSearchJobs(jobs, "nonsense").map((j) => j.external_job_id), ["a", "b", "c"]);
+  });
+
+  it("sorts by AI relevance score descending", () => {
+    const jobs = [job("a", 60, 50), job("b", 90, 70), job("c", 40, 90)];
+    assert.deepEqual(sortSearchJobs(jobs, "relevance").map((j) => j.external_job_id), ["b", "a", "c"]);
+  });
+
+  it("sorts by quick-match fit descending, unavailable/missing last", () => {
+    const jobs = [
+      job("a", 60, 50),
+      job("b", 90, 88),
+      job("u", 95, 99, "strong", true), // unavailable → sinks despite high score
+    ];
+    jobs.push(makeJob({ external_job_id: "n", quick_match: null }));
+    assert.deepEqual(sortSearchJobs(jobs, "fit").map((j) => j.external_job_id), ["b", "a", "u", "n"]);
+  });
+
+  it("is stable for ties and never mutates the input", () => {
+    const jobs = [job("a", 70, 50), job("b", 70, 50), job("c", 70, 50)];
+    const input = [...jobs];
+    assert.deepEqual(sortSearchJobs(jobs, "relevance").map((j) => j.external_job_id), ["a", "b", "c"]);
+    assert.deepEqual(jobs, input); // original order untouched
+  });
+
+  it("tolerates a non-array input", () => {
+    assert.deepEqual(sortSearchJobs(undefined, "relevance"), []);
+  });
+
+  it("sorts by posted date descending for 'newest', missing dates last", () => {
+    const jobs = [
+      makeJob({ external_job_id: "old", posted_at: "2025-01-01T00:00:00Z" }),
+      makeJob({ external_job_id: "new", posted_at: "2025-03-01T00:00:00Z" }),
+      makeJob({ external_job_id: "none", posted_at: null }),
+      makeJob({ external_job_id: "mid", posted_at: "2025-02-01T00:00:00Z" }),
+    ];
+    assert.deepEqual(
+      sortSearchJobs(jobs, "newest").map((j) => j.external_job_id),
+      ["new", "mid", "old", "none"]
+    );
+  });
+});
+
+// --- filterSearchJobs ---
+
+describe("filterSearchJobs", () => {
+  const job = (id, relScore, tf, fitLabel, fitUnavailable = false) =>
+    makeJob({
+      external_job_id: id,
+      ai_relevance: { ...makeJob().ai_relevance, ai_relevance_score: relScore, transition_friendliness: tf },
+      quick_match: { ...makeJob().quick_match, match_label: fitLabel, unavailable: fitUnavailable },
+    });
+
+  const jobs = [
+    job("strong", 82, "high", "strong"),
+    job("adjacent", 64, "medium", "possible"),
+    job("weak", 50, "low", "weak"),
+    job("strongAiLowFit", 90, "low", "weak"),
+    job("unavailFit", 88, "high", "strong", true),
+  ];
+
+  it("returns all jobs when no filters are active", () => {
+    assert.equal(filterSearchJobs(jobs, {}).length, jobs.length);
+  });
+
+  it("strongAi keeps only score >= 75", () => {
+    assert.deepEqual(
+      filterSearchJobs(jobs, { strongAi: true }).map((j) => j.external_job_id),
+      ["strong", "strongAiLowFit", "unavailFit"]
+    );
+  });
+
+  it("transitionFriendly keeps only 'high'", () => {
+    assert.deepEqual(
+      filterSearchJobs(jobs, { transitionFriendly: true }).map((j) => j.external_job_id),
+      ["strong", "unavailFit"]
+    );
+  });
+
+  it("strongFit keeps available 'strong' matches only", () => {
+    // unavailFit is labelled strong but unavailable → excluded.
+    assert.deepEqual(
+      filterSearchJobs(jobs, { strongFit: true }).map((j) => j.external_job_id),
+      ["strong"]
+    );
+  });
+
+  it("AND-combines multiple active filters", () => {
+    assert.deepEqual(
+      filterSearchJobs(jobs, { strongAi: true, transitionFriendly: true }).map((j) => j.external_job_id),
+      ["strong", "unavailFit"]
+    );
+  });
+});
+
+// --- companyInitials ---
+
+describe("companyInitials", () => {
+  it("uses the first letter of the first two words", () => {
+    assert.equal(companyInitials("Scale AI"), "SA");
+    assert.equal(companyInitials("Hugging Face Inc"), "HF");
+  });
+
+  it("uses a single letter for a one-word company", () => {
+    assert.equal(companyInitials("Anthropic"), "A");
+  });
+
+  it("strips punctuation and digits-only edges", () => {
+    assert.equal(companyInitials("a16z"), "A");
+    assert.equal(companyInitials("@Home Co"), "HC");
+  });
+
+  it("falls back to the title when company is blank", () => {
+    assert.equal(companyInitials("", "Senior ML Engineer"), "SM");
+    assert.equal(companyInitials(null, "OpenAI"), "O");
+  });
+
+  it("returns '?' when nothing usable is provided", () => {
+    assert.equal(companyInitials("   ", ""), "?");
+    assert.equal(companyInitials(null), "?");
+  });
+});
+
+// --- postedDateLabel ---
+
+describe("postedDateLabel", () => {
+  it("formats an ISO datetime to a short date", () => {
+    assert.equal(postedDateLabel("2025-01-15T09:00:00Z"), "Jan 15, 2025");
+    assert.equal(postedDateLabel("2025-12-03"), "Dec 3, 2025");
+  });
+
+  it("returns null for non-date input", () => {
+    assert.equal(postedDateLabel(null), null);
+    assert.equal(postedDateLabel(""), null);
+    assert.equal(postedDateLabel("not a date"), null);
+    assert.equal(postedDateLabel("2025-13-01T00:00:00Z"), null); // invalid month
+  });
+});
+
 // --- groupJobResults ---
 
 describe("groupJobResults", () => {
@@ -311,6 +473,40 @@ describe("quickMatchBadge", () => {
     const badge = quickMatchBadge(null);
     assert.equal(badge.variant, "outline");
     assert.match(badge.label, /unavailable/i);
+  });
+});
+
+// --- searchFitTier ---
+
+describe("searchFitTier", () => {
+  it("returns strong for a strong, available match", () => {
+    assert.equal(
+      searchFitTier({ match_label: "strong", preview_match_score: 88, unavailable: false }),
+      "strong"
+    );
+  });
+
+  it("returns possible for a possible match", () => {
+    assert.equal(
+      searchFitTier({ match_label: "possible", preview_match_score: 65, unavailable: false }),
+      "possible"
+    );
+  });
+
+  it("returns none for a weak match (poor fit stays neutral, never warning-coloured)", () => {
+    assert.equal(
+      searchFitTier({ match_label: "weak", preview_match_score: 42, unavailable: false }),
+      "none"
+    );
+  });
+
+  it("returns none when the match is unavailable or missing", () => {
+    assert.equal(
+      searchFitTier({ match_label: "strong", preview_match_score: 90, unavailable: true }),
+      "none"
+    );
+    assert.equal(searchFitTier(null), "none");
+    assert.equal(searchFitTier(undefined), "none");
   });
 });
 

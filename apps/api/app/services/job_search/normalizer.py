@@ -55,6 +55,8 @@ def _to_dict(pj: ProviderJob) -> dict[str, Any]:
         "location": pj.location,
         "description": (pj.description or "")[:_MAX_DESCRIPTION_CHARS],
         "apply_url": pj.apply_url,
+        "posted_at": pj.posted_at,
+        "salary_range": pj.salary_range,
         "pre_score": 0,
         "likely_ai_related": False,
         "keyword_hits": [],
