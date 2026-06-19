@@ -31,10 +31,18 @@ _EVIDENCE = "Copied verbatim from your resume."
 
 
 def _clip(text: str | None) -> str:
+    """Copy a bullet verbatim, trimming only one that exceeds the schema's
+    ``BULLET_MAX_CHARS`` (two printed lines, US-041). The cut lands on a word
+    boundary so an over-long bullet ends cleanly with an ellipsis instead of
+    breaking mid-word; selection-only — the wording itself is never changed."""
     value = (text or "").strip()
     if len(value) <= BULLET_MAX_CHARS:
         return value
-    return value[: BULLET_MAX_CHARS - 1].rstrip() + "…"
+    window = value[: BULLET_MAX_CHARS - 1].rstrip()
+    space = window.rfind(" ")
+    if space > 0:
+        window = window[:space]
+    return window.rstrip(" ,;:") + "…"
 
 
 def _bullet(text: str) -> dict[str, Any]:
@@ -226,7 +234,12 @@ def build_draft_cv(
             "keywords_prioritized": prioritized,
             "keywords_excluded": [],
         },
-        "professional_summary": _clip(professional_summary) if professional_summary else "",
+        # The summary is not a bullet: it has no schema length cap, and the
+        # export pipeline already trims it to the page-fit summary cap at a
+        # sentence boundary (compress._truncate_summary). Copy it verbatim here —
+        # clipping it to the bullet's two-line cap cut multi-sentence summaries
+        # off mid-word.
+        "professional_summary": (professional_summary or "").strip(),
         "skills": skill_groups,
         "work_experience": work_experience,
         "projects": projects,

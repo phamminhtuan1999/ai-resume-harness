@@ -273,6 +273,20 @@ export function quickMatchBadge(quickMatch) {
 }
 
 /**
+ * Fit tier for a search result's candidate quick-match — drives the result
+ * card's colour wash (strong → emerald, possible → amber, everything else
+ * neutral). Kept beside quickMatchBadge so the wash and the badge can't drift.
+ * "weak" stays neutral on purpose: a poor match shouldn't shout in warning
+ * colour, and an unavailable/missing match has nothing to colour by.
+ */
+export function searchFitTier(quickMatch) {
+  if (!quickMatch || quickMatch.unavailable) return "none";
+  if (quickMatch.match_label === "strong") return "strong";
+  if (quickMatch.match_label === "possible") return "possible";
+  return "none";
+}
+
+/**
  * Human-readable label for the enricher's recommended_action value.
  */
 export function recommendedActionLabel(action) {

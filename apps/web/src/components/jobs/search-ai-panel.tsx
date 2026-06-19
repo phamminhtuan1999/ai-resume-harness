@@ -6,22 +6,19 @@ import { AlertCircle, Search, ChevronDown, ChevronRight } from "lucide-react";
 import type { SearchAiJob, SearchAiJobsState } from "@/lib/actions";
 import { searchAiJobsAction } from "@/lib/actions";
 import {
+  aiRelevanceBadge,
   groupJobResults,
   quickMatchBadge,
-  recommendedActionLabel,
+  searchFitTier,
   sortSearchJobs,
   filterSearchJobs,
-  postedDateLabel,
 } from "@/lib/job-search-flow.mjs";
 import { CompanyMonogram } from "@/components/jobs/company-monogram";
 import { IntakeSaveActions } from "@/components/jobs/intake-save-actions";
-import { JobRelevancePreview } from "@/components/jobs/job-relevance-preview";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { cn } from "@/lib/utils";
 
@@ -121,7 +118,7 @@ export function SearchAiPanel({ onUsePaste, onUseUrl }: SearchAiPanelProps) {
           />
 
           {processed.length > 0 ? (
-            <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {processed.map((job: SearchAiJob) => (
                 <SearchJobCard key={job.external_job_id} job={job} />
               ))}
@@ -131,7 +128,7 @@ export function SearchAiPanel({ onUsePaste, onUseUrl }: SearchAiPanelProps) {
           )}
 
           {hidden.length > 0 && (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-4">
               <button
                 className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
                 onClick={() => setShowHidden((v) => !v)}
@@ -145,10 +142,13 @@ export function SearchAiPanel({ onUsePaste, onUseUrl }: SearchAiPanelProps) {
                 {showHidden ? "Hide" : "Show"} {hidden.length} hidden{" "}
                 {hidden.length === 1 ? "job" : "jobs"} (below AI relevance threshold)
               </button>
-              {showHidden &&
-                hidden.map((job: SearchAiJob) => (
-                  <SearchJobCard key={job.external_job_id} job={job} dimmed />
-                ))}
+              {showHidden && (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {hidden.map((job: SearchAiJob) => (
+                    <SearchJobCard key={job.external_job_id} job={job} dimmed />
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -179,7 +179,7 @@ function SearchForm({ formAction }: { formAction: (payload: FormData) => void })
   // action completes, which would snap the query back to its default after every
   // search / "Load more". Holding the values in state keeps what the user typed.
   const [targetRole, setTargetRole] = useState("Applied AI Engineer");
-  const [location, setLocation] = useState("Remote US");
+  const [location, setLocation] = useState("US");
   const [experienceLevel, setExperienceLevel] = useState("");
   const [remoteOnly, setRemoteOnly] = useState(false);
 
@@ -206,7 +206,7 @@ function SearchForm({ formAction }: { formAction: (payload: FormData) => void })
             id="search-location"
             name="location"
             onChange={(e) => setLocation(e.target.value)}
-            placeholder="Remote US"
+            placeholder="US"
             value={location}
           />
         </div>
@@ -338,83 +338,95 @@ function FilterChip({
   );
 }
 
+// The single point of colour on a card: a small dot whose hue reports the
+// candidate fit (searchFitTier). Strong is emerald, possible is amber, and
+// everything else (weak/unavailable) stays a neutral grey so a poor match never
+// shouts. Everything else on the card is monochrome.
+const FIT_DOT: Record<string, string> = {
+  strong: "bg-success",
+  possible: "bg-warning",
+  none: "bg-muted-foreground/40",
+};
+
+// Soft background wash so every card carries colour at a glance: emerald for a
+// strong fit, amber for a possible one, a quiet neutral tint otherwise. Kept low
+// (~8%) so it reads as a calm wash, not a paint-by-tier card.
+const FIT_WASH: Record<string, string> = {
+  strong: "border-success/30 bg-success/[0.08]",
+  possible: "border-warning/40 bg-warning/[0.09]",
+  none: "border-border bg-muted/50",
+};
+
 function SearchJobCard({ job, dimmed = false }: { job: SearchAiJob; dimmed?: boolean }) {
-  const qmBadge = quickMatchBadge(job.quick_match);
-  const quickMatchUnavailable = !job.quick_match || job.quick_match.unavailable;
   const subtitle = [job.company, job.location].filter(Boolean).join(" · ");
-  const posted = postedDateLabel(job.posted_at);
-  const meta = [job.salary_range, posted ? `Posted ${posted}` : null]
-    .filter(Boolean)
-    .join(" · ");
+  const tier = searchFitTier(job.quick_match);
+  const fitLabel = quickMatchBadge(job.quick_match).label;
+
+  // One quiet line of "about the job" signal — relevance, then any flags.
+  const rel = job.ai_relevance;
+  const aiSignal = rel
+    ? [
+        aiRelevanceBadge(rel).label,
+        rel.transition_friendliness === "high" ? "transition-friendly" : null,
+        rel.research_heavy ? "research-heavy" : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
 
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 rounded-lg border bg-card p-4",
+        "flex flex-col rounded-xl border p-4",
+        FIT_WASH[tier],
         dimmed && "opacity-60"
       )}
     >
-      {/* Header — company identity tile, role, source */}
       <div className="flex items-start gap-3">
-        <CompanyMonogram company={job.company} title={job.title} />
-        <div className="flex flex-1 flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <h3 className="text-sm font-semibold leading-snug">{job.title}</h3>
-            <p className="truncate text-xs text-muted-foreground">
-              {subtitle || "Company not specified"}
-            </p>
-          </div>
-          <Badge variant="outline" className="text-xs">
-            {job.external_source}
-          </Badge>
+        <CompanyMonogram
+          className="size-9 rounded-lg text-xs"
+          company={job.company}
+          title={job.title}
+        />
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-medium leading-snug">{job.title}</h3>
+          <p className="truncate text-xs text-muted-foreground">
+            {subtitle || "Company not specified"}
+          </p>
         </div>
       </div>
 
-      {meta && <p className="text-xs text-muted-foreground">{meta}</p>}
+      {job.salary_range && (
+        <p className="mt-3 text-xs text-foreground">{job.salary_range}</p>
+      )}
 
-      <Separator />
+      <p className="mt-2.5 flex items-center gap-2 text-xs text-foreground">
+        <span
+          aria-hidden
+          className={cn("size-1.5 shrink-0 rounded-full", FIT_DOT[tier])}
+        />
+        {fitLabel}
+      </p>
 
-      {/* AI relevance — about the job */}
-      <JobRelevancePreview
-        aiRelevance={job.ai_relevance}
-        hiddenExcludeReason={job.hidden ? job.ai_relevance?.exclude_reason : null}
-      />
+      {aiSignal && (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">{aiSignal}</p>
+      )}
 
-      <Separator />
+      {job.hidden && job.ai_relevance?.exclude_reason && (
+        <p className="mt-1.5 text-[11px] italic text-muted-foreground/80">
+          Hidden: {job.ai_relevance.exclude_reason}
+        </p>
+      )}
 
-      {/* Quick match — about the candidate's fit */}
-      <div className="flex flex-col gap-1.5">
-        <p className="text-xs font-medium text-muted-foreground">Your fit preview</p>
-        {quickMatchUnavailable ? (
-          <p className="text-xs italic text-muted-foreground">
-            Match preview unavailable
-          </p>
-        ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Badge variant={qmBadge.variant as never}>{qmBadge.label}</Badge>
-              {job.quick_match?.recommended_action && (
-                <span className="text-xs text-muted-foreground">
-                  Suggested: {recommendedActionLabel(job.quick_match.recommended_action)}
-                </span>
-              )}
-            </div>
-            {job.quick_match?.assistant_preview && (
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                {job.quick_match.assistant_preview}
-              </p>
-            )}
-          </>
-        )}
+      <div className="mt-4">
+        <IntakeSaveActions
+          applyUrl={job.apply_url}
+          jobTitle={job.title}
+          mode="search"
+          payload={job}
+          primaryAction="analyze"
+        />
       </div>
-
-      {/* Actions (US-077): save the result + its AI judgments, or save & analyze. */}
-      <IntakeSaveActions
-        applyUrl={job.apply_url}
-        jobTitle={job.title}
-        mode="search"
-        payload={job}
-      />
     </div>
   );
 }

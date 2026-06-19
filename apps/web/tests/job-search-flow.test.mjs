@@ -11,6 +11,7 @@ import {
   groupJobResults,
   aiRelevanceBadge,
   quickMatchBadge,
+  searchFitTier,
   recommendedActionLabel,
   transitionFriendlinessBadge,
 } from "../src/lib/job-search-flow.mjs";
@@ -472,6 +473,40 @@ describe("quickMatchBadge", () => {
     const badge = quickMatchBadge(null);
     assert.equal(badge.variant, "outline");
     assert.match(badge.label, /unavailable/i);
+  });
+});
+
+// --- searchFitTier ---
+
+describe("searchFitTier", () => {
+  it("returns strong for a strong, available match", () => {
+    assert.equal(
+      searchFitTier({ match_label: "strong", preview_match_score: 88, unavailable: false }),
+      "strong"
+    );
+  });
+
+  it("returns possible for a possible match", () => {
+    assert.equal(
+      searchFitTier({ match_label: "possible", preview_match_score: 65, unavailable: false }),
+      "possible"
+    );
+  });
+
+  it("returns none for a weak match (poor fit stays neutral, never warning-coloured)", () => {
+    assert.equal(
+      searchFitTier({ match_label: "weak", preview_match_score: 42, unavailable: false }),
+      "none"
+    );
+  });
+
+  it("returns none when the match is unavailable or missing", () => {
+    assert.equal(
+      searchFitTier({ match_label: "strong", preview_match_score: 90, unavailable: true }),
+      "none"
+    );
+    assert.equal(searchFitTier(null), "none");
+    assert.equal(searchFitTier(undefined), "none");
   });
 });
 

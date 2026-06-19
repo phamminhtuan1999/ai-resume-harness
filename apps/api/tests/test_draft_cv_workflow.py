@@ -530,6 +530,58 @@ def test_build_draft_cv_clips_long_bullets() -> None:
     DraftCvOutput.model_validate(cv)
 
 
+def test_build_draft_cv_clips_long_bullets_on_word_boundary() -> None:
+    # A realistic over-cap bullet must end cleanly on a word, never mid-word.
+    long_bullet = (
+        "Architected core Web APIs for the Government Disclosure System, led the "
+        "backend development of a high-security financial filing system, integrating "
+        "stateless authorization with complex audit trails to ensure compliance for "
+        "state-level financial regulators across multiple jurisdictions nationwide."
+    )
+    profile = rich_candidate_profile()
+    profile["work_experience"][0]["bullet_points"] = [long_bullet]
+    cv = build_draft_cv(
+        candidate_profile=profile,
+        job_title="Role",
+        company="Co",
+        source_url=None,
+        job_keywords=[],
+    )
+    text = cv["work_experience"][0]["bullets"][0]["text"]
+    assert len(text) <= 240
+    assert text.endswith("…")
+    # The kept text (minus the ellipsis) is a whole-word prefix of the original:
+    # the original continues with a space exactly where we cut, so no word was
+    # split (the "...state-level fin..." mid-word break is gone).
+    kept = text[:-1]
+    assert long_bullet.startswith(kept)
+    assert long_bullet[len(kept)] == " "
+
+
+def test_build_draft_cv_keeps_full_summary() -> None:
+    # The professional summary is not a bullet: it must be copied verbatim, never
+    # clipped to the 240-char bullet cap (which used to cut it off mid-word).
+    summary = (
+        "Senior Backend Engineer with over 4 years of experience architecting "
+        "high-availability distributed systems for government, healthcare, and "
+        "e-commerce. Specialist in Node.js (NestJS) and .NET 8, with a proven "
+        "track record of slashing API latency and shipping audited releases."
+    )
+    assert len(summary) > 240
+    profile = rich_candidate_profile()
+    profile["professional_summary"]["candidate_summary"] = summary
+    cv = build_draft_cv(
+        candidate_profile=profile,
+        job_title="Role",
+        company="Co",
+        source_url=None,
+        job_keywords=[],
+    )
+    assert cv["professional_summary"] == summary
+    assert "…" not in cv["professional_summary"]
+    DraftCvOutput.model_validate(cv)
+
+
 def test_default_resume_corpus_supports_fixture_skills() -> None:
     # Guard against fixture drift: the happy-path skills must be in the resume.
     text = default_resume()["raw_text"].lower()
