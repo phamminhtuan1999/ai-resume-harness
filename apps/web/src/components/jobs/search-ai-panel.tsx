@@ -168,6 +168,23 @@ export function SearchAiPanel({ onUsePaste, onUseUrl }: SearchAiPanelProps) {
               </button>
             </div>
           )}
+
+          {result?.has_more && (
+            <div className="flex justify-center pt-1">
+              {/* Outside the form, but submits it via form= so the same query is
+                  re-run with intent=more (the server derives the next page). */}
+              <button
+                className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted/40 disabled:opacity-60"
+                disabled={isPending}
+                form="search-ai-form"
+                name="intent"
+                type="submit"
+                value="more"
+              >
+                {isPending ? "Loading…" : "Load more results"}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
